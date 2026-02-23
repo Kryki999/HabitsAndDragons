@@ -10,14 +10,16 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Swords, Zap, BookOpen, Plus } from 'lucide-react-native';
+import { Swords, Zap, BookOpen, Plus, Mail, Settings } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
 import { StatType, TimeOfDay } from '@/types/game';
 import HabitCard from '@/components/HabitCard';
 import AddHabitModal from '@/components/AddHabitModal';
 import ClassSelectionModal from '@/components/ClassSelectionModal';
+import CircularProgress from '@/components/CircularProgress';
 
 const { width } = Dimensions.get('window');
 
@@ -49,11 +51,10 @@ function getCastleTier(level: number) {
   return tier;
 }
 
-function StatBar({ stat, xp, delay }: { stat: StatType; xp: number; delay: number }) {
+function StatRing({ stat, xp, delay }: { stat: StatType; xp: number; delay: number }) {
   const cfg = STAT_CONFIG[stat];
   const getStatLevel = useGameStore(s => s.getStatLevel);
   const level = getStatLevel(stat);
-  const barAnim = useRef(new Animated.Value(0)).current;
   const entryAnim = useRef(new Animated.Value(0)).current;
 
   const xpInLevel = useMemo(() => {
@@ -71,40 +72,36 @@ function StatBar({ stat, xp, delay }: { stat: StatType; xp: number; delay: numbe
   useEffect(() => {
     Animated.sequence([
       Animated.delay(delay),
-      Animated.parallel([
-        Animated.spring(entryAnim, { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
-        Animated.timing(barAnim, { toValue: xpInLevel, duration: 800, useNativeDriver: false }),
-      ]),
+      Animated.spring(entryAnim, { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
     ]).start();
   }, [xpInLevel]);
 
-  const barWidth = barAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  });
-
   return (
-    <Animated.View style={[styles.statBarContainer, {
+    <Animated.View style={[styles.statRingContainer, {
       opacity: entryAnim,
-      transform: [{ translateX: entryAnim.interpolate({ inputRange: [0, 1], outputRange: [-30, 0] }) }],
+      transform: [{ scale: entryAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }],
     }]}>
-      <View style={[styles.statBarIcon, { backgroundColor: cfg.color + '18' }]}>
-        <cfg.icon size={14} color={cfg.color} />
-      </View>
-      <View style={styles.statBarInfo}>
-        <View style={styles.statBarHeader}>
-          <Text style={[styles.statBarLabel, { color: cfg.color }]}>{cfg.label}</Text>
-          <Text style={styles.statBarLevel}>Lv.{level}</Text>
+      <CircularProgress
+        progress={xpInLevel}
+        size={58}
+        strokeWidth={4}
+        color={cfg.color}
+        backgroundColor={Colors.dark.surfaceLight}
+      >
+        <View style={styles.statRingIcon}>
+          <cfg.icon size={22} color={cfg.color} />
         </View>
-        <View style={styles.statBarTrack}>
-          <Animated.View style={[styles.statBarFill, { width: barWidth, backgroundColor: cfg.color }]} />
-        </View>
+      </CircularProgress>
+      <View style={styles.statRingLabelContainer}>
+        <Text style={[styles.statRingLabel, { color: cfg.color }]}>{cfg.label}</Text>
+        <Text style={styles.statRingLevel}>Lv.{level}</Text>
       </View>
     </Animated.View>
   );
 }
 
 export default function CastleScreen() {
+  const insets = useSafeAreaInsets();
   const [modalVisible, setModalVisible] = useState(false);
   const {
     gold, streak, habits, strengthXP, agilityXP, intelligenceXP, playerClass,
@@ -121,11 +118,10 @@ export default function CastleScreen() {
   const castleScaleAnim = useRef(new Animated.Value(0.8)).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
   const fabPulse = useRef(new Animated.Value(1)).current;
-  const xpBarAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     resetDailyHabits();
-  }, []);
+  }, [resetDailyHabits]);
 
   useEffect(() => {
     Animated.stagger(150, [
@@ -140,14 +136,6 @@ export default function CastleScreen() {
       ])
     ).start();
   }, []);
-
-  useEffect(() => {
-    Animated.timing(xpBarAnim, {
-      toValue: xpProgress,
-      duration: 600,
-      useNativeDriver: false,
-    }).start();
-  }, [xpProgress]);
 
   const handleAddHabit = useCallback((habit: { name: string; description: string; stat: StatType; timeOfDay: TimeOfDay; icon: string }) => {
     addHabit(habit);
@@ -174,91 +162,97 @@ export default function CastleScreen() {
   const completedCount = useMemo(() => habits.filter(h => h.completedToday).length, [habits]);
   const totalCount = habits.length;
 
-  const xpBarWidth = xpBarAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  });
-
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[...Colors.gradients.castle]}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
+      {/* Absolute Top HUD */}
+      <Animated.View style={[styles.hudContainer, {
+        paddingTop: Math.max(insets.top, 16),
+        opacity: headerAnim,
+        transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
+      }]}>
+        <View style={styles.hudTopRow}>
+          {/* Left: Avatar & Name */}
+          <View style={styles.hudLeft}>
+            <CircularProgress
+              progress={xpProgress}
+              size={50}
+              strokeWidth={4}
+              color={Colors.dark.gold}
+              backgroundColor={Colors.dark.border}
+            >
+              <View style={styles.avatarInner}>
+                <Text style={styles.avatarEmoji}>🧙‍♂️</Text>
+              </View>
+            </CircularProgress>
+            <View style={styles.playerInfo}>
+              <Text style={styles.playerName}>Player</Text>
+              <Text style={styles.playerLevelText}>Lv.{playerLevel}</Text>
+            </View>
+          </View>
 
-      <View style={styles.decorOrb1} />
-      <View style={styles.decorOrb2} />
+          {/* Right: Icons */}
+          <View style={styles.hudRight}>
+            <Pressable style={styles.iconButton}>
+              <Mail color={Colors.dark.text} size={22} />
+              <View style={styles.notificationDot} />
+            </Pressable>
+            <Pressable style={styles.iconButton}>
+              <Settings color={Colors.dark.text} size={22} />
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Center: Pill Badges */}
+        <View style={styles.pillBadgesContainer}>
+          <View style={styles.pillBadge}>
+            <Text style={styles.pillEmoji}>🪙</Text>
+            <Text style={styles.pillValue}>{gold}</Text>
+          </View>
+          <View style={styles.pillBadge}>
+            <Text style={styles.pillEmoji}>🔥</Text>
+            <Text style={[styles.pillValue, { color: Colors.dark.fire }]}>{streak}</Text>
+          </View>
+        </View>
+      </Animated.View>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 120 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={[styles.kingdomSection, {
+        {/* Diorama Component */}
+        <Animated.View style={[styles.dioramaContainer, { transform: [{ scale: castleScaleAnim }] }]}>
+          <LinearGradient
+            colors={[...Colors.gradients.castle]}
+            style={styles.dioramaBackground}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <View style={styles.dioramaContent}>
+            <Text style={styles.dioramaCastleEmoji}>{castleTier.emoji}</Text>
+
+            <View style={styles.charactersRow}>
+              <View style={styles.placeholderCharacter}>
+                <Text style={styles.characterEmoji}>🧙‍♂️</Text>
+                <View style={styles.characterShadow} />
+              </View>
+              <View style={styles.placeholderDragon}>
+                <Text style={styles.dragonEmoji}>🐉</Text>
+                <View style={styles.characterShadow} />
+              </View>
+            </View>
+
+            <Text style={styles.dioramaCastleName}>{castleTier.name}</Text>
+          </View>
+        </Animated.View>
+
+        {/* Stat Hub */}
+        <Animated.View style={[styles.statHubContainer, {
           opacity: headerAnim,
-          transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
         }]}>
-          <View style={styles.topCounters}>
-            <View style={styles.counterChip}>
-              <Text style={styles.counterEmoji}>🪙</Text>
-              <Text style={styles.counterValue}>{gold}</Text>
-            </View>
-            <View style={styles.counterChip}>
-              <Text style={styles.counterEmoji}>🔥</Text>
-              <Text style={[styles.counterValue, { color: Colors.dark.fire }]}>{streak}</Text>
-            </View>
-          </View>
-
-          <Animated.View style={[styles.castleVisual, { transform: [{ scale: castleScaleAnim }] }]}>
-            <View style={styles.castleEmojiWrap}>
-              <Text style={styles.castleEmoji}>{castleTier.emoji}</Text>
-            </View>
-            <View style={styles.castleLevelBadge}>
-              <LinearGradient
-                colors={[...Colors.gradients.gold]}
-                style={styles.castleLevelGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <Text style={styles.castleLevelText}>LVL {playerLevel}</Text>
-              </LinearGradient>
-            </View>
-            <Text style={styles.castleName}>{castleTier.name}</Text>
-            <Text style={styles.castleDesc}>{castleTier.desc}</Text>
-          </Animated.View>
-
-          <View style={styles.xpBarSection}>
-            <View style={styles.xpBarHeader}>
-              <Text style={styles.xpLabel}>TOTAL EXP</Text>
-              <Text style={styles.xpNumbers}>{currentLevelXP} / {xpForNext}</Text>
-            </View>
-            <View style={styles.xpBarTrack}>
-              <Animated.View style={[styles.xpBarFillMain]}>
-                <LinearGradient
-                  colors={[...Colors.gradients.gold]}
-                  style={[StyleSheet.absoluteFill, { borderRadius: 6 }]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                />
-              </Animated.View>
-              <Animated.View style={[StyleSheet.absoluteFill, { width: xpBarWidth }]}>
-                <LinearGradient
-                  colors={[...Colors.gradients.gold]}
-                  style={[StyleSheet.absoluteFill, { borderRadius: 6 }]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                />
-              </Animated.View>
-            </View>
-          </View>
-
-          <View style={styles.statsSection}>
-            <StatBar stat="strength" xp={strengthXP} delay={200} />
-            <StatBar stat="agility" xp={agilityXP} delay={350} />
-            <StatBar stat="intelligence" xp={intelligenceXP} delay={500} />
-          </View>
+          <StatRing stat="strength" xp={strengthXP} delay={200} />
+          <StatRing stat="agility" xp={agilityXP} delay={350} />
+          <StatRing stat="intelligence" xp={intelligenceXP} delay={500} />
         </Animated.View>
 
         <View style={styles.divider}>
@@ -344,193 +338,224 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.dark.background,
   },
-  decorOrb1: {
-    position: 'absolute' as const,
-    top: -60,
-    right: -40,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: Colors.dark.gold + '06',
+
+  // --- HUD Styles ---
+  hudContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border + '50',
+    backgroundColor: Colors.dark.surface + 'e6', // Slight transparency
   },
-  decorOrb2: {
-    position: 'absolute' as const,
-    top: 200,
-    left: -50,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: Colors.dark.ruby + '04',
+  hudTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
+  hudLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatarInner: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Colors.dark.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarEmoji: {
+    fontSize: 24,
+  },
+  playerInfo: {
+    justifyContent: 'center',
+  },
+  playerName: {
+    color: Colors.dark.text,
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  playerLevelText: {
+    color: Colors.dark.gold,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  hudRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.dark.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.dark.ruby,
+    borderWidth: 1,
+    borderColor: Colors.dark.surfaceLight,
+  },
+  pillBadgesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  pillBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    minWidth: 80,
+    justifyContent: 'center',
+    gap: 6,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+      },
+      android: { elevation: 3 },
+    }),
+  },
+  pillEmoji: {
+    fontSize: 14,
+  },
+  pillValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.dark.gold,
+  },
+
+  // --- Diorama Styles ---
+  dioramaContainer: {
+    marginHorizontal: 20,
+    height: 220,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: Colors.dark.border,
+    marginBottom: 20,
+  },
+  dioramaBackground: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.8,
+  },
+  dioramaContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dioramaCastleEmoji: {
+    fontSize: 60,
+    position: 'absolute',
+    top: '15%',
+    opacity: 0.3,
+  },
+  charactersRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: 20,
+    zIndex: 2,
+  },
+  placeholderCharacter: {
+    alignItems: 'center',
+  },
+  placeholderDragon: {
+    alignItems: 'center',
+    transform: [{ scaleX: -1 }], // flip dragon to face player
+  },
+  characterEmoji: {
+    fontSize: 56,
+  },
+  dragonEmoji: {
+    fontSize: 40,
+  },
+  characterShadow: {
+    width: 30,
+    height: 8,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 15,
+    marginTop: 4,
+  },
+  dioramaCastleName: {
+    position: 'absolute',
+    bottom: 12,
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.dark.text,
+    letterSpacing: 1,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+
+  // --- Stat Hub Styles ---
+  statHubContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'flex-start',
+    paddingHorizontal: 10,
+    marginBottom: 10,
+  },
+  statRingContainer: {
+    alignItems: 'center',
+    width: 80,
+  },
+  statRingIcon: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statRingLabelContainer: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  statRingLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  statRingLevel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.dark.textSecondary,
+    marginTop: 2,
+  },
+
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingTop: 12,
   },
-  kingdomSection: {
-    paddingHorizontal: 20,
-  },
-  topCounters: {
-    flexDirection: 'row' as const,
-    justifyContent: 'center' as const,
-    gap: 16,
-    marginBottom: 16,
-  },
-  counterChip: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-    gap: 6,
-  },
-  counterEmoji: {
-    fontSize: 18,
-  },
-  counterValue: {
-    fontSize: 18,
-    fontWeight: '800' as const,
-    color: Colors.dark.gold,
-  },
-  castleVisual: {
-    alignItems: 'center' as const,
-    marginBottom: 20,
-  },
-  castleEmojiWrap: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: Colors.dark.surface,
-    borderWidth: 2,
-    borderColor: Colors.dark.border,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginBottom: 10,
-    ...Platform.select({
-      ios: {
-        shadowColor: Colors.dark.gold,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
-      },
-      android: { elevation: 8 },
-      default: {},
-    }),
-  },
-  castleEmoji: {
-    fontSize: 42,
-  },
-  castleLevelBadge: {
-    borderRadius: 16,
-    overflow: 'hidden' as const,
-    marginBottom: 6,
-  },
-  castleLevelGradient: {
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderRadius: 16,
-  },
-  castleLevelText: {
-    fontSize: 12,
-    fontWeight: '900' as const,
-    color: '#1a1228',
-    letterSpacing: 1.5,
-  },
-  castleName: {
-    fontSize: 22,
-    fontWeight: '800' as const,
-    color: Colors.dark.text,
-    marginBottom: 2,
-  },
-  castleDesc: {
-    fontSize: 13,
-    color: Colors.dark.textSecondary,
-  },
-  xpBarSection: {
-    marginBottom: 18,
-  },
-  xpBarHeader: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-    marginBottom: 8,
-  },
-  xpLabel: {
-    fontSize: 11,
-    fontWeight: '800' as const,
-    color: Colors.dark.gold,
-    letterSpacing: 1.5,
-  },
-  xpNumbers: {
-    fontSize: 12,
-    fontWeight: '600' as const,
-    color: Colors.dark.textSecondary,
-  },
-  xpBarTrack: {
-    height: 10,
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 5,
-    overflow: 'hidden' as const,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  xpBarFillMain: {
-    ...StyleSheet.absoluteFillObject,
-    width: '0%',
-    borderRadius: 5,
-  },
-  statsSection: {
-    gap: 10,
-    marginBottom: 4,
-  },
-  statBarContainer: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 10,
-  },
-  statBarIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  statBarInfo: {
-    flex: 1,
-  },
-  statBarHeader: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-    marginBottom: 4,
-  },
-  statBarLabel: {
-    fontSize: 12,
-    fontWeight: '800' as const,
-    letterSpacing: 1,
-  },
-  statBarLevel: {
-    fontSize: 11,
-    fontWeight: '700' as const,
-    color: Colors.dark.textMuted,
-  },
-  statBarTrack: {
-    height: 6,
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 3,
-    overflow: 'hidden' as const,
-  },
-  statBarFill: {
-    height: '100%' as const,
-    borderRadius: 3,
-  },
   divider: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
     marginVertical: 18,
     gap: 10,
@@ -550,7 +575,7 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     fontSize: 10,
-    fontWeight: '800' as const,
+    fontWeight: '800',
     color: Colors.dark.textMuted,
     letterSpacing: 1.5,
   },
@@ -562,12 +587,12 @@ const styles = StyleSheet.create({
   },
   timeGroupHeader: {
     fontSize: 13,
-    fontWeight: '700' as const,
+    fontWeight: '700',
     color: Colors.dark.textSecondary,
     marginBottom: 10,
   },
   emptyState: {
-    alignItems: 'center' as const,
+    alignItems: 'center',
     paddingVertical: 40,
   },
   emptyEmoji: {
@@ -576,18 +601,18 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '800' as const,
+    fontWeight: '800',
     color: Colors.dark.text,
     marginBottom: 6,
   },
   emptyDesc: {
     fontSize: 14,
     color: Colors.dark.textSecondary,
-    textAlign: 'center' as const,
+    textAlign: 'center',
     maxWidth: 240,
   },
   fabContainer: {
-    position: 'absolute' as const,
+    position: 'absolute',
     bottom: 20,
     right: 20,
   },
@@ -595,11 +620,11 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 29,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fabShadow: {
-    position: 'absolute' as const,
+    position: 'absolute',
     bottom: -3,
     left: 4,
     right: 4,
