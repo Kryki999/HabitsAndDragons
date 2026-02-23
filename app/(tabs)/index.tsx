@@ -10,7 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Swords, Zap, BookOpen, Plus, Mail, Settings } from 'lucide-react-native';
+import { Swords, Zap, BookOpen, Plus, Mail, Settings, Coins } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
@@ -20,6 +20,7 @@ import HabitCard from '@/components/HabitCard';
 import AddHabitModal from '@/components/AddHabitModal';
 import ClassSelectionModal from '@/components/ClassSelectionModal';
 import CircularProgress from '@/components/CircularProgress';
+import LivingDiorama from '@/components/LivingDiorama';
 
 const { width } = Dimensions.get('window');
 
@@ -166,17 +167,17 @@ export default function CastleScreen() {
     <View style={styles.container}>
       {/* Absolute Top HUD */}
       <Animated.View style={[styles.hudContainer, {
-        paddingTop: Math.max(insets.top, 16),
+        paddingTop: Math.max(insets.top, 10),
         opacity: headerAnim,
         transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
       }]}>
-        <View style={styles.hudTopRow}>
+        <View style={styles.hudRow}>
           {/* Left: Avatar & Name */}
           <View style={styles.hudLeft}>
             <CircularProgress
               progress={xpProgress}
-              size={50}
-              strokeWidth={4}
+              size={40}
+              strokeWidth={3}
               color={Colors.dark.gold}
               backgroundColor={Colors.dark.border}
             >
@@ -185,65 +186,45 @@ export default function CastleScreen() {
               </View>
             </CircularProgress>
             <View style={styles.playerInfo}>
-              <Text style={styles.playerName}>Player</Text>
+              <Text style={styles.playerName} numberOfLines={1}>Player</Text>
               <Text style={styles.playerLevelText}>Lv.{playerLevel}</Text>
+            </View>
+          </View>
+
+          {/* Center: Pill Badges */}
+          <View style={styles.pillBadgesContainer}>
+            <View style={styles.pillBadge}>
+              <Coins color={Colors.dark.gold} size={14} />
+              <Text style={styles.pillValue}>{gold}</Text>
+            </View>
+            <View style={styles.pillBadge}>
+              <Text style={styles.pillEmoji}>🔥</Text>
+              <Text style={[styles.pillValue, { color: Colors.dark.fire }]}>{streak}</Text>
             </View>
           </View>
 
           {/* Right: Icons */}
           <View style={styles.hudRight}>
             <Pressable style={styles.iconButton}>
-              <Mail color={Colors.dark.text} size={22} />
+              <Mail color={Colors.dark.text} size={20} />
               <View style={styles.notificationDot} />
             </Pressable>
             <Pressable style={styles.iconButton}>
-              <Settings color={Colors.dark.text} size={22} />
+              <Settings color={Colors.dark.text} size={20} />
             </Pressable>
-          </View>
-        </View>
-
-        {/* Center: Pill Badges */}
-        <View style={styles.pillBadgesContainer}>
-          <View style={styles.pillBadge}>
-            <Text style={styles.pillEmoji}>🪙</Text>
-            <Text style={styles.pillValue}>{gold}</Text>
-          </View>
-          <View style={styles.pillBadge}>
-            <Text style={styles.pillEmoji}>🔥</Text>
-            <Text style={[styles.pillValue, { color: Colors.dark.fire }]}>{streak}</Text>
           </View>
         </View>
       </Animated.View>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 120 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 70 }]}
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        {/* Diorama Component */}
-        <Animated.View style={[styles.dioramaContainer, { transform: [{ scale: castleScaleAnim }] }]}>
-          <LinearGradient
-            colors={[...Colors.gradients.castle]}
-            style={styles.dioramaBackground}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          <View style={styles.dioramaContent}>
-            <Text style={styles.dioramaCastleEmoji}>{castleTier.emoji}</Text>
-
-            <View style={styles.charactersRow}>
-              <View style={styles.placeholderCharacter}>
-                <Text style={styles.characterEmoji}>🧙‍♂️</Text>
-                <View style={styles.characterShadow} />
-              </View>
-              <View style={styles.placeholderDragon}>
-                <Text style={styles.dragonEmoji}>🐉</Text>
-                <View style={styles.characterShadow} />
-              </View>
-            </View>
-
-            <Text style={styles.dioramaCastleName}>{castleTier.name}</Text>
-          </View>
+        {/* Living Diorama Component */}
+        <Animated.View style={{ transform: [{ scale: castleScaleAnim }] }}>
+          <LivingDiorama />
         </Animated.View>
 
         {/* Stat Hub */}
@@ -346,57 +327,60 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: Colors.dark.border + '50',
-    backgroundColor: Colors.dark.surface + 'e6', // Slight transparency
+    backgroundColor: Colors.dark.surface + 'e6',
   },
-  hudTopRow: {
+  hudRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
   hudLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    flex: 1, // allow truncation if needed
   },
   avatarInner: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: Colors.dark.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarEmoji: {
-    fontSize: 24,
+    fontSize: 18,
   },
   playerInfo: {
     justifyContent: 'center',
+    flexShrink: 1,
   },
   playerName: {
     color: Colors.dark.text,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
-    marginBottom: 2,
+    marginBottom: 0,
   },
   playerLevelText: {
     color: Colors.dark.gold,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   hudRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 10,
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: Colors.dark.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
@@ -405,8 +389,8 @@ const styles = StyleSheet.create({
   },
   notificationDot: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 6,
+    right: 6,
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -417,102 +401,27 @@ const styles = StyleSheet.create({
   pillBadgesContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
+    gap: 8,
   },
   pillBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.dark.surface,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderWidth: 1,
     borderColor: Colors.dark.border,
-    minWidth: 80,
     justifyContent: 'center',
-    gap: 6,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 3,
-      },
-      android: { elevation: 3 },
-    }),
+    gap: 4,
   },
   pillEmoji: {
-    fontSize: 14,
+    fontSize: 12,
   },
   pillValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: Colors.dark.gold,
-  },
-
-  // --- Diorama Styles ---
-  dioramaContainer: {
-    marginHorizontal: 20,
-    height: 220,
-    borderRadius: 24,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: Colors.dark.border,
-    marginBottom: 20,
-  },
-  dioramaBackground: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.8,
-  },
-  dioramaContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dioramaCastleEmoji: {
-    fontSize: 60,
-    position: 'absolute',
-    top: '15%',
-    opacity: 0.3,
-  },
-  charactersRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    gap: 20,
-    marginTop: 20,
-    zIndex: 2,
-  },
-  placeholderCharacter: {
-    alignItems: 'center',
-  },
-  placeholderDragon: {
-    alignItems: 'center',
-    transform: [{ scaleX: -1 }], // flip dragon to face player
-  },
-  characterEmoji: {
-    fontSize: 56,
-  },
-  dragonEmoji: {
-    fontSize: 40,
-  },
-  characterShadow: {
-    width: 30,
-    height: 8,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 15,
-    marginTop: 4,
-  },
-  dioramaCastleName: {
-    position: 'absolute',
-    bottom: 12,
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.dark.text,
-    letterSpacing: 1,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
   },
 
   // --- Stat Hub Styles ---
