@@ -18,6 +18,9 @@ export type LootIconId =
   | "anchor"
   | "moon";
 
+/** Slot loadoutu: strój / zbroja vs relikwia / broń / artefakt / akcesoria. */
+export type ItemLoadoutSlot = "outfit" | "relic";
+
 export interface LootItemEntry {
   id: string;
   kind: "item";
@@ -25,6 +28,7 @@ export interface LootItemEntry {
   rarity: LootRarity;
   description: string;
   icon: LootIconId;
+  itemSlot: ItemLoadoutSlot;
 }
 
 export interface LootGoldEntry {

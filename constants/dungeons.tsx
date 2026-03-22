@@ -30,6 +30,7 @@ export const DUNGEONS: DungeonData[] = [
         description:
           "A disc that hums with unstable magic. Displayed on your profile banner as a mark of conquest.",
         icon: "orb",
+        itemSlot: "relic",
       },
       {
         id: "p-chaos",
@@ -39,6 +40,7 @@ export const DUNGEONS: DungeonData[] = [
         description:
           "Crystallized entropy from between worlds. Purely cosmetic trophy sparkles in your lair.",
         icon: "gem",
+        itemSlot: "relic",
       },
       {
         id: "p-gold",
@@ -67,6 +69,7 @@ export const DUNGEONS: DungeonData[] = [
         rarity: "uncommon",
         description: "Too brittle to open real locks — a grim keepsake for your trophy shelf.",
         icon: "key",
+        itemSlot: "relic",
       },
       {
         id: "c-essence",
@@ -76,6 +79,7 @@ export const DUNGEONS: DungeonData[] = [
         description:
           "Trapped in a glass vial, it flickers when heroes pass. Cosmetic aura hook for future flair.",
         icon: "skull",
+        itemSlot: "relic",
       },
       {
         id: "c-relic",
@@ -84,6 +88,7 @@ export const DUNGEONS: DungeonData[] = [
         rarity: "rare",
         description: "A tarnished icon that whispers in menus. No stats — just undeniable edge.",
         icon: "moon",
+        itemSlot: "relic",
       },
     ],
   },
@@ -102,6 +107,7 @@ export const DUNGEONS: DungeonData[] = [
         rarity: "epic",
         description: "Too heavy for a pocket, perfect for bragging rights. Melts in story, not in combat.",
         icon: "gem",
+        itemSlot: "relic",
       },
       {
         id: "v-seal",
@@ -110,6 +116,7 @@ export const DUNGEONS: DungeonData[] = [
         rarity: "legendary",
         description: "The wax seal is long gone; the ring remains a symbol of old thrones.",
         icon: "crown",
+        itemSlot: "relic",
       },
       {
         id: "v-gold",
@@ -137,6 +144,7 @@ export const DUNGEONS: DungeonData[] = [
         rarity: "rare",
         description: "Never melts — a centerpiece for your winter-themed profile ornaments.",
         icon: "snowflake",
+        itemSlot: "relic",
       },
       {
         id: "f-crown",
@@ -145,6 +153,7 @@ export const DUNGEONS: DungeonData[] = [
         rarity: "epic",
         description: "Miniature, purely ornamental. Makes you look like you survived the long night.",
         icon: "crown",
+        itemSlot: "outfit",
       },
       {
         id: "f-charm",
@@ -153,6 +162,7 @@ export const DUNGEONS: DungeonData[] = [
         rarity: "uncommon",
         description: "Tickles the UI with frost motes. Zero damage, maximum style.",
         icon: "star",
+        itemSlot: "relic",
       },
       {
         id: "f-gold",
@@ -180,6 +190,7 @@ export const DUNGEONS: DungeonData[] = [
         rarity: "rare",
         description: "A black pearl that pulses with bioluminescent UI particles. Pure vanity.",
         icon: "gem",
+        itemSlot: "relic",
       },
       {
         id: "t-relic",
@@ -188,6 +199,7 @@ export const DUNGEONS: DungeonData[] = [
         rarity: "epic",
         description: "Carved from shipwreck oak. Grants no swim speed — only prestige.",
         icon: "anchor",
+        itemSlot: "relic",
       },
       {
         id: "t-sap",
@@ -196,6 +208,7 @@ export const DUNGEONS: DungeonData[] = [
         rarity: "rare",
         description: "Salt-crusted but still brilliant. A collector's flex.",
         icon: "sparkles",
+        itemSlot: "relic",
       },
     ],
   },
@@ -215,6 +228,7 @@ export const DUNGEONS: DungeonData[] = [
         description:
           "Tattered silk that still snaps in an imaginary wind. Hang it in your hall of glory.",
         icon: "shield",
+        itemSlot: "outfit",
       },
       {
         id: "s-plate",
@@ -223,6 +237,7 @@ export const DUNGEONS: DungeonData[] = [
         rarity: "epic",
         description: "Too heavy for a habit app — perfect as a cosmetic armor slot later.",
         icon: "shield",
+        itemSlot: "outfit",
       },
       {
         id: "s-key",
@@ -231,6 +246,7 @@ export const DUNGEONS: DungeonData[] = [
         rarity: "legendary",
         description: "Opens nothing yet — a promise of future content. Still shiny.",
         icon: "key",
+        itemSlot: "relic",
       },
       {
         id: "s-gold",

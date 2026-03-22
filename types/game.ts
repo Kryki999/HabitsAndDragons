@@ -55,8 +55,12 @@ export interface GameState {
   unlockedTitleIds: string[];
   /** Per-habit grants for the current economy day (cleared at daily reset). */
   habitCompletionLog: Record<string, HabitCompletionLedger>;
-  /** Unikalne ID zdobytych przedmiotów kosmetycznych (loot z lochów). */
+  /** Stack przedmiotów z lochów — ID mogą się powtarzać (duplikaty). */
   ownedItemIds: string[];
+  /** Aktywny strój / zbroja (kosmetyk). */
+  equippedOutfitId: string | null;
+  /** Aktywna relikwia / broń / artefakt (kosmetyk). */
+  equippedRelicId: string | null;
 }
 
 export interface GameActions {
@@ -83,8 +87,14 @@ export interface GameActions {
   purchaseDungeonKeyWithGold: () => boolean;
   /** Consume one key to enter a dungeon run. Returns false if no keys. */
   consumeDungeonKeyForRun: () => boolean;
-  /** Dodaje przedmiot do ekwipunku (bez duplikatów). */
+  /** Dodaje jeden egzemplarz przedmiotu do plecaka (duplikaty dozwolone). */
   addInventoryItemId: (itemId: string) => void;
+  /** Sprzedaje jeden egzemplarz pod indeksem; złoto poza limitem nawyków; zdejmuje z loadoutu jeśli założony. */
+  sellInventoryItemAtIndex: (index: number) => void;
+  /** Zakłada przedmiot do właściwego slotu (nadpisuje poprzedni). */
+  equipItemById: (itemId: string) => void;
+  /** Zdejmuje aktywny przedmiot ze slotu. */
+  unequipLoadoutSlot: (slot: "outfit" | "relic") => void;
   /**
    * Złoto ze skrzyń / lochów — bez limitu dziennego z nawyków.
    * Wewnętrznie to zwykły przyrost salda (jak `addGold`).

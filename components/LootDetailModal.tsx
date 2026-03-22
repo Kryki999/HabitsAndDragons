@@ -8,12 +8,15 @@ import {
   Animated,
   Platform,
   useWindowDimensions,
+  Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { X } from "lucide-react-native";
 import { LootGlyph } from "@/lib/lootGlyph";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { sellPriceForRarity } from "@/lib/inventoryEconomy";
+import { useGameStore } from "@/store/gameStore";
 import type { LootGoldEntry, LootIconId, LootItemEntry, LootRarity } from "@/types/dungeonLoot";
 
 export type LootModalPayload =
@@ -41,13 +44,27 @@ interface LootDetailModalProps {
   onClose: () => void;
   payload: LootModalPayload | null;
   accentHint?: string;
+  /** Ustawione tylko z plecaka — wtedy Sell / Equip / Unequip. */
+  itemInventoryIndex?: number;
 }
 
-export default function LootDetailModal({ visible, onClose, payload, accentHint }: LootDetailModalProps) {
+export default function LootDetailModal({
+  visible,
+  onClose,
+  payload,
+  accentHint,
+  itemInventoryIndex,
+}: LootDetailModalProps) {
   const { width } = useWindowDimensions();
   const modalWidth = Math.min(width - 48, 360);
   const fade = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.94)).current;
+
+  const sellInventoryItemAtIndex = useGameStore((s) => s.sellInventoryItemAtIndex);
+  const equipItemById = useGameStore((s) => s.equipItemById);
+  const unequipLoadoutSlot = useGameStore((s) => s.unequipLoadoutSlot);
+  const equippedOutfitId = useGameStore((s) => s.equippedOutfitId);
+  const equippedRelicId = useGameStore((s) => s.equippedRelicId);
 
   useEffect(() => {
     if (visible) {
@@ -69,6 +86,47 @@ export default function LootDetailModal({ visible, onClose, payload, accentHint 
   const rarity = payload.entry.rarity;
   const rColor = RARITY_COLOR[rarity];
   const icon: LootIconId = payload.type === "item" ? payload.entry.icon : "coins";
+
+  const backpackMode =
+    payload.type === "item" && typeof itemInventoryIndex === "number" && itemInventoryIndex >= 0;
+  const itemEntry = payload.type === "item" ? payload.entry : null;
+  const isEquipped =
+    itemEntry != null &&
+    (itemEntry.itemSlot === "outfit"
+      ? equippedOutfitId === itemEntry.id
+      : equippedRelicId === itemEntry.id);
+  const sellPrice = itemEntry ? sellPriceForRarity(itemEntry.rarity) : 0;
+
+  const handleSell = () => {
+    if (!backpackMode || !itemEntry) return;
+    Alert.alert(
+      "Sprzedaż",
+      `Czy na pewno chcesz sprzedać ten przedmiot za ${sellPrice} 🪙?`,
+      [
+        { text: "Anuluj", style: "cancel" },
+        {
+          text: "Sprzedaj",
+          style: "destructive",
+          onPress: () => {
+            sellInventoryItemAtIndex(itemInventoryIndex);
+            onClose();
+          },
+        },
+      ],
+    );
+  };
+
+  const handleEquip = () => {
+    if (!itemEntry) return;
+    equipItemById(itemEntry.id);
+    onClose();
+  };
+
+  const handleUnequip = () => {
+    if (!itemEntry) return;
+    unequipLoadoutSlot(itemEntry.itemSlot);
+    onClose();
+  };
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
@@ -124,7 +182,22 @@ export default function LootDetailModal({ visible, onClose, payload, accentHint 
             <Text style={styles.title}>{payload.entry.name}</Text>
 
             {payload.type === "item" ? (
-              <Text style={styles.cosmeticTag}>Cosmetic — no combat stats</Text>
+              <View style={styles.itemMetaRow}>
+                <Text style={styles.cosmeticTag}>Cosmetic — no combat stats</Text>
+                <View
+                  style={[
+                    styles.slotPill,
+                    {
+                      borderColor: rColor + "55",
+                      backgroundColor: rColor + "12",
+                    },
+                  ]}
+                >
+                  <Text style={[styles.slotPillText, { color: rColor }]}>
+                    {payload.entry.itemSlot === "outfit" ? "Outfit" : "Relic"}
+                  </Text>
+                </View>
+              </View>
             ) : (
               <Text style={styles.cosmeticTag}>Gold pool — currency, not gear</Text>
             )}
@@ -153,6 +226,32 @@ export default function LootDetailModal({ visible, onClose, payload, accentHint 
                 </LinearGradient>
               </View>
             )}
+
+            {backpackMode && itemEntry ? (
+              <View style={styles.backpackActions}>
+                <Pressable onPress={handleSell} style={styles.sellBtn}>
+                  <Text style={styles.sellBtnText}>
+                    Sell ({sellPrice} 🪙)
+                  </Text>
+                </Pressable>
+                {isEquipped ? (
+                  <Pressable onPress={handleUnequip} style={styles.unequipBtn}>
+                    <Text style={styles.unequipBtnText}>Unequip</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable onPress={handleEquip} style={styles.equipBtn}>
+                    <LinearGradient
+                      colors={[Colors.dark.emerald + "cc", Colors.dark.emeraldDark]}
+                      style={styles.equipBtnGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={styles.equipBtnText}>Equip</Text>
+                    </LinearGradient>
+                  </Pressable>
+                )}
+              </View>
+            ) : null}
 
             <Pressable onPress={onClose} style={styles.dismissBtn}>
               <Text style={styles.dismissText}>Close</Text>
@@ -264,11 +363,75 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     letterSpacing: 0.2,
   },
+  itemMetaRow: {
+    alignItems: "center" as const,
+    marginBottom: 12,
+    gap: 8,
+  },
   cosmeticTag: {
     fontSize: 11,
     color: Colors.dark.textMuted,
     fontStyle: "italic" as const,
+    textAlign: "center" as const,
+  },
+  slotPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  slotPillText: {
+    fontSize: 10,
+    fontWeight: "800" as const,
+    letterSpacing: 0.8,
+    textTransform: "uppercase" as const,
+  },
+  backpackActions: {
+    alignSelf: "stretch" as const,
+    gap: 10,
     marginBottom: 12,
+  },
+  sellBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: Colors.dark.ruby + "18",
+    borderWidth: 1,
+    borderColor: Colors.dark.ruby + "55",
+    alignItems: "center" as const,
+  },
+  sellBtnText: {
+    fontSize: 15,
+    fontWeight: "800" as const,
+    color: Colors.dark.ruby,
+  },
+  equipBtn: {
+    borderRadius: 14,
+    overflow: "hidden" as const,
+  },
+  equipBtnGradient: {
+    paddingVertical: 12,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  equipBtnText: {
+    fontSize: 15,
+    fontWeight: "800" as const,
+    color: "#0d1a12",
+  },
+  unequipBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: Colors.dark.surfaceLight,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    alignItems: "center" as const,
+  },
+  unequipBtnText: {
+    fontSize: 15,
+    fontWeight: "800" as const,
+    color: Colors.dark.textSecondary,
   },
   body: {
     fontSize: 14,

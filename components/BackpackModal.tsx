@@ -10,7 +10,7 @@ import {
   Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { X, Backpack } from "lucide-react-native";
+import { X, Backpack, Shirt, Sparkles } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useGameStore } from "@/store/gameStore";
@@ -40,14 +40,17 @@ interface BackpackModalProps {
 export default function BackpackModal({ visible, onClose }: BackpackModalProps) {
   const { width } = useWindowDimensions();
   const ownedItemIds = useGameStore((s) => s.ownedItemIds ?? []);
+  const equippedOutfitId = useGameStore((s) => s.equippedOutfitId);
+  const equippedRelicId = useGameStore((s) => s.equippedRelicId);
 
   const [detailPayload, setDetailPayload] = useState<LootModalPayload | null>(null);
+  const [detailInventoryIndex, setDetailInventoryIndex] = useState<number | null>(null);
 
   const modalMaxW = Math.min(width - 32, 400);
 
   const slots = useMemo(() => {
     const shown = ownedItemIds.slice(0, SLOT_COUNT);
-    const cells: ({ kind: "empty" } | { kind: "item"; entry: LootItemEntry })[] = [];
+    const cells: ({ kind: "empty" } | { kind: "item"; entry: LootItemEntry; inventoryIndex: number })[] = [];
     for (let i = 0; i < SLOT_COUNT; i++) {
       const id = shown[i];
       if (!id) {
@@ -56,7 +59,7 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
       }
       const entry = resolveLootItemById(id);
       if (entry) {
-        cells.push({ kind: "item", entry });
+        cells.push({ kind: "item", entry, inventoryIndex: i });
       } else {
         cells.push({ kind: "empty" });
       }
@@ -77,12 +80,36 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
   const handleClose = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDetailPayload(null);
+    setDetailInventoryIndex(null);
     onClose();
   }, [onClose]);
 
-  const openItem = useCallback((entry: LootItemEntry) => {
+  const openItem = useCallback((entry: LootItemEntry, inventoryIndex: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDetailInventoryIndex(inventoryIndex);
     setDetailPayload({ type: "item", entry });
+  }, []);
+
+  const openEquipped = useCallback(
+    (slot: "outfit" | "relic") => {
+      const id = slot === "outfit" ? equippedOutfitId : equippedRelicId;
+      if (!id) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return;
+      }
+      const entry = resolveLootItemById(id);
+      if (!entry) return;
+      const idx = ownedItemIds.indexOf(id);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setDetailInventoryIndex(idx >= 0 ? idx : 0);
+      setDetailPayload({ type: "item", entry });
+    },
+    [equippedOutfitId, equippedRelicId, ownedItemIds],
+  );
+
+  const closeDetailOnly = useCallback(() => {
+    setDetailPayload(null);
+    setDetailInventoryIndex(null);
   }, []);
 
   return (
@@ -117,6 +144,79 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
               >
+                <View style={styles.loadoutSection}>
+                  <Text style={styles.loadoutSectionTitle}>Equipped</Text>
+                  <View style={styles.loadoutRow}>
+                    <Pressable
+                      onPress={() => openEquipped("outfit")}
+                      style={({ pressed }) => [styles.loadoutSlot, pressed && styles.loadoutSlotPressed]}
+                    >
+                      <View style={styles.loadoutSlotHeader}>
+                        <Shirt size={16} color={Colors.dark.gold} />
+                        <Text style={styles.loadoutSlotLabel}>Outfit</Text>
+                      </View>
+                      {equippedOutfitId ? (
+                        (() => {
+                          const e = resolveLootItemById(equippedOutfitId);
+                          if (!e) {
+                            return <Text style={styles.loadoutEmpty}>—</Text>;
+                          }
+                          const rc = RARITY_COLOR[e.rarity];
+                          return (
+                            <View style={styles.loadoutIconWrap}>
+                              <LinearGradient
+                                colors={[rc + "33", Colors.dark.background]}
+                                style={styles.loadoutIconGradient}
+                              >
+                                <LootGlyph icon={e.icon} size={36} color={rc} />
+                              </LinearGradient>
+                              <Text style={styles.loadoutItemName} numberOfLines={2}>
+                                {e.name}
+                              </Text>
+                            </View>
+                          );
+                        })()
+                      ) : (
+                        <Text style={styles.loadoutEmpty}>Empty slot</Text>
+                      )}
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => openEquipped("relic")}
+                      style={({ pressed }) => [styles.loadoutSlot, pressed && styles.loadoutSlotPressed]}
+                    >
+                      <View style={styles.loadoutSlotHeader}>
+                        <Sparkles size={16} color={Colors.dark.purple} />
+                        <Text style={styles.loadoutSlotLabel}>Relic</Text>
+                      </View>
+                      {equippedRelicId ? (
+                        (() => {
+                          const e = resolveLootItemById(equippedRelicId);
+                          if (!e) {
+                            return <Text style={styles.loadoutEmpty}>—</Text>;
+                          }
+                          const rc = RARITY_COLOR[e.rarity];
+                          return (
+                            <View style={styles.loadoutIconWrap}>
+                              <LinearGradient
+                                colors={[rc + "33", Colors.dark.background]}
+                                style={styles.loadoutIconGradient}
+                              >
+                                <LootGlyph icon={e.icon} size={36} color={rc} />
+                              </LinearGradient>
+                              <Text style={styles.loadoutItemName} numberOfLines={2}>
+                                {e.name}
+                              </Text>
+                            </View>
+                          );
+                        })()
+                      ) : (
+                        <Text style={styles.loadoutEmpty}>Empty slot</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+
                 <View style={styles.inventoryPanel}>
                   <Text style={styles.inventoryLabel}>Inventory</Text>
                   <View style={styles.gridFrame}>
@@ -137,16 +237,22 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
                             );
                           }
 
-                          const { entry } = slot;
+                          const { entry, inventoryIndex } = slot;
                           const rc = RARITY_COLOR[entry.rarity];
+                          const isEquipped =
+                            entry.itemSlot === "outfit"
+                              ? equippedOutfitId === entry.id
+                              : equippedRelicId === entry.id;
+
                           return (
-                            <View key={entry.id + flatIndex} style={styles.slotCell}>
+                            <View key={slotKey} style={styles.slotCell}>
                               <Pressable
-                                onPress={() => openItem(entry)}
+                                onPress={() => openItem(entry, inventoryIndex)}
                                 style={({ pressed }) => [
                                   styles.slotFilledOuter,
                                   {
-                                    borderColor: rc + "99",
+                                    borderColor: isEquipped ? Colors.dark.gold : rc + "99",
+                                    borderWidth: isEquipped ? 2.5 : 1.5,
                                     opacity: pressed ? 0.9 : 1,
                                     transform: pressed ? [{ scale: 0.97 }] : undefined,
                                   },
@@ -160,6 +266,11 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
                                 >
                                   <LootGlyph icon={entry.icon} size={26} color={rc} />
                                 </LinearGradient>
+                                {isEquipped ? (
+                                  <View style={styles.equippedBadge}>
+                                    <Text style={styles.equippedBadgeText}>E</Text>
+                                  </View>
+                                ) : null}
                               </Pressable>
                             </View>
                           );
@@ -182,9 +293,10 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
 
       <LootDetailModal
         visible={detailPayload !== null}
-        onClose={() => setDetailPayload(null)}
+        onClose={closeDetailOnly}
         payload={detailPayload}
         accentHint={detailPayload?.type === "item" ? RARITY_COLOR[detailPayload.entry.rarity] : undefined}
+        itemInventoryIndex={detailInventoryIndex ?? undefined}
       />
     </>
   );
@@ -201,7 +313,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.78)",
   },
   sheet: {
-    maxHeight: "90%" as const,
+    maxHeight: "92%" as const,
   },
   sheetGradient: {
     borderRadius: 22,
@@ -248,10 +360,85 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.surface + "99",
   },
   scroll: {
-    maxHeight: 460,
+    maxHeight: 520,
   },
   scrollContent: {
     paddingBottom: 10,
+  },
+  loadoutSection: {
+    marginBottom: 14,
+    borderRadius: 16,
+    padding: 14,
+    backgroundColor: Colors.dark.background + "dd",
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + "28",
+  },
+  loadoutSectionTitle: {
+    fontSize: 10,
+    fontWeight: "800" as const,
+    letterSpacing: 1.2,
+    color: Colors.dark.gold,
+    textTransform: "uppercase" as const,
+    marginBottom: 12,
+    textAlign: "center" as const,
+  },
+  loadoutRow: {
+    flexDirection: "row" as const,
+    gap: 10,
+  },
+  loadoutSlot: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: 14,
+    padding: 10,
+    backgroundColor: Colors.dark.surface + "cc",
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "aa",
+    minHeight: 118,
+  },
+  loadoutSlotPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  loadoutSlotHeader: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    marginBottom: 8,
+  },
+  loadoutSlotLabel: {
+    fontSize: 11,
+    fontWeight: "800" as const,
+    color: Colors.dark.textSecondary,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.6,
+  },
+  loadoutIconWrap: {
+    alignItems: "center" as const,
+    gap: 6,
+  },
+  loadoutIconGradient: {
+    width: 72,
+    height: 72,
+    borderRadius: 16,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "88",
+  },
+  loadoutItemName: {
+    fontSize: 10,
+    fontWeight: "700" as const,
+    color: Colors.dark.text,
+    textAlign: "center" as const,
+    lineHeight: 13,
+  },
+  loadoutEmpty: {
+    fontSize: 12,
+    fontStyle: "italic" as const,
+    color: Colors.dark.textMuted,
+    textAlign: "center" as const,
+    marginTop: 12,
   },
   inventoryPanel: {
     borderRadius: 16,
@@ -277,7 +464,6 @@ const styles = StyleSheet.create({
     width: "100%" as const,
     gap: SLOT_GAP,
   },
-  /** Równy podział: zawsze 4 sloty w linii — bez „3+1”. */
   slotCell: {
     flex: 1,
     minWidth: 0,
@@ -293,7 +479,6 @@ const styles = StyleSheet.create({
   slotFilledOuter: {
     flex: 1,
     borderRadius: 12,
-    borderWidth: 1.5,
     overflow: "hidden" as const,
   },
   slotFilledGradient: {
@@ -301,6 +486,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 6,
+  },
+  equippedBadge: {
+    position: "absolute" as const,
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.dark.gold,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderWidth: 1,
+    borderColor: "#1a1228",
+  },
+  equippedBadgeText: {
+    fontSize: 11,
+    fontWeight: "900" as const,
+    color: "#1a1228",
   },
   overflowHint: {
     marginTop: 14,

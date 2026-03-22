@@ -13,6 +13,8 @@ import {
   rollDungeonKeyDrop,
 } from '@/lib/economy';
 import { TITLE_DEFINITIONS } from '@/constants/titles';
+import { resolveLootItemById } from '@/lib/itemCatalog';
+import { sellPriceForRarity } from '@/lib/inventoryEconomy';
 
 type GameStore = GameState & GameActions;
 
@@ -88,6 +90,8 @@ export const useGameStore = create<GameStore>()(
       unlockedTitleIds: [],
       habitCompletionLog: {},
       ownedItemIds: [],
+      equippedOutfitId: null,
+      equippedRelicId: null,
 
       completeHabit: (habitId: string) => {
         set((state) => {
@@ -319,10 +323,48 @@ export const useGameStore = create<GameStore>()(
       addInventoryItemId: (itemId: string) => {
         set((state) => {
           const ownedItemIds = state.ownedItemIds ?? [];
-          if (ownedItemIds.includes(itemId)) return state;
-          console.log(`[GameStore] Inventory +1: ${itemId}`);
+          console.log(`[GameStore] Inventory +1 (stack): ${itemId}`);
           return { ownedItemIds: [...ownedItemIds, itemId] };
         });
+      },
+
+      sellInventoryItemAtIndex: (index: number) => {
+        set((state) => {
+          const owned = [...(state.ownedItemIds ?? [])];
+          if (index < 0 || index >= owned.length) return state;
+          const itemId = owned[index]!;
+          const entry = resolveLootItemById(itemId);
+          owned.splice(index, 1);
+          const price = entry ? sellPriceForRarity(entry.rarity) : 0;
+          let equippedOutfitId = state.equippedOutfitId ?? null;
+          let equippedRelicId = state.equippedRelicId ?? null;
+          if (equippedOutfitId === itemId) equippedOutfitId = null;
+          if (equippedRelicId === itemId) equippedRelicId = null;
+          console.log(`[GameStore] Sold inventory[${index}] ${itemId} for ${price}g`);
+          return {
+            ownedItemIds: owned,
+            gold: state.gold + price,
+            equippedOutfitId,
+            equippedRelicId,
+          };
+        });
+      },
+
+      equipItemById: (itemId: string) => {
+        const entry = resolveLootItemById(itemId);
+        if (!entry) return;
+        if (entry.itemSlot === 'outfit') {
+          set({ equippedOutfitId: itemId });
+        } else {
+          set({ equippedRelicId: itemId });
+        }
+        console.log(`[GameStore] Equipped ${entry.itemSlot}: ${itemId}`);
+      },
+
+      unequipLoadoutSlot: (slot: 'outfit' | 'relic') => {
+        if (slot === 'outfit') set({ equippedOutfitId: null });
+        else set({ equippedRelicId: null });
+        console.log(`[GameStore] Unequipped ${slot}`);
       },
 
       addDungeonChestGold: (amount: number) => {
@@ -416,6 +458,8 @@ export const useGameStore = create<GameStore>()(
         unlockedTitleIds: state.unlockedTitleIds,
         habitCompletionLog: state.habitCompletionLog,
         ownedItemIds: state.ownedItemIds,
+        equippedOutfitId: state.equippedOutfitId,
+        equippedRelicId: state.equippedRelicId,
       }),
     },
   ),
