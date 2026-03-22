@@ -4,6 +4,9 @@ export type TimeOfDay = 'morning' | 'day' | 'evening';
 
 export type PlayerClass = 'warrior' | 'hunter' | 'mage';
 
+/** Task difficulty — drives base XP and gold per completion. */
+export type HabitDifficulty = 'easy' | 'medium' | 'hard';
+
 export interface Habit {
   id: string;
   name: string;
@@ -12,6 +15,16 @@ export interface Habit {
   timeOfDay: TimeOfDay;
   completedToday: boolean;
   icon: string;
+  /** Older saves may omit; treated as `medium`. */
+  difficulty?: HabitDifficulty;
+}
+
+/** Snapshot of rewards granted for one habit completion today (for reversal on uncomplete). */
+export interface HabitCompletionLedger {
+  taskDayIndex: number;
+  xpGranted: number;
+  goldGranted: number;
+  keyDropped: boolean;
 }
 
 export interface GameState {
@@ -24,6 +37,24 @@ export interface GameState {
   lastCompletionDate: string | null;
   allCompletedToday: boolean;
   playerClass: PlayerClass | null;
+  /** Persistent currency — dungeon keys (casino / lochów). */
+  dungeonKeys: number;
+  /** Completions today (for fatigue XP scaling). */
+  tasksCompletedToday: number;
+  /** Gold from standard habits today toward the 100 cap. */
+  goldFromStandardTasksToday: number;
+  /** Calendar day for which economy counters below are valid. */
+  lastEconomyResetDate: string | null;
+  /** First key already dropped today — lowers further drop rates. */
+  firstDungeonKeyDroppedToday: boolean;
+  /** Sage epic quest (50 gold, separate from 100 cap) claimed this calendar day. */
+  sageEpicQuestClaimedToday: boolean;
+  /** Morning streak bonus (+20 gold) claimed for this calendar day. */
+  lastMorningGoldClaimDate: string | null;
+  /** Titles unlocked by milestone stat levels. */
+  unlockedTitleIds: string[];
+  /** Per-habit grants for the current economy day (cleared at daily reset). */
+  habitCompletionLog: Record<string, HabitCompletionLedger>;
 }
 
 export interface GameActions {
@@ -37,9 +68,15 @@ export interface GameActions {
   getCurrentLevelXP: () => number;
   getStatLevel: (stat: StatType) => number;
   resetDailyHabits: () => void;
+  /** Run after midnight / on first screen load: economy rollover + morning gold if eligible. */
+  processDailyLogin: () => void;
   setPlayerClass: (playerClass: PlayerClass) => void;
+  /** Unrestricted gold (avoid for gameplay; prefer specific reward actions). */
   addGold: (amount: number) => void;
+  /** Raw XP grant (no fatigue); used for Sage epic bonus XP. */
   addXP: (stat: StatType, amount: number) => void;
+  /** Epic Quest from Sage: +50 gold (outside 100 cap) once per day; not counted toward standard daily gold. */
+  claimSageEpicQuestReward: (stat: StatType, xpBonus?: number) => void;
 }
 
 export interface SuggestedHabit {
@@ -49,4 +86,5 @@ export interface SuggestedHabit {
   stat: StatType;
   timeOfDay: TimeOfDay;
   icon: string;
+  difficulty: HabitDifficulty;
 }

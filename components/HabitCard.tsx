@@ -10,7 +10,13 @@ import {
 import { Check, Swords, Zap, BookOpen, Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
-import { Habit, StatType } from '@/types/game';
+import { Habit, StatType, HabitDifficulty } from '@/types/game';
+
+const DIFF_SHORT: Record<HabitDifficulty, string> = {
+  easy: 'E',
+  medium: 'M',
+  hard: 'H',
+};
 
 const STAT_CONFIG: Record<StatType, { color: string; label: string; icon: typeof Swords }> = {
   strength: { color: Colors.dark.ruby, label: 'STR', icon: Swords },
@@ -29,6 +35,7 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
   const pressAnim = useRef(new Animated.Value(0)).current;
   const checkAnim = useRef(new Animated.Value(habit.completedToday ? 1 : 0)).current;
   const statCfg = STAT_CONFIG[habit.stat];
+  const diffKey = (habit.difficulty ?? 'medium') as HabitDifficulty;
 
   const handlePressIn = useCallback(() => {
     Animated.timing(pressAnim, {
@@ -120,11 +127,14 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
               ]}>
                 {habit.name}
               </Text>
-              <View style={styles.statBadge}>
-                <statCfg.icon size={10} color={statCfg.color} />
-                <Text style={[styles.statBadgeText, { color: statCfg.color }]}>
-                  +{statCfg.label}
-                </Text>
+              <View style={styles.metaRow}>
+                <View style={styles.statBadge}>
+                  <statCfg.icon size={10} color={statCfg.color} />
+                  <Text style={[styles.statBadgeText, { color: statCfg.color }]}>
+                    +{statCfg.label}
+                  </Text>
+                </View>
+                <Text style={styles.diffBadge}>{DIFF_SHORT[diffKey]}</Text>
               </View>
             </View>
           </View>
@@ -210,10 +220,20 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     textDecorationLine: 'line-through' as const,
   },
+  metaRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+  },
   statBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 4,
+  },
+  diffBadge: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: Colors.dark.textMuted,
   },
   statBadgeText: {
     fontSize: 11,

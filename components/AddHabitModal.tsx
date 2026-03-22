@@ -16,7 +16,7 @@ import { X, Swords, Zap, BookOpen, ChevronRight, Scroll, PenTool } from 'lucide-
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '@/constants/colors';
-import { StatType, TimeOfDay, SuggestedHabit } from '@/types/game';
+import { StatType, TimeOfDay, SuggestedHabit, HabitDifficulty } from '@/types/game';
 import { suggestedHabits } from '@/mocks/suggestedHabits';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -33,10 +33,23 @@ const TIME_OPTIONS: { value: TimeOfDay; label: string; emoji: string }[] = [
   { value: 'evening', label: 'Evening', emoji: '🌙' },
 ];
 
+const DIFFICULTY_OPTIONS: { value: HabitDifficulty; label: string; hint: string }[] = [
+  { value: 'easy', label: 'Easy', hint: '15 XP · 5 gold' },
+  { value: 'medium', label: 'Medium', hint: '25 XP · 10 gold' },
+  { value: 'hard', label: 'Hard', hint: '40 XP · 20 gold' },
+];
+
 interface AddHabitModalProps {
   visible: boolean;
   onClose: () => void;
-  onAddHabit: (habit: { name: string; description: string; stat: StatType; timeOfDay: TimeOfDay; icon: string }) => void;
+  onAddHabit: (habit: {
+    name: string;
+    description: string;
+    stat: StatType;
+    timeOfDay: TimeOfDay;
+    icon: string;
+    difficulty: HabitDifficulty;
+  }) => void;
 }
 
 type ModalView = 'choose' | 'suggested' | 'custom';
@@ -66,9 +79,14 @@ function SuggestedHabitItem({ habit, onSelect }: { habit: SuggestedHabit; onSele
           <View style={styles.suggestedInfo}>
             <Text style={styles.suggestedName}>{habit.name}</Text>
             <Text style={styles.suggestedDesc} numberOfLines={2}>{habit.rpgDescription}</Text>
-            <View style={[styles.suggestedStatBadge, { backgroundColor: statOpt.color + '18' }]}>
-              <statOpt.icon size={10} color={statOpt.color} />
-              <Text style={[styles.suggestedStatText, { color: statOpt.color }]}>+{statOpt.label.substring(0, 3).toUpperCase()}</Text>
+            <View style={styles.suggestedMetaRow}>
+              <View style={[styles.suggestedStatBadge, { backgroundColor: statOpt.color + '18' }]}>
+                <statOpt.icon size={10} color={statOpt.color} />
+                <Text style={[styles.suggestedStatText, { color: statOpt.color }]}>+{statOpt.label.substring(0, 3).toUpperCase()}</Text>
+              </View>
+              <Text style={styles.suggestedDiff}>
+                {habit.difficulty === 'easy' ? 'Easy' : habit.difficulty === 'hard' ? 'Hard' : 'Med'}
+              </Text>
             </View>
           </View>
           <ChevronRight size={18} color={Colors.dark.textMuted} />
@@ -86,6 +104,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
   const [selectedStat, setSelectedStat] = useState<StatType>('strength');
   const [selectedTime, setSelectedTime] = useState<TimeOfDay>('morning');
   const [selectedIcon, setSelectedIcon] = useState('⚔️');
+  const [selectedDifficulty, setSelectedDifficulty] = useState<HabitDifficulty>('medium');
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   const ICON_OPTIONS = ['⚔️', '🛡️', '🏃', '📖', '🧠', '💪', '🎯', '🔥', '⭐', '🌟', '💎', '🏆'];
@@ -98,6 +117,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
       setSelectedStat('strength');
       setSelectedTime('morning');
       setSelectedIcon('⚔️');
+      setSelectedDifficulty('medium');
       Animated.spring(slideAnim, {
         toValue: 0,
         friction: 8,
@@ -129,6 +149,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
       stat: habit.stat,
       timeOfDay: habit.timeOfDay,
       icon: habit.icon,
+      difficulty: habit.difficulty,
     });
     handleClose();
   }, [onAddHabit, handleClose]);
@@ -142,9 +163,10 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
       stat: selectedStat,
       timeOfDay: selectedTime,
       icon: selectedIcon,
+      difficulty: selectedDifficulty,
     });
     handleClose();
-  }, [customName, customDesc, selectedStat, selectedTime, selectedIcon, onAddHabit, handleClose]);
+  }, [customName, customDesc, selectedStat, selectedTime, selectedIcon, selectedDifficulty, onAddHabit, handleClose]);
 
   const renderChooseView = () => (
     <View style={styles.chooseContainer}>
@@ -312,6 +334,32 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
                 ]}>
                   {stat.label}
                 </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.fieldLabel}>Difficulty</Text>
+          <View style={styles.statRow}>
+            {DIFFICULTY_OPTIONS.map(d => (
+              <Pressable
+                key={d.value}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setSelectedDifficulty(d.value);
+                }}
+                style={[
+                  styles.timeOption,
+                  selectedDifficulty === d.value && { borderColor: Colors.dark.gold, backgroundColor: Colors.dark.gold + '12' },
+                ]}
+                testID={`difficulty-option-${d.value}`}
+              >
+                <Text style={[
+                  styles.timeOptionText,
+                  { color: selectedDifficulty === d.value ? Colors.dark.gold : Colors.dark.textMuted },
+                ]}>
+                  {d.label}
+                </Text>
+                <Text style={styles.diffHint}>{d.hint}</Text>
               </Pressable>
             ))}
           </View>
@@ -549,6 +597,11 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginBottom: 6,
   },
+  suggestedMetaRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+  },
   suggestedStatBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -557,6 +610,11 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
     gap: 4,
+  },
+  suggestedDiff: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: Colors.dark.textMuted,
   },
   suggestedStatText: {
     fontSize: 10,
@@ -650,6 +708,12 @@ const styles = StyleSheet.create({
   timeOptionText: {
     fontSize: 12,
     fontWeight: '700' as const,
+  },
+  diffHint: {
+    fontSize: 9,
+    color: Colors.dark.textMuted,
+    marginTop: 2,
+    textAlign: 'center' as const,
   },
   createBtn: {
     borderRadius: 14,

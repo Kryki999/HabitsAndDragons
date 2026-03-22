@@ -76,7 +76,8 @@ function SageMessage({ message, delay }: { message: { sender: string; text: stri
 }
 
 export default function SageScreen() {
-  const { addGold, addXP, gold } = useGameStore();
+  const { claimSageEpicQuestReward, gold } = useGameStore();
+  const sageEpicQuestClaimedToday = useGameStore((s) => s.sageEpicQuestClaimedToday);
   const [questCompleted, setQuestCompleted] = useState(false);
   const [currentQuest] = useState(() => EPIC_QUESTS[Math.floor(Math.random() * EPIC_QUESTS.length)]);
   const [currentQuote] = useState(() => SAGE_QUOTES[Math.floor(Math.random() * SAGE_QUOTES.length)]);
@@ -86,6 +87,10 @@ export default function SageScreen() {
   const sparkleAnim = useRef(new Animated.Value(0.5)).current;
   const questPulseAnim = useRef(new Animated.Value(1)).current;
   const rewardAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (sageEpicQuestClaimedToday) setQuestCompleted(true);
+  }, [sageEpicQuestClaimedToday]);
 
   useEffect(() => {
     Animated.spring(headerAnim, {
@@ -118,12 +123,11 @@ export default function SageScreen() {
   }, []);
 
   const handleCompleteQuest = useCallback(() => {
-    if (questCompleted) return;
+    if (questCompleted || sageEpicQuestClaimedToday) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     setQuestCompleted(true);
-    addGold(50);
-    addXP(currentQuest.stat, 20);
+    claimSageEpicQuestReward(currentQuest.stat, 20);
 
     Animated.spring(rewardAnim, {
       toValue: 1,
@@ -137,7 +141,7 @@ export default function SageScreen() {
       "⚡ Epic Quest Complete!",
       `+50 Gold 🪙\n+20 ${statLabel} XP\n\nThe Sage is pleased with your resolve.`
     );
-  }, [questCompleted, addGold, addXP, currentQuest.stat]);
+  }, [questCompleted, sageEpicQuestClaimedToday, claimSageEpicQuestReward, currentQuest.stat]);
 
   return (
     <View style={styles.container}>

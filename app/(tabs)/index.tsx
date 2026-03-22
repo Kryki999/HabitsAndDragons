@@ -10,12 +10,13 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Swords, Zap, BookOpen, Plus, Mail, Settings, Coins } from 'lucide-react-native';
+import { Swords, Zap, BookOpen, Plus, Mail, Settings, Coins, KeyRound } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
-import { StatType, TimeOfDay } from '@/types/game';
+import { StatType, TimeOfDay, HabitDifficulty } from '@/types/game';
+import { getXPProgressInCurrentLevel } from '@/lib/playerLevel';
 import HabitCard from '@/components/HabitCard';
 import AddHabitModal from '@/components/AddHabitModal';
 import ClassSelectionModal from '@/components/ClassSelectionModal';
@@ -59,16 +60,9 @@ function StatRing({ stat, xp, delay }: { stat: StatType; xp: number; delay: numb
   const entryAnim = useRef(new Animated.Value(0)).current;
 
   const xpInLevel = useMemo(() => {
-    const baseXP = 100;
-    const growth = 1.4;
-    let accumulated = 0;
-    for (let i = 1; i < level; i++) {
-      accumulated += Math.floor(baseXP * Math.pow(growth, i - 1));
-    }
-    const currentLevelXP = xp - accumulated;
-    const neededXP = Math.floor(baseXP * Math.pow(growth, level - 1));
-    return Math.min(currentLevelXP / neededXP, 1);
-  }, [xp, level]);
+    const { current, needed } = getXPProgressInCurrentLevel(xp);
+    return needed > 0 ? Math.min(current / needed, 1) : 0;
+  }, [xp]);
 
   useEffect(() => {
     Animated.sequence([
@@ -105,9 +99,9 @@ export default function CastleScreen() {
   const insets = useSafeAreaInsets();
   const [modalVisible, setModalVisible] = useState(false);
   const {
-    gold, streak, habits, strengthXP, agilityXP, intelligenceXP, playerClass,
+    gold, streak, habits, strengthXP, agilityXP, intelligenceXP, playerClass, dungeonKeys,
     getPlayerLevel, getCurrentLevelXP, getXPForNextLevel,
-    completeHabit, uncompleteHabit, addHabit, removeHabit, resetDailyHabits, setPlayerClass,
+    completeHabit, uncompleteHabit, addHabit, removeHabit, setPlayerClass,
   } = useGameStore();
 
   const playerLevel = getPlayerLevel();
@@ -119,10 +113,6 @@ export default function CastleScreen() {
   const castleScaleAnim = useRef(new Animated.Value(0.8)).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
   const fabPulse = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    resetDailyHabits();
-  }, [resetDailyHabits]);
 
   useEffect(() => {
     Animated.stagger(150, [
@@ -138,7 +128,14 @@ export default function CastleScreen() {
     ).start();
   }, []);
 
-  const handleAddHabit = useCallback((habit: { name: string; description: string; stat: StatType; timeOfDay: TimeOfDay; icon: string }) => {
+  const handleAddHabit = useCallback((habit: {
+    name: string;
+    description: string;
+    stat: StatType;
+    timeOfDay: TimeOfDay;
+    icon: string;
+    difficulty: HabitDifficulty;
+  }) => {
     addHabit(habit);
   }, [addHabit]);
 
@@ -196,6 +193,10 @@ export default function CastleScreen() {
             <View style={styles.pillBadge}>
               <Coins color={Colors.dark.gold} size={14} />
               <Text style={styles.pillValue}>{gold}</Text>
+            </View>
+            <View style={styles.pillBadge}>
+              <KeyRound color={Colors.dark.cyan} size={14} />
+              <Text style={[styles.pillValue, { color: Colors.dark.cyan }]}>{dungeonKeys}</Text>
             </View>
             <View style={styles.pillBadge}>
               <Text style={styles.pillEmoji}>🔥</Text>

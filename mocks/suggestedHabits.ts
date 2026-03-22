@@ -8,6 +8,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'strength',
     timeOfDay: 'morning',
     icon: '💪',
+    difficulty: 'medium',
   },
   {
     name: 'Cold Shower',
@@ -16,6 +17,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'strength',
     timeOfDay: 'morning',
     icon: '🧊',
+    difficulty: 'easy',
   },
   {
     name: 'Morning Run',
@@ -24,6 +26,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'agility',
     timeOfDay: 'morning',
     icon: '🏃',
+    difficulty: 'hard',
   },
   {
     name: 'Stretch Routine',
@@ -32,6 +35,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'agility',
     timeOfDay: 'morning',
     icon: '🧘',
+    difficulty: 'easy',
   },
   {
     name: 'Read 10 Pages',
@@ -40,6 +44,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'intelligence',
     timeOfDay: 'morning',
     icon: '📖',
+    difficulty: 'easy',
   },
   {
     name: 'Journal Entry',
@@ -48,6 +53,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'intelligence',
     timeOfDay: 'morning',
     icon: '📝',
+    difficulty: 'easy',
   },
   {
     name: 'Gym Session',
@@ -56,6 +62,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'strength',
     timeOfDay: 'day',
     icon: '🏋️',
+    difficulty: 'hard',
   },
   {
     name: 'Walk 10K Steps',
@@ -64,6 +71,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'agility',
     timeOfDay: 'day',
     icon: '🚶',
+    difficulty: 'medium',
   },
   {
     name: 'Deep Work Block',
@@ -72,6 +80,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'intelligence',
     timeOfDay: 'day',
     icon: '🧠',
+    difficulty: 'hard',
   },
   {
     name: 'Learn a New Skill',
@@ -80,6 +89,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'intelligence',
     timeOfDay: 'day',
     icon: '🎓',
+    difficulty: 'medium',
   },
   {
     name: 'Evening Walk',
@@ -88,6 +98,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'agility',
     timeOfDay: 'evening',
     icon: '🌙',
+    difficulty: 'easy',
   },
   {
     name: 'No Screens Before Bed',
@@ -96,6 +107,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'intelligence',
     timeOfDay: 'evening',
     icon: '📵',
+    difficulty: 'medium',
   },
   {
     name: 'Meditation',
@@ -104,6 +116,7 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'strength',
     timeOfDay: 'evening',
     icon: '🧘‍♂️',
+    difficulty: 'medium',
   },
   {
     name: 'Meal Prep',
@@ -112,5 +125,6 @@ export const suggestedHabits: SuggestedHabit[] = [
     stat: 'strength',
     timeOfDay: 'evening',
     icon: '🍲',
+    difficulty: 'medium',
   },
 ];
