@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Swords, Zap, BookOpen, Shield, Target, Wand2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
+import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import Colors from '@/constants/colors';
 import { PlayerClass } from '@/types/game';
 
@@ -117,7 +117,7 @@ function ClassCard({
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          impactAsync(ImpactFeedbackStyle.Heavy);
           onSelect(classOption.id);
         }}
         testID={`class-select-${classOption.id}`}

@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Tabs } from "expo-router";
 import { Home, Trophy, Castle, Sparkles } from "lucide-react-native";
-import * as Haptics from "expo-haptics";
+import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import Colors from "@/constants/colors";
 
 type TabIconProps = {
@@ -110,7 +110,7 @@ export default function TabLayout() {
         tabBarButton: ({ style, children, onPress, ...rest }) => (
           <Pressable
             onPress={(e) => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              impactAsync(ImpactFeedbackStyle.Light);
               if (onPress) {
                 (onPress as (e: GestureResponderEvent) => void)(e);
               }

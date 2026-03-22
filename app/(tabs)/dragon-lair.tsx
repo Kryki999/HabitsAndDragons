@@ -25,7 +25,13 @@ import {
   Coins,
   DoorOpen,
 } from "lucide-react-native";
-import * as Haptics from "expo-haptics";
+import {
+  impactAsync,
+  selectionAsync,
+  notificationAsync,
+  ImpactFeedbackStyle,
+  NotificationFeedbackType,
+} from "@/lib/hapticsGate";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useGameStore } from "@/store/gameStore";
@@ -563,28 +569,28 @@ export default function DragonLairScreen() {
   }, [headerAnim, dragonsSectionAnim, dungeonsSectionAnim, orbAnim]);
 
   const handleAddStreak = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    impactAsync(ImpactFeedbackStyle.Heavy);
     useGameStore.setState((s) => ({ streak: s.streak + 5 }));
   }, []);
 
   const handleResetStreak = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    impactAsync(ImpactFeedbackStyle.Heavy);
     useGameStore.setState({ streak: 0 });
   }, []);
 
   const handleDebugGold = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    impactAsync(ImpactFeedbackStyle.Medium);
     addGold(500);
   }, [addGold]);
 
   const handleDebugKeys = useCallback((amount: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    impactAsync(ImpactFeedbackStyle.Medium);
     useGameStore.setState((s) => ({ dungeonKeys: s.dungeonKeys + amount }));
   }, []);
 
   const handleDebugXP = useCallback(
     (stat: StatType, amount: number) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      impactAsync(ImpactFeedbackStyle.Light);
       addXP(stat, amount);
     },
     [addXP],
@@ -593,16 +599,16 @@ export default function DragonLairScreen() {
   const handleEnterDungeon = useCallback(
     (dungeonId: string) => {
       if (dungeonKeys <= 0) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        notificationAsync(NotificationFeedbackType.Warning);
         return;
       }
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      impactAsync(ImpactFeedbackStyle.Medium);
       const ok = consumeDungeonKeyForRun();
       if (!ok) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        notificationAsync(NotificationFeedbackType.Error);
         return;
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      notificationAsync(NotificationFeedbackType.Success);
       const dungeonMeta = DUNGEONS.find((d) => d.id === dungeonId);
       const dungeonName = dungeonMeta?.name ?? "the dungeon";
       const table = dungeonMeta?.lootTable ?? [];
@@ -646,14 +652,14 @@ export default function DragonLairScreen() {
 
   const handleBuyKey = useCallback(() => {
     if (gold < DUNGEON_KEY_GOLD_PRICE) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      notificationAsync(NotificationFeedbackType.Warning);
       Alert.alert("Not enough gold", `You need ${DUNGEON_KEY_GOLD_PRICE} 🪙 to buy a key.`);
       return;
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    impactAsync(ImpactFeedbackStyle.Light);
     const ok = purchaseDungeonKeyWithGold();
     if (ok) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      notificationAsync(NotificationFeedbackType.Success);
     }
   }, [gold, purchaseDungeonKeyWithGold]);
 
@@ -831,7 +837,7 @@ export default function DragonLairScreen() {
                   canEnter={canEnter}
                   onEnter={handleEnterDungeon}
                   onLootEntryPress={(entry) => {
-                    Haptics.selectionAsync();
+                    selectionAsync();
                     setLootModal({
                       payload:
                         entry.kind === "item"
@@ -976,7 +982,7 @@ export default function DragonLairScreen() {
                   {dungeonClearReward.payload ? (
                     <Pressable
                       onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        impactAsync(ImpactFeedbackStyle.Light);
                         setLootModal({
                           payload: dungeonClearReward.payload!,
                           accent: dungeonClearReward.accent,
@@ -1025,7 +1031,7 @@ export default function DragonLairScreen() {
 
                   <Pressable
                     onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      impactAsync(ImpactFeedbackStyle.Medium);
                       setDungeonClearReward(null);
                     }}
                     style={styles.clearRewardClaimBtn}
@@ -1209,6 +1215,8 @@ const styles = StyleSheet.create({
   },
   dragonIconAreaCompact: {
     marginBottom: 10,
+    width: "100%" as const,
+    alignItems: "center" as const,
   },
   dragonIconCircle: {
     alignItems: "center" as const,
@@ -1256,6 +1264,8 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
     letterSpacing: 0.2,
     maxWidth: "100%",
+    width: "100%" as const,
+    textAlign: "center" as const,
   },
   dragonSubtitle: {
     fontSize: 13,
@@ -1268,6 +1278,8 @@ const styles = StyleSheet.create({
     color: Colors.dark.textMuted,
     marginTop: 2,
     fontWeight: "500" as const,
+    width: "100%" as const,
+    textAlign: "center" as const,
   },
   activeBadge: {
     flexDirection: "row" as const,
@@ -1282,6 +1294,7 @@ const styles = StyleSheet.create({
   activeBadgeCompact: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
+    alignSelf: "center" as const,
     marginTop: 10,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -1308,6 +1321,8 @@ const styles = StyleSheet.create({
   },
   lockedSectionCompact: {
     marginTop: 10,
+    alignItems: "center" as const,
+    width: "100%" as const,
   },
   progressBarBg: {
     width: "70%" as const,
@@ -1318,6 +1333,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   progressBarBgCompact: {
+    alignSelf: "center" as const,
     width: "85%" as const,
     height: 5,
     marginBottom: 6,

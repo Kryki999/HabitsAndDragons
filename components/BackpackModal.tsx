@@ -11,7 +11,12 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { X, Backpack, Shirt, Sparkles } from "lucide-react-native";
-import * as Haptics from "expo-haptics";
+import {
+  impactAsync,
+  notificationAsync,
+  ImpactFeedbackStyle,
+  NotificationFeedbackType,
+} from "@/lib/hapticsGate";
 import Colors from "@/constants/colors";
 import { LOOT_RARITY_COLOR } from "@/constants/lootRarity";
 import { useGameStore } from "@/store/gameStore";
@@ -76,14 +81,14 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
   const overflow = ownedItemIds.length > SLOT_COUNT ? ownedItemIds.length - SLOT_COUNT : 0;
 
   const handleClose = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    impactAsync(ImpactFeedbackStyle.Light);
     setDetailPayload(null);
     setDetailInventoryIndex(null);
     onClose();
   }, [onClose]);
 
   const openItem = useCallback((entry: LootItemEntry, inventoryIndex: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    impactAsync(ImpactFeedbackStyle.Light);
     setDetailInventoryIndex(inventoryIndex);
     setDetailPayload({ type: "item", entry });
   }, []);
@@ -92,13 +97,13 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
     (slot: "outfit" | "relic") => {
       const id = slot === "outfit" ? equippedOutfitId : equippedRelicId;
       if (!id) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        notificationAsync(NotificationFeedbackType.Warning);
         return;
       }
       const entry = resolveLootItemById(id);
       if (!entry) return;
       const idx = ownedItemIds.indexOf(id);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      impactAsync(ImpactFeedbackStyle.Light);
       setDetailInventoryIndex(idx >= 0 ? idx : 0);
       setDetailPayload({ type: "item", entry });
     },

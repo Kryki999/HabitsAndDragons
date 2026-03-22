@@ -74,6 +74,23 @@ function resolveDifficulty(habit: Habit): HabitDifficulty {
   return habit.difficulty ?? 'medium';
 }
 
+function patchActivityForDay(
+  activityByDate: GameState['activityByDate'],
+  date: string,
+  deltaCompletions: number,
+  deltaXp: number,
+): GameState['activityByDate'] {
+  const prev = activityByDate[date] ?? { completions: 0, xpFromHabits: 0 };
+  const completions = Math.max(0, prev.completions + deltaCompletions);
+  const xpFromHabits = Math.max(0, prev.xpFromHabits + deltaXp);
+  if (completions === 0 && xpFromHabits === 0) {
+    const next = { ...activityByDate };
+    delete next[date];
+    return next;
+  }
+  return { ...activityByDate, [date]: { completions, xpFromHabits } };
+}
+
 export const useGameStore = create<GameStore>()(
   persist(
     (set, get) => ({
@@ -102,6 +119,8 @@ export const useGameStore = create<GameStore>()(
       ownedItemIds: [],
       equippedOutfitId: null,
       equippedRelicId: null,
+      activityByDate: {},
+      hapticsEnabled: true,
 
       completeHabit: (habitId: string) => {
         set((state) => {
@@ -148,6 +167,8 @@ export const useGameStore = create<GameStore>()(
             `[GameStore] complete ${habit.name} [${resolveDifficulty(habit)}] task#${newTaskIndex} fatigue=${fatigueMul} +${xpGranted} ${habit.stat}XP +${goldGranted}g key=${keyDropped}`,
           );
 
+          const activityByDate = patchActivityForDay(base.activityByDate ?? {}, today, 1, xpGranted);
+
           return {
             ...base,
             habits: updatedHabits,
@@ -165,6 +186,7 @@ export const useGameStore = create<GameStore>()(
               [habitId]: { taskDayIndex: newTaskIndex, xpGranted, goldGranted, keyDropped },
             },
             unlockedTitleIds: [...base.unlockedTitleIds, ...newTitles],
+            activityByDate,
           };
         });
       },
@@ -195,6 +217,8 @@ export const useGameStore = create<GameStore>()(
 
           const xpKey = `${habit.stat}XP` as 'strengthXP' | 'agilityXP' | 'intelligenceXP';
           const firstDungeonKeyDroppedToday = Object.values(nextLog).some(l => l.keyDropped);
+          const today = getTodayString();
+          const activityByDate = patchActivityForDay(base.activityByDate ?? {}, today, -1, -ledger.xpGranted);
 
           return {
             ...base,
@@ -207,6 +231,7 @@ export const useGameStore = create<GameStore>()(
             goldFromStandardTasksToday: Math.max(0, base.goldFromStandardTasksToday - ledger.goldGranted),
             firstDungeonKeyDroppedToday,
             habitCompletionLog: nextLog,
+            activityByDate,
           };
         });
       },
@@ -235,6 +260,8 @@ export const useGameStore = create<GameStore>()(
             const nextLog = { ...base.habitCompletionLog };
             delete nextLog[habitId];
             const firstDungeonKeyDroppedToday = Object.values(nextLog).some(l => l.keyDropped);
+            const today = getTodayString();
+            const activityByDate = patchActivityForDay(base.activityByDate ?? {}, today, -1, -ledger.xpGranted);
             return {
               ...base,
               habits: base.habits.filter(h => h.id !== habitId),
@@ -246,6 +273,7 @@ export const useGameStore = create<GameStore>()(
               goldFromStandardTasksToday: Math.max(0, base.goldFromStandardTasksToday - ledger.goldGranted),
               firstDungeonKeyDroppedToday,
               habitCompletionLog: nextLog,
+              activityByDate,
             };
           }
 
@@ -449,14 +477,21 @@ export const useGameStore = create<GameStore>()(
           const intelligenceXP = stat === 'intelligence' ? newXp : base.intelligenceXP;
           const newTitles = collectNewTitles(base.unlockedTitleIds, strengthXP, agilityXP, intelligenceXP);
           console.log(`[GameStore] Sage Epic Quest +${GOLD_EPIC_QUEST_SAGE} gold (extra pool), +${xpBonus} ${stat} XP`);
+          const today = getTodayString();
+          const activityByDate = patchActivityForDay(base.activityByDate ?? {}, today, 1, xpBonus);
           return {
             ...base,
             gold: base.gold + GOLD_EPIC_QUEST_SAGE,
             sageEpicQuestClaimedToday: true,
             [xpKey]: newXp,
             unlockedTitleIds: [...base.unlockedTitleIds, ...newTitles],
+            activityByDate,
           };
         });
+      },
+
+      setHapticsEnabled: (enabled: boolean) => {
+        set({ hapticsEnabled: enabled });
       },
 
       processDailyLogin: () => {
@@ -528,6 +563,8 @@ export const useGameStore = create<GameStore>()(
         ownedItemIds: state.ownedItemIds,
         equippedOutfitId: state.equippedOutfitId,
         equippedRelicId: state.equippedRelicId,
+        activityByDate: state.activityByDate,
+        hapticsEnabled: state.hapticsEnabled,
       }),
     },
   ),

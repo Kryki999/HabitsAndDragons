@@ -69,6 +69,13 @@ export interface GameState {
   equippedOutfitId: string | null;
   /** Aktywna relikwia / broń / artefakt (kosmetyk). */
   equippedRelicId: string | null;
+  /**
+   * Dzienna aktywność (nawyki) dla heatmapy — klucz `YYYY-MM-DD`.
+   * `completions` = liczba odhaczonych nawyków; `xpFromHabits` = XP z nawyków tego dnia.
+   */
+  activityByDate: Record<string, { completions: number; xpFromHabits: number }>;
+  /** Globalny przełącznik wibracji (Settings). */
+  hapticsEnabled: boolean;
 }
 
 export interface GameActions {
@@ -114,6 +121,7 @@ export interface GameActions {
    * Wewnętrznie to zwykły przyrost salda (jak `addGold`).
    */
   addDungeonChestGold: (amount: number) => void;
+  setHapticsEnabled: (enabled: boolean) => void;
 }
 
 export interface SuggestedHabit {

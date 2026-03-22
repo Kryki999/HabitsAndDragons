@@ -13,7 +13,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { X } from "lucide-react-native";
 import { LootGlyph } from "@/lib/lootGlyph";
-import * as Haptics from "expo-haptics";
+import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import Colors from "@/constants/colors";
 import { LOOT_RARITY_COLOR } from "@/constants/lootRarity";
 import { sellPriceForRarity } from "@/lib/inventoryEconomy";
@@ -63,7 +63,7 @@ export default function LootDetailModal({
 
   useEffect(() => {
     if (visible) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      impactAsync(ImpactFeedbackStyle.Light);
       Animated.parallel([
         Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }),
         Animated.spring(scale, { toValue: 1, friction: 8, tension: 80, useNativeDriver: true }),

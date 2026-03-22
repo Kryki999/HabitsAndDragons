@@ -8,6 +8,7 @@ import {
   ScrollView,
   Pressable,
   Alert,
+  useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -22,7 +23,7 @@ import {
   FlaskConical,
   Dices,
 } from "lucide-react-native";
-import * as Haptics from "expo-haptics";
+import { impactAsync, selectionAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useGameStore } from "@/store/gameStore";
@@ -95,6 +96,8 @@ function SageMessage({ message, delay }: { message: { sender: string; text: stri
 }
 
 export default function SageScreen() {
+  const { width: winW } = useWindowDimensions();
+  const pricingCardWidth = Math.min(winW * 0.82, 320);
   const insets = useSafeAreaInsets();
   const gold = useGameStore((s) => s.gold);
   const claimSageEpicQuestReward = useGameStore((s) => s.claimSageEpicQuestReward);
@@ -168,7 +171,7 @@ export default function SageScreen() {
 
   const handleCompleteQuest = useCallback(() => {
     if (questCompleted || sageEpicQuestClaimedToday) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    impactAsync(ImpactFeedbackStyle.Heavy);
 
     setQuestCompleted(true);
     claimSageEpicQuestReward(currentQuest.stat, 20);
@@ -200,7 +203,7 @@ export default function SageScreen() {
       Alert.alert("Za mało złota", `Potrzebujesz ${GOLD_SAGE_EPIC_REROLL} złota, by wylosować nowe propozycje.`);
       return;
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    impactAsync(ImpactFeedbackStyle.Medium);
     const ok = paySageEpicReroll();
     if (!ok) {
       Alert.alert("Nie udało się", "Spróbuj ponownie za chwilę.");
@@ -214,7 +217,7 @@ export default function SageScreen() {
 
   const handlePickQuest = useCallback(
     (id: string) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      impactAsync(ImpactFeedbackStyle.Light);
       selectSageEpicQuest(id);
     },
     [selectSageEpicQuest],
@@ -254,6 +257,7 @@ export default function SageScreen() {
           { paddingTop: Math.max(insets.top, 12) + 8, paddingBottom: insets.bottom + 32 },
         ]}
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
       >
         <Animated.View
           style={[
@@ -278,7 +282,7 @@ export default function SageScreen() {
           </View>
           <Pressable
             onPress={() => {
-              Haptics.selectionAsync();
+              selectionAsync();
               setLifeGoalOpen(true);
             }}
             style={({ pressed }) => [styles.settingsBtn, pressed && styles.settingsBtnPressed]}
@@ -469,8 +473,19 @@ export default function SageScreen() {
         </View>
 
         <Text style={styles.pricingSectionTitle}>Plany</Text>
-        <View style={styles.pricingRow}>
-          <LinearGradient colors={["#1e1a28", "#16121f"]} style={styles.planCard}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
+          decelerationRate="fast"
+          snapToInterval={pricingCardWidth + 14}
+          snapToAlignment="start"
+          contentContainerStyle={styles.pricingCarousel}
+        >
+          <LinearGradient
+            colors={["#1e1a28", "#16121f"]}
+            style={[styles.planCard, styles.planCardCarousel, { width: pricingCardWidth }]}
+          >
             <Text style={styles.planName}>Darmowy Odkrywca</Text>
             <Text style={styles.planPrice}>0 zł</Text>
             <View style={styles.planBullets}>
@@ -480,7 +495,10 @@ export default function SageScreen() {
             </View>
           </LinearGradient>
 
-          <LinearGradient colors={["#2d2048", "#1e1438"]} style={[styles.planCard, styles.planCardPremium]}>
+          <LinearGradient
+            colors={["#2d2048", "#1e1438"]}
+            style={[styles.planCard, styles.planCardPremium, styles.planCardCarousel, { width: pricingCardWidth }]}
+          >
             <LinearGradient colors={[...Colors.gradients.purple]} style={styles.premiumBadge}>
               <Text style={styles.premiumBadgeText}>PREMIUM</Text>
             </LinearGradient>
@@ -497,7 +515,7 @@ export default function SageScreen() {
               </LinearGradient>
             </Pressable>
           </LinearGradient>
-        </View>
+        </ScrollView>
       </ScrollView>
 
       <LifeGoalModal visible={lifeGoalOpen} onClose={() => setLifeGoalOpen(false)} />
@@ -889,18 +907,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: "center" as const,
   },
-  pricingRow: {
+  pricingCarousel: {
+    paddingBottom: 8,
+    paddingHorizontal: 4,
     flexDirection: "row" as const,
-    gap: 12,
-    marginBottom: 8,
+    alignItems: "stretch" as const,
   },
   planCard: {
-    flex: 1,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
     borderColor: Colors.dark.border,
-    minHeight: 200,
+    minHeight: 220,
+  },
+  planCardCarousel: {
+    marginRight: 14,
   },
   planCardPremium: {
     borderColor: Colors.dark.purple + "66",

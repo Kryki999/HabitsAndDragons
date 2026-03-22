@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -6,17 +6,19 @@ import {
   Animated,
   Platform,
   ScrollView,
-  Pressable,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Castle, Crown, Flame, Shirt, Sparkles, Trophy } from "lucide-react-native";
-import * as Haptics from "expo-haptics";
+import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { REALM_MOCK_HEROES, type RealmMockHero } from "@/constants/realmMockHeroes";
 import { useGameStore } from "@/store/gameStore";
 import type { PlayerClass } from "@/types/game";
 import RarityItemSlot from "@/components/RarityItemSlot";
+import LootDetailModal, { type LootModalPayload } from "@/components/LootDetailModal";
+import { resolveLootItemById } from "@/lib/itemCatalog";
+import { LOOT_RARITY_COLOR } from "@/constants/lootRarity";
 
 const CLASS_LABEL: Record<PlayerClass, string> = {
   warrior: "Warrior",
@@ -47,6 +49,7 @@ function RealmPlayerSticky({
   classColor,
   outfitId,
   relicId,
+  onInspectItem,
 }: {
   rank: number;
   streak: number;
@@ -55,6 +58,7 @@ function RealmPlayerSticky({
   classColor: string;
   outfitId: string | null;
   relicId: string | null;
+  onInspectItem: (itemId: string) => void;
 }) {
   const entryAnim = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0.35)).current;
@@ -137,7 +141,15 @@ function RealmPlayerSticky({
   );
 }
 
-function RealmRivalRow({ hero, rank }: { hero: RealmMockHero; rank: number }) {
+function RealmRivalRow({
+  hero,
+  rank,
+  onInspectItem,
+}: {
+  hero: RealmMockHero;
+  rank: number;
+  onInspectItem: (itemId: string) => void;
+}) {
   const entryAnim = useRef(new Animated.Value(0)).current;
   const classColor = CLASS_COLOR[hero.playerClass];
   const classLabel = CLASS_LABEL[hero.playerClass];
@@ -153,10 +165,7 @@ function RealmRivalRow({ hero, rank }: { hero: RealmMockHero; rank: number }) {
 
   return (
     <Animated.View style={{ opacity: entryAnim }}>
-      <Pressable
-        onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-        style={({ pressed }) => [styles.rivalCard, pressed && styles.rivalCardPressed]}
-      >
+      <View style={styles.rivalCard}>
         <LinearGradient
           colors={[Colors.dark.surface + "ff", Colors.dark.background + "ee"]}
           style={styles.rivalGradient}
@@ -186,11 +195,33 @@ function RealmRivalRow({ hero, rank }: { hero: RealmMockHero; rank: number }) {
             </View>
           </View>
           <View style={styles.rivalGear}>
-            <RarityItemSlot itemId={hero.outfitItemId} size={44} emptyLabel="—" />
-            <RarityItemSlot itemId={hero.relicItemId} size={44} emptyLabel="—" />
+            <RarityItemSlot
+              itemId={hero.outfitItemId}
+              size={44}
+              emptyLabel="—"
+              onPress={
+                hero.outfitItemId
+                  ? () => {
+                      onInspectItem(hero.outfitItemId!);
+                    }
+                  : undefined
+              }
+            />
+            <RarityItemSlot
+              itemId={hero.relicItemId}
+              size={44}
+              emptyLabel="—"
+              onPress={
+                hero.relicItemId
+                  ? () => {
+                      onInspectItem(hero.relicItemId!);
+                    }
+                  : undefined
+              }
+            />
           </View>
         </LinearGradient>
-      </Pressable>
+      </View>
     </Animated.View>
   );
 }
@@ -202,6 +233,15 @@ export default function KingdomScreen() {
   const getPlayerLevel = useGameStore((s) => s.getPlayerLevel);
   const equippedOutfitId = useGameStore((s) => s.equippedOutfitId);
   const equippedRelicId = useGameStore((s) => s.equippedRelicId);
+
+  const [lootPayload, setLootPayload] = useState<LootModalPayload | null>(null);
+
+  const openLootItem = useCallback((itemId: string) => {
+    const entry = resolveLootItemById(itemId);
+    if (!entry) return;
+    impactAsync(ImpactFeedbackStyle.Light);
+    setLootPayload({ type: "item", entry });
+  }, []);
 
   const headerAnim = useRef(new Animated.Value(0)).current;
   const orbAnim = useRef(new Animated.Value(0.2)).current;
@@ -258,6 +298,7 @@ export default function KingdomScreen() {
             classColor={classColor}
             outfitId={equippedOutfitId}
             relicId={equippedRelicId}
+            onInspectItem={openLootItem}
           />
         </View>
 
@@ -294,7 +335,7 @@ export default function KingdomScreen() {
         </View>
 
         {sortedHeroes.map((hero, i) => (
-          <RealmRivalRow key={hero.id} hero={hero} rank={i + 1} />
+          <RealmRivalRow key={hero.id} hero={hero} rank={i + 1} onInspectItem={openLootItem} />
         ))}
 
         <View style={styles.footer}>
@@ -303,6 +344,15 @@ export default function KingdomScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      <LootDetailModal
+        visible={lootPayload !== null}
+        payload={lootPayload}
+        onClose={() => setLootPayload(null)}
+        accentHint={
+          lootPayload?.type === "item" ? LOOT_RARITY_COLOR[lootPayload.entry.rarity] : undefined
+        }
+      />
     </View>
   );
 }
@@ -489,10 +539,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderRadius: 14,
     overflow: "hidden",
-  },
-  rivalCardPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.99 }],
   },
   rivalGradient: {
     flexDirection: "row",

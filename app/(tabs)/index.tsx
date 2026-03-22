@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Swords, Zap, BookOpen, Plus, Mail, Settings, Coins, KeyRound, Backpack } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
@@ -23,6 +23,9 @@ import ClassSelectionModal from '@/components/ClassSelectionModal';
 import CircularProgress from '@/components/CircularProgress';
 import LivingDiorama from '@/components/LivingDiorama';
 import BackpackModal from '@/components/BackpackModal';
+import ActivityHeatmap from '@/components/ActivityHeatmap';
+import SettingsModal from '@/components/SettingsModal';
+import MailboxModal from '@/components/MailboxModal';
 
 const { width } = Dimensions.get('window');
 
@@ -39,11 +42,11 @@ const TIME_LABELS: Record<TimeOfDay, { label: string; emoji: string }> = {
 };
 
 const CASTLE_TIERS = [
-  { minLevel: 1, name: 'Wooden Hut', emoji: '🏚️', desc: 'A humble beginning' },
-  { minLevel: 3, name: 'Stone Tower', emoji: '🏰', desc: 'Walls of stone rise' },
-  { minLevel: 5, name: 'Fortified Keep', emoji: '🏯', desc: 'A bastion of strength' },
-  { minLevel: 8, name: 'Grand Castle', emoji: '⚔️', desc: 'A kingdom takes shape' },
-  { minLevel: 12, name: 'Dragon Fortress', emoji: '🐉', desc: 'Legends are forged here' },
+  { minLevel: 1, namePl: 'Skromny Namiot', emoji: '🏕️', desc: 'Skromny początek przygody' },
+  { minLevel: 3, namePl: 'Drewniana Wieża', emoji: '🪵', desc: 'Pierwsze palisady i wieżyczka strażnicza' },
+  { minLevel: 5, namePl: 'Warowny Bastion', emoji: '🏯', desc: 'Mury rosną w górę — bezpieczniejszy obóz' },
+  { minLevel: 8, namePl: 'Wielki Zamek', emoji: '⚔️', desc: 'Królestwo nabiera majestatu' },
+  { minLevel: 12, namePl: 'Smocza Forteca', emoji: '🐉', desc: 'Legendy rodzą się w cieniu smoków' },
 ];
 
 function getCastleTier(level: number) {
@@ -100,8 +103,11 @@ export default function CastleScreen() {
   const insets = useSafeAreaInsets();
   const [modalVisible, setModalVisible] = useState(false);
   const [backpackOpen, setBackpackOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mailboxOpen, setMailboxOpen] = useState(false);
   const {
     gold, streak, habits, strengthXP, agilityXP, intelligenceXP, playerClass, dungeonKeys,
+    activityByDate,
     getPlayerLevel, getCurrentLevelXP, getXPForNextLevel,
     completeHabit, uncompleteHabit, addHabit, removeHabit, setPlayerClass,
   } = useGameStore();
@@ -208,11 +214,23 @@ export default function CastleScreen() {
 
           {/* Right: Icons */}
           <View style={styles.hudRight}>
-            <Pressable style={styles.iconButton}>
+            <Pressable
+              style={styles.iconButton}
+              onPress={() => {
+                impactAsync(ImpactFeedbackStyle.Light);
+                setMailboxOpen(true);
+              }}
+            >
               <Mail color={Colors.dark.text} size={20} />
               <View style={styles.notificationDot} />
             </Pressable>
-            <Pressable style={styles.iconButton}>
+            <Pressable
+              style={styles.iconButton}
+              onPress={() => {
+                impactAsync(ImpactFeedbackStyle.Light);
+                setSettingsOpen(true);
+              }}
+            >
               <Settings color={Colors.dark.text} size={20} />
             </Pressable>
           </View>
@@ -230,6 +248,21 @@ export default function CastleScreen() {
           <LivingDiorama />
         </Animated.View>
 
+        <Animated.View style={[styles.castleCaptionBlock, { opacity: headerAnim }]}>
+          <LinearGradient
+            colors={['#1a1528', '#120e1a']}
+            style={styles.castleCaptionGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Text style={styles.castleCaptionLevel}>Poziom {playerLevel}</Text>
+            <Text style={styles.castleCaptionTitle}>
+              {castleTier.emoji} {castleTier.namePl}
+            </Text>
+            <Text style={styles.castleCaptionDesc}>{castleTier.desc}</Text>
+          </LinearGradient>
+        </Animated.View>
+
         {/* Stat Hub */}
         <Animated.View style={[styles.statHubContainer, {
           opacity: headerAnim,
@@ -242,7 +275,7 @@ export default function CastleScreen() {
         <Animated.View style={[styles.backpackRow, { opacity: headerAnim }]}>
           <Pressable
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              impactAsync(ImpactFeedbackStyle.Light);
               setBackpackOpen(true);
             }}
             style={({ pressed }) => [styles.backpackEntryOuter, pressed && styles.backpackEntryPressed]}
@@ -263,6 +296,8 @@ export default function CastleScreen() {
             </LinearGradient>
           </Pressable>
         </Animated.View>
+
+        <ActivityHeatmap activityByDate={activityByDate ?? {}} />
 
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
@@ -311,7 +346,7 @@ export default function CastleScreen() {
       <Animated.View style={[styles.fabContainer, { transform: [{ scale: fabPulse }] }]}>
         <Pressable
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            impactAsync(ImpactFeedbackStyle.Heavy);
             setModalVisible(true);
           }}
           testID="add-habit-fab"
@@ -340,6 +375,9 @@ export default function CastleScreen() {
       />
 
       <BackpackModal visible={backpackOpen} onClose={() => setBackpackOpen(false)} />
+
+      <SettingsModal visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <MailboxModal visible={mailboxOpen} onClose={() => setMailboxOpen(false)} />
     </View>
   );
 }
@@ -452,6 +490,40 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: Colors.dark.gold,
+  },
+
+  castleCaptionBlock: {
+    paddingHorizontal: 20,
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  castleCaptionGradient: {
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + '88',
+    alignItems: 'center',
+  },
+  castleCaptionLevel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.dark.gold,
+    letterSpacing: 1.4,
+    marginBottom: 4,
+  },
+  castleCaptionTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.dark.text,
+    textAlign: 'center',
+  },
+  castleCaptionDesc: {
+    fontSize: 12,
+    color: Colors.dark.textSecondary,
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: 18,
   },
 
   // --- Stat Hub Styles ---

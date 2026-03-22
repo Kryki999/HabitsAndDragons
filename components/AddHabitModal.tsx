@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { X, Swords, Zap, BookOpen, ChevronRight, Scroll, PenTool } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { impactAsync, selectionAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '@/constants/colors';
 import { StatType, TimeOfDay, SuggestedHabit, HabitDifficulty } from '@/types/game';
@@ -63,7 +63,7 @@ function SuggestedHabitItem({ habit, onSelect }: { habit: SuggestedHabit; onSele
       onPressIn={() => Animated.timing(pressAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start()}
       onPressOut={() => Animated.spring(pressAnim, { toValue: 0, friction: 6, tension: 100, useNativeDriver: true }).start()}
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        impactAsync(ImpactFeedbackStyle.Heavy);
         onSelect(habit);
       }}
       testID={`suggested-habit-${habit.name}`}
@@ -142,7 +142,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
   }, [slideAnim, onClose]);
 
   const handleSelectSuggested = useCallback((habit: SuggestedHabit) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    impactAsync(ImpactFeedbackStyle.Heavy);
     onAddHabit({
       name: habit.name,
       description: habit.description,
@@ -156,7 +156,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
 
   const handleCreateCustom = useCallback(() => {
     if (!customName.trim()) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    impactAsync(ImpactFeedbackStyle.Heavy);
     onAddHabit({
       name: customName.trim(),
       description: customDesc.trim() || customName.trim(),
@@ -175,7 +175,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
 
       <Pressable
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          impactAsync(ImpactFeedbackStyle.Heavy);
           setView('suggested');
         }}
         testID="choose-suggested"
@@ -202,7 +202,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
 
       <Pressable
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          impactAsync(ImpactFeedbackStyle.Heavy);
           setView('custom');
         }}
         testID="choose-custom"
@@ -318,7 +318,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
               <Pressable
                 key={stat.value}
                 onPress={() => {
-                  Haptics.selectionAsync();
+                  selectionAsync();
                   setSelectedStat(stat.value);
                 }}
                 style={[
@@ -344,7 +344,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
               <Pressable
                 key={d.value}
                 onPress={() => {
-                  Haptics.selectionAsync();
+                  selectionAsync();
                   setSelectedDifficulty(d.value);
                 }}
                 style={[
@@ -370,7 +370,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
               <Pressable
                 key={time.value}
                 onPress={() => {
-                  Haptics.selectionAsync();
+                  selectionAsync();
                   setSelectedTime(time.value);
                 }}
                 style={[

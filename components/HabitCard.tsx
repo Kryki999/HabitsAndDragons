@@ -8,7 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { Check, Swords, Zap, BookOpen, Trash2 } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import Colors from '@/constants/colors';
 import { Habit, StatType, HabitDifficulty } from '@/types/game';
 
@@ -55,7 +55,7 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
   }, [pressAnim]);
 
   const handlePress = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    impactAsync(ImpactFeedbackStyle.Heavy);
     if (habit.completedToday) {
       onUncomplete(habit.id);
       Animated.spring(checkAnim, {
@@ -84,7 +84,7 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
   }, [habit.completedToday, habit.id, onComplete, onUncomplete, checkAnim]);
 
   const handleDelete = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    impactAsync(ImpactFeedbackStyle.Light);
     onDelete(habit.id);
   }, [habit.id, onDelete]);
 
