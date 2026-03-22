@@ -499,9 +499,12 @@ export default function SageScreen() {
             colors={["#2d2048", "#1e1438"]}
             style={[styles.planCard, styles.planCardPremium, styles.planCardCarousel, { width: pricingCardWidth }]}
           >
-            <LinearGradient colors={[...Colors.gradients.purple]} style={styles.premiumBadge}>
-              <Text style={styles.premiumBadgeText}>PREMIUM</Text>
-            </LinearGradient>
+            <View style={styles.premiumBadgeRow}>
+              <View style={{ flex: 1 }} />
+              <LinearGradient colors={[...Colors.gradients.purple]} style={styles.premiumBadgeInline}>
+                <Text style={styles.premiumBadgeText}>PREMIUM</Text>
+              </LinearGradient>
+            </View>
             <Text style={styles.planNamePremium}>Legendarny Bohater</Text>
             <Text style={styles.planPricePremium}>Wkrótce</Text>
             <View style={styles.planBullets}>
@@ -925,15 +928,17 @@ const styles = StyleSheet.create({
   },
   planCardPremium: {
     borderColor: Colors.dark.purple + "66",
-    position: "relative" as const,
-    overflow: "visible" as const,
+    paddingTop: 12,
   },
-  premiumBadge: {
-    position: "absolute" as const,
-    top: -10,
-    right: 8,
+  premiumBadgeRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    minHeight: 22,
+    marginBottom: 6,
+  },
+  premiumBadgeInline: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 8,
   },
   premiumBadgeText: {
@@ -953,7 +958,6 @@ const styles = StyleSheet.create({
     fontWeight: "800" as const,
     color: Colors.dark.text,
     marginBottom: 4,
-    marginTop: 8,
   },
   planPrice: {
     fontSize: 20,

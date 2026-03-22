@@ -29,10 +29,12 @@ const LEVEL_BG: readonly string[] = [
 
 type Props = {
   activityByDate: Record<string, { completions: number; xpFromHabits: number }>;
+  /** W modalu — mniejszy margines zewnętrzny. */
+  embedded?: boolean;
 };
 
 /** GitHub-style contribution grid — oldest left→right, newest bottom-right corner. */
-export default function ActivityHeatmap({ activityByDate }: Props) {
+export default function ActivityHeatmap({ activityByDate, embedded }: Props) {
   const cells = useMemo(() => {
     const out: { key: string; level: number }[] = [];
     const end = new Date();
@@ -55,7 +57,7 @@ export default function ActivityHeatmap({ activityByDate }: Props) {
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, embedded && styles.wrapEmbedded]}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>Aktywność</Text>
         <Text style={styles.sub}>Ostatnie {NUM_DAYS} dni</Text>
@@ -100,6 +102,9 @@ const GAP = 3;
 const styles = StyleSheet.create({
   wrap: {
     marginBottom: 20,
+  },
+  wrapEmbedded: {
+    marginBottom: 0,
   },
   headerRow: {
     flexDirection: "row",

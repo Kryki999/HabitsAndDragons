@@ -126,14 +126,24 @@ function RealmPlayerSticky({
               <Shirt size={14} color={Colors.dark.gold} />
               <Text style={styles.gearColTitle}>Outfit</Text>
             </View>
-            <RarityItemSlot itemId={outfitId} size={64} emptyLabel="—" />
+            <RarityItemSlot
+              itemId={outfitId}
+              size={64}
+              emptyLabel="—"
+              onPress={outfitId ? () => onInspectItem(outfitId) : undefined}
+            />
           </View>
           <View style={styles.gearCol}>
             <View style={styles.gearColHead}>
               <Sparkles size={14} color={Colors.dark.purple} />
               <Text style={styles.gearColTitle}>Relic</Text>
             </View>
-            <RarityItemSlot itemId={relicId} size={64} emptyLabel="—" />
+            <RarityItemSlot
+              itemId={relicId}
+              size={64}
+              emptyLabel="—"
+              onPress={relicId ? () => onInspectItem(relicId) : undefined}
+            />
           </View>
         </View>
       </LinearGradient>
