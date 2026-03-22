@@ -44,3 +44,19 @@ Absolutny killer-feature. Lochy to szybka, klikana wyprawa (Auto-Resolve).
 
 ### 6. Mapa Prowincji (Faza 2 - Social Accountability)
 Zamiast "listy znajomych", gracz przesuwa izometryczną mapę, na której widzi zamki i avatary (w tym zdobyte kosmetyki i smoki) swoich znajomych z prawdziwego życia. Presja społeczna i chęć pokazania swojego statusu to najlepszy "anty-cheat" przeciwko oszukiwaniu w nawykach.
+
+---
+
+## V2 / Future Backlog
+
+Planowany rozwój (wysokopoziomowo — bez obietnic terminów):
+
+- **Friends System & Direct Messaging (Czat)** — znajomi w grze, wiadomości bezpośrednie, obecność online.
+- **Leaderboard filtering (Global vs. Friends)** — przełącznik zakresu rankingu: świat vs. znajomi.
+- **Guilds / Clans with Co-op Weekly Quests** — gildie, tygodniowe questy drużynowe, wspólne cele.
+- **Global World Bosses (Weekend events)** — światowi bossowie w weekendy, eventy sezonowe.
+- **Crafting System (Forging duplicate items into higher rarity)** — przepalanie duplikatów w wyższą rzadkość.
+- **Player-to-Player Marketplace (Trading)** — handel między graczami, giełda przedmiotów kosmetycznych.
+- **SFX & Epic UI sounds** — pełna warstwa audio: UI, lochy, nagrody, ambient.
+
+*Ten backlog może się zmieniać w miarę rozwoju produktu.*

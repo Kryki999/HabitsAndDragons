@@ -33,6 +33,7 @@ import { DUNGEON_KEY_GOLD_PRICE } from "@/lib/economy";
 import { rollGoldAmount, rollWeightedDungeonEntry } from "@/lib/weightedLoot";
 import { LootGlyph } from "@/lib/lootGlyph";
 import type { StatType } from "@/types/game";
+import { LOOT_RARITY_COLOR } from "@/constants/lootRarity";
 import { sortDungeonLootByRarity, type DungeonLootEntry, type LootRarity } from "@/types/dungeonLoot";
 import { DUNGEONS, type DungeonData } from "@/constants/dungeons";
 import LootDetailModal, { type LootModalPayload } from "@/components/LootDetailModal";
@@ -80,14 +81,6 @@ const DRAGONS: DragonData[] = [
     lockedIcon: <Crown size={34} color="#4a4a3a" />,
   },
 ];
-
-const LOOT_RARITY_COLOR: Record<LootRarity, string> = {
-  common: "#9ca3af",
-  uncommon: "#3dd68c",
-  rare: "#45d4e8",
-  epic: "#9b6dff",
-  legendary: "#ffc845",
-};
 
 /** Stały „viewport” listy lootu (~3 wiersze); reszta przewijana — nie rozciąga karty. */
 const DUNGEON_LOOT_SCROLL_MAX_HEIGHT = 210;

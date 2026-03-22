@@ -9,7 +9,7 @@ import {
   GestureResponderEvent,
 } from "react-native";
 import { Tabs } from "expo-router";
-import { Home, Trophy, Map, Sparkles } from "lucide-react-native";
+import { Home, Trophy, Castle, Sparkles } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 
@@ -141,11 +141,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="map"
+        name="kingdom"
         options={{
-          title: "Map",
+          title: "Kingdom",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon={Map} color={color} focused={focused} label="Map" />
+            <TabIcon icon={Castle} color={color} focused={focused} label="Kingdom" />
           ),
         }}
       />

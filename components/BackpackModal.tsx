@@ -13,24 +13,17 @@ import { LinearGradient } from "expo-linear-gradient";
 import { X, Backpack, Shirt, Sparkles } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { LOOT_RARITY_COLOR } from "@/constants/lootRarity";
 import { useGameStore } from "@/store/gameStore";
 import { resolveLootItemById } from "@/lib/itemCatalog";
-import { LootGlyph } from "@/lib/lootGlyph";
 import LootDetailModal, { type LootModalPayload } from "@/components/LootDetailModal";
-import type { LootItemEntry, LootRarity } from "@/types/dungeonLoot";
+import RarityItemSlot from "@/components/RarityItemSlot";
+import type { LootItemEntry } from "@/types/dungeonLoot";
 
 const SLOT_COUNT = 20;
 const COLUMNS = 4;
 const ROWS = SLOT_COUNT / COLUMNS;
 const SLOT_GAP = 10;
-
-const RARITY_COLOR: Record<LootRarity, string> = {
-  common: "#9ca3af",
-  uncommon: "#3dd68c",
-  rare: "#45d4e8",
-  epic: "#9b6dff",
-  legendary: "#ffc845",
-};
 
 interface BackpackModalProps {
   visible: boolean;
@@ -47,6 +40,11 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
   const [detailInventoryIndex, setDetailInventoryIndex] = useState<number | null>(null);
 
   const modalMaxW = Math.min(width - 32, 400);
+  const gridInnerW = modalMaxW - 36;
+  const cellPx = useMemo(() => {
+    const g = SLOT_GAP * (COLUMNS - 1);
+    return (gridInnerW - g) / COLUMNS;
+  }, [gridInnerW]);
 
   const slots = useMemo(() => {
     const shown = ownedItemIds.slice(0, SLOT_COUNT);
@@ -161,15 +159,9 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
                           if (!e) {
                             return <Text style={styles.loadoutEmpty}>—</Text>;
                           }
-                          const rc = RARITY_COLOR[e.rarity];
                           return (
                             <View style={styles.loadoutIconWrap}>
-                              <LinearGradient
-                                colors={[rc + "33", Colors.dark.background]}
-                                style={styles.loadoutIconGradient}
-                              >
-                                <LootGlyph icon={e.icon} size={36} color={rc} />
-                              </LinearGradient>
+                              <RarityItemSlot itemId={equippedOutfitId} size={72} />
                               <Text style={styles.loadoutItemName} numberOfLines={2}>
                                 {e.name}
                               </Text>
@@ -195,15 +187,9 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
                           if (!e) {
                             return <Text style={styles.loadoutEmpty}>—</Text>;
                           }
-                          const rc = RARITY_COLOR[e.rarity];
                           return (
                             <View style={styles.loadoutIconWrap}>
-                              <LinearGradient
-                                colors={[rc + "33", Colors.dark.background]}
-                                style={styles.loadoutIconGradient}
-                              >
-                                <LootGlyph icon={e.icon} size={36} color={rc} />
-                              </LinearGradient>
+                              <RarityItemSlot itemId={equippedRelicId} size={72} />
                               <Text style={styles.loadoutItemName} numberOfLines={2}>
                                 {e.name}
                               </Text>
@@ -238,7 +224,6 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
                           }
 
                           const { entry, inventoryIndex } = slot;
-                          const rc = RARITY_COLOR[entry.rarity];
                           const isEquipped =
                             entry.itemSlot === "outfit"
                               ? equippedOutfitId === entry.id
@@ -249,28 +234,15 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
                               <Pressable
                                 onPress={() => openItem(entry, inventoryIndex)}
                                 style={({ pressed }) => [
-                                  styles.slotFilledOuter,
-                                  {
-                                    borderColor: isEquipped ? Colors.dark.gold : rc + "99",
-                                    borderWidth: isEquipped ? 2.5 : 1.5,
-                                    opacity: pressed ? 0.9 : 1,
-                                    transform: pressed ? [{ scale: 0.97 }] : undefined,
-                                  },
+                                  styles.slotPress,
+                                  pressed && styles.slotPressPressed,
                                 ]}
                               >
-                                <LinearGradient
-                                  colors={[rc + "28", Colors.dark.background + "ee"]}
-                                  style={styles.slotFilledGradient}
-                                  start={{ x: 0, y: 0 }}
-                                  end={{ x: 1, y: 1 }}
-                                >
-                                  <LootGlyph icon={entry.icon} size={26} color={rc} />
-                                </LinearGradient>
-                                {isEquipped ? (
-                                  <View style={styles.equippedBadge}>
-                                    <Text style={styles.equippedBadgeText}>E</Text>
-                                  </View>
-                                ) : null}
+                                <RarityItemSlot
+                                  itemId={entry.id}
+                                  size={cellPx}
+                                  cornerBadge={isEquipped ? "E" : undefined}
+                                />
                               </Pressable>
                             </View>
                           );
@@ -295,7 +267,7 @@ export default function BackpackModal({ visible, onClose }: BackpackModalProps) 
         visible={detailPayload !== null}
         onClose={closeDetailOnly}
         payload={detailPayload}
-        accentHint={detailPayload?.type === "item" ? RARITY_COLOR[detailPayload.entry.rarity] : undefined}
+        accentHint={detailPayload?.type === "item" ? LOOT_RARITY_COLOR[detailPayload.entry.rarity] : undefined}
         itemInventoryIndex={detailInventoryIndex ?? undefined}
       />
     </>
@@ -417,15 +389,6 @@ const styles = StyleSheet.create({
     alignItems: "center" as const,
     gap: 6,
   },
-  loadoutIconGradient: {
-    width: 72,
-    height: 72,
-    borderRadius: 16,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    borderWidth: 1,
-    borderColor: Colors.dark.border + "88",
-  },
   loadoutItemName: {
     fontSize: 10,
     fontWeight: "700" as const,
@@ -476,34 +439,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.dark.border + "99",
   },
-  slotFilledOuter: {
+  slotPress: {
     flex: 1,
-    borderRadius: 12,
-    overflow: "hidden" as const,
-  },
-  slotFilledGradient: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 6,
-  },
-  equippedBadge: {
-    position: "absolute" as const,
-    top: 4,
-    right: 4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.dark.gold,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    borderWidth: 1,
-    borderColor: "#1a1228",
   },
-  equippedBadgeText: {
-    fontSize: 11,
-    fontWeight: "900" as const,
-    color: "#1a1228",
+  slotPressPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.97 }],
   },
   overflowHint: {
     marginTop: 14,

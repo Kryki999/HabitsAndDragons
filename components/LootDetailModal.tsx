@@ -15,6 +15,7 @@ import { X } from "lucide-react-native";
 import { LootGlyph } from "@/lib/lootGlyph";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { LOOT_RARITY_COLOR } from "@/constants/lootRarity";
 import { sellPriceForRarity } from "@/lib/inventoryEconomy";
 import { useGameStore } from "@/store/gameStore";
 import type { LootGoldEntry, LootIconId, LootItemEntry, LootRarity } from "@/types/dungeonLoot";
@@ -31,13 +32,7 @@ const RARITY_LABEL: Record<LootRarity, string> = {
   legendary: "Legendary",
 };
 
-const RARITY_COLOR: Record<LootRarity, string> = {
-  common: "#9ca3af",
-  uncommon: "#3dd68c",
-  rare: "#45d4e8",
-  epic: "#9b6dff",
-  legendary: "#ffc845",
-};
+const RARITY_COLOR = LOOT_RARITY_COLOR;
 
 interface LootDetailModalProps {
   visible: boolean;
