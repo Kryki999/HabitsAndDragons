@@ -152,9 +152,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="sage"
         options={{
-          title: "Sage",
+          title: "Mędrzec",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon={Sparkles} color={color} focused={focused} label="Sage" />
+            <TabIcon icon={Sparkles} color={color} focused={focused} label="Mędrzec" />
           ),
         }}
       />

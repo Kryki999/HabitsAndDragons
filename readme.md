@@ -59,4 +59,20 @@ Planowany rozwój (wysokopoziomowo — bez obietnic terminów):
 - **Player-to-Player Marketplace (Trading)** — handel między graczami, giełda przedmiotów kosmetycznych.
 - **SFX & Epic UI sounds** — pełna warstwa audio: UI, lochy, nagrody, ambient.
 
+- Creator / Streamer Mode (Widgety): Wielu twórców internetowych, muzyków czy streamerów lubi pokazywać, że pracują nad sobą. Możemy w V2 stworzyć publiczny link webowy (wykorzystując np. Vercela do frontendu), który generuje mały, przezroczysty widget (tzw. overlay). Streamer wrzuca to na OBS-a i jego widzowie na żywo widzą jego aktualny Streak, Level i Smoka. To darmowy marketing dla apki!
+
+-Web Dashboard / Public Profiles: Możliwość wygenerowania pięknego profilu webowego (np. habitsanddragons.com/p/Kael), żeby móc pochwalić się swoim zamkiem i statystykami na social mediach (Instagram, Twitter).
+
+-Real-World Check-ins (Eventy Lokalne): Integracja wyzwań z prawdziwym światem. Np. gracz idzie na duże wydarzenie (np. zlot, koncert, impreza taneczna) – odpala apkę, system wykrywa geolokalizację lub skanuje QR kod i daje potężny bonus zwinności z komunikatem "Zatańcz z nami i zdobądź XP!".
+
+- **Koło Fortuny (Wheel of Fortune):** System gacha, w którym gracze mogą kręcić kołem za nadmiar złota, by wygrać rzadkie przedmioty lub klucze.
+
+- **Sklep Mędrca:** Możliwość zakupu zaawansowanych przedmiotów użytkowych, takich jak Tarcze Ochrony Streaka.
+
+- **Premium AI Sage:** Podłączenie modelu LLM do analizowania zachowań gracza i prowadzenia z nim dialogu coachingowego.
+
+- **Task Archive & Activity Heatmap:** Historia ukończonych zadań i wizualny kalendarz aktywności w formacie "GitHub contributions" (Heatmap). Silny motywator psychologiczny oparty na metodzie "Don't break the chain".
+- **Healthy Bingo (LiveOps Events):** Czasowe wydarzenia w formie planszy Bingo. Wykonywanie konkretnych nawyków zamyka pola, a skompletowanie wiersza, kolumny lub przekątnej gwarantuje unikalny loot i premie do złota.
+- **Achievements System:** Dedykowana gablota z długoterminowymi osiągnięciami do odblokowania (medale, unikalne tytuły, odznaki za kamienie milowe). Świetne uzupełnienie profilu publicznego gracza.
+
 *Ten backlog może się zmieniać w miarę rozwoju produktu.*

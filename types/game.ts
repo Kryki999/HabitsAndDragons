@@ -49,6 +49,14 @@ export interface GameState {
   firstDungeonKeyDroppedToday: boolean;
   /** Sage epic quest (50 gold, separate from 100 cap) claimed this calendar day. */
   sageEpicQuestClaimedToday: boolean;
+  /** Stable id from `EPIC_QUEST_DEFINITIONS` for today's epic quest. */
+  sageEpicQuestId: string | null;
+  /** Calendar day (`YYYY-MM-DD`) for which `sageEpicQuestId` is valid. */
+  sageEpicQuestDate: string | null;
+  /** Paid rerolls used today (max 1). */
+  sageEpicRerollsUsedToday: number;
+  /** After paying reroll: three quest ids to pick from; null when not choosing. */
+  sageEpicRerollPendingIds: string[] | null;
   /** Morning streak bonus (+20 gold) claimed for this calendar day. */
   lastMorningGoldClaimDate: string | null;
   /** Titles unlocked by milestone stat levels. */
@@ -83,6 +91,12 @@ export interface GameActions {
   addXP: (stat: StatType, amount: number) => void;
   /** Epic Quest from Sage: +50 gold (outside 100 cap) once per day; not counted toward standard daily gold. */
   claimSageEpicQuestReward: (stat: StatType, xpBonus?: number) => void;
+  /** Ensures today's epic quest id exists (migration + day alignment). */
+  ensureSageEpicState: () => void;
+  /** Spend gold to roll 3 epic quest options; max 1/day; returns false if blocked. */
+  paySageEpicReroll: () => boolean;
+  /** Commit one of the three reroll options as the new epic quest. */
+  selectSageEpicQuest: (questId: string) => void;
   /** Spend gold for a dungeon key (D&D tab). Returns false if not enough gold. */
   purchaseDungeonKeyWithGold: () => boolean;
   /** Consume one key to enter a dungeon run. Returns false if no keys. */

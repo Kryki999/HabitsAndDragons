@@ -32,7 +32,8 @@ const Colors = {
     castle: ["#1a1228", "#1e1535", "#251d38"] as const,
     dragonLair: ["#1a0f14", "#251520", "#2a1828"] as const,
     map: ["#0d1a14", "#122520", "#1a2a28"] as const,
-    sage: ["#140f1a", "#1a1530", "#201a3a"] as const,
+    /** Sage / tavern — warm ember + deep wine + midnight violet */
+    sage: ["#120a0e", "#1a0f18", "#1e1428", "#1a1530"] as const,
     gold: ["#ffc845", "#ff9f1a"] as const,
     fire: ["#ff6b35", "#ff4444"] as const,
     emerald: ["#3dd68c", "#28a06a"] as const,

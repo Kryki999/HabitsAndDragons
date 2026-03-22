@@ -18,6 +18,9 @@ export const KEY_SUBSEQUENT_DROP_RATE = 0.01;
 /** Gold sink: buy one dungeon key in the D&D tab. */
 export const DUNGEON_KEY_GOLD_PRICE = 150;
 
+/** Sage tab: reroll epic daily quest (max 1/day); shows 3 picks. */
+export const GOLD_SAGE_EPIC_REROLL = 20;
+
 /** Task index for the day after this completion (1-based). */
 export function fatigueMultiplierForTaskIndex(taskIndexAfterComplete: number): number {
   if (taskIndexAfterComplete <= 19) return 1;

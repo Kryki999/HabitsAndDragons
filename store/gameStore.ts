@@ -9,9 +9,11 @@ import {
   GOLD_CAP_STANDARD_TASKS_DAILY,
   GOLD_EPIC_QUEST_SAGE,
   GOLD_MORNING_STREAK,
+  GOLD_SAGE_EPIC_REROLL,
   fatigueMultiplierForTaskIndex,
   rollDungeonKeyDrop,
 } from '@/lib/economy';
+import { pickRandomEpicQuestId, pickThreeDistinctEpicQuestIds } from '@/constants/epicQuests';
 import { TITLE_DEFINITIONS } from '@/constants/titles';
 import { resolveLootItemById } from '@/lib/itemCatalog';
 import { sellPriceForRarity } from '@/lib/inventoryEconomy';
@@ -39,6 +41,10 @@ function getEconomyPatchIfNewDay(state: GameState): Partial<GameState> | null {
     sageEpicQuestClaimedToday: false,
     habitCompletionLog: {},
     lastEconomyResetDate: today,
+    sageEpicQuestDate: today,
+    sageEpicQuestId: pickRandomEpicQuestId(),
+    sageEpicRerollsUsedToday: 0,
+    sageEpicRerollPendingIds: null,
   };
 }
 
@@ -86,6 +92,10 @@ export const useGameStore = create<GameStore>()(
       lastEconomyResetDate: null,
       firstDungeonKeyDroppedToday: false,
       sageEpicQuestClaimedToday: false,
+      sageEpicQuestId: null,
+      sageEpicQuestDate: null,
+      sageEpicRerollsUsedToday: 0,
+      sageEpicRerollPendingIds: null,
       lastMorningGoldClaimDate: null,
       unlockedTitleIds: [],
       habitCompletionLog: {},
@@ -373,6 +383,60 @@ export const useGameStore = create<GameStore>()(
         set((s) => ({ gold: s.gold + amount }));
       },
 
+      ensureSageEpicState: () => {
+        set((state) => {
+          const econ = getEconomyPatchIfNewDay(state);
+          if (econ) return { ...state, ...econ };
+          const today = getTodayString();
+          if (state.sageEpicQuestId && state.sageEpicQuestDate === today) return state;
+          return {
+            ...state,
+            sageEpicQuestDate: today,
+            sageEpicQuestId: pickRandomEpicQuestId(),
+            sageEpicRerollsUsedToday: 0,
+            sageEpicRerollPendingIds: null,
+          };
+        });
+      },
+
+      paySageEpicReroll: () => {
+        const state = get();
+        const econ = getEconomyPatchIfNewDay(state) ?? {};
+        let base: GameState = { ...state, ...econ };
+        const today = getTodayString();
+        if (!base.sageEpicQuestId || base.sageEpicQuestDate !== today) {
+          base = {
+            ...base,
+            sageEpicQuestDate: today,
+            sageEpicQuestId: pickRandomEpicQuestId(),
+            sageEpicRerollsUsedToday: 0,
+            sageEpicRerollPendingIds: null,
+          };
+        }
+        if (base.sageEpicQuestClaimedToday) return false;
+        if (base.sageEpicRerollsUsedToday >= 1) return false;
+        if (base.gold < GOLD_SAGE_EPIC_REROLL) return false;
+        if (base.sageEpicRerollPendingIds && base.sageEpicRerollPendingIds.length > 0) return false;
+
+        const three = pickThreeDistinctEpicQuestIds(base.sageEpicQuestId);
+        set({
+          ...base,
+          gold: base.gold - GOLD_SAGE_EPIC_REROLL,
+          sageEpicRerollsUsedToday: 1,
+          sageEpicRerollPendingIds: three,
+        });
+        console.log(`[GameStore] Sage epic reroll -${GOLD_SAGE_EPIC_REROLL}g, choices: ${three.join(',')}`);
+        return true;
+      },
+
+      selectSageEpicQuest: (questId: string) => {
+        set((state) => {
+          const pending = state.sageEpicRerollPendingIds;
+          if (!pending?.includes(questId)) return state;
+          return { ...state, sageEpicQuestId: questId, sageEpicRerollPendingIds: null };
+        });
+      },
+
       claimSageEpicQuestReward: (stat: StatType, xpBonus = 20) => {
         set((state) => {
           const econ = getEconomyPatchIfNewDay(state) ?? {};
@@ -454,6 +518,10 @@ export const useGameStore = create<GameStore>()(
         lastEconomyResetDate: state.lastEconomyResetDate,
         firstDungeonKeyDroppedToday: state.firstDungeonKeyDroppedToday,
         sageEpicQuestClaimedToday: state.sageEpicQuestClaimedToday,
+        sageEpicQuestId: state.sageEpicQuestId,
+        sageEpicQuestDate: state.sageEpicQuestDate,
+        sageEpicRerollsUsedToday: state.sageEpicRerollsUsedToday,
+        sageEpicRerollPendingIds: state.sageEpicRerollPendingIds,
         lastMorningGoldClaimDate: state.lastMorningGoldClaimDate,
         unlockedTitleIds: state.unlockedTitleIds,
         habitCompletionLog: state.habitCompletionLog,
