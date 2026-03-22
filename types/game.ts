@@ -77,6 +77,10 @@ export interface GameActions {
   addXP: (stat: StatType, amount: number) => void;
   /** Epic Quest from Sage: +50 gold (outside 100 cap) once per day; not counted toward standard daily gold. */
   claimSageEpicQuestReward: (stat: StatType, xpBonus?: number) => void;
+  /** Spend gold for a dungeon key (D&D tab). Returns false if not enough gold. */
+  purchaseDungeonKeyWithGold: () => boolean;
+  /** Consume one key to enter a dungeon run. Returns false if no keys. */
+  consumeDungeonKeyForRun: () => boolean;
 }
 
 export interface SuggestedHabit {

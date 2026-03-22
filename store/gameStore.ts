@@ -5,6 +5,7 @@ import { Habit, StatType, PlayerClass, GameState, GameActions, HabitDifficulty }
 import { getLevelFromXP, getXPProgressInCurrentLevel } from '@/lib/playerLevel';
 import {
   DIFFICULTY_BASE_REWARDS,
+  DUNGEON_KEY_GOLD_PRICE,
   GOLD_CAP_STANDARD_TASKS_DAILY,
   GOLD_EPIC_QUEST_SAGE,
   GOLD_MORNING_STREAK,
@@ -293,6 +294,25 @@ export const useGameStore = create<GameStore>()(
             unlockedTitleIds: [...state.unlockedTitleIds, ...newTitles],
           };
         });
+      },
+
+      purchaseDungeonKeyWithGold: () => {
+        const state = get();
+        if (state.gold < DUNGEON_KEY_GOLD_PRICE) return false;
+        set({
+          gold: state.gold - DUNGEON_KEY_GOLD_PRICE,
+          dungeonKeys: state.dungeonKeys + 1,
+        });
+        console.log(`[GameStore] Bought dungeon key for ${DUNGEON_KEY_GOLD_PRICE} gold`);
+        return true;
+      },
+
+      consumeDungeonKeyForRun: () => {
+        const state = get();
+        if (state.dungeonKeys <= 0) return false;
+        set({ dungeonKeys: state.dungeonKeys - 1 });
+        console.log('[GameStore] Consumed 1 dungeon key (dungeon run)');
+        return true;
       },
 
       claimSageEpicQuestReward: (stat: StatType, xpBonus = 20) => {

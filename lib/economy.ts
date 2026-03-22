@@ -15,6 +15,9 @@ export const DAILY_GOLD_THEORETICAL_MAX =
 export const KEY_FIRST_DROP_RATE = 0.05;
 export const KEY_SUBSEQUENT_DROP_RATE = 0.01;
 
+/** Gold sink: buy one dungeon key in the D&D tab. */
+export const DUNGEON_KEY_GOLD_PRICE = 150;
+
 /** Task index for the day after this completion (1-based). */
 export function fatigueMultiplierForTaskIndex(taskIndexAfterComplete: number): number {
   if (taskIndexAfterComplete <= 19) return 1;

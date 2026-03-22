@@ -134,9 +134,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="dragon-lair"
         options={{
-          title: "Dragon Lair",
+          title: "D&D",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon={Trophy} color={color} focused={focused} label="Lair" />
+            <TabIcon icon={Trophy} color={color} focused={focused} label="D&D" />
           ),
         }}
       />
