@@ -87,6 +87,7 @@ export const useGameStore = create<GameStore>()(
       lastMorningGoldClaimDate: null,
       unlockedTitleIds: [],
       habitCompletionLog: {},
+      ownedItemIds: [],
 
       completeHabit: (habitId: string) => {
         set((state) => {
@@ -315,6 +316,21 @@ export const useGameStore = create<GameStore>()(
         return true;
       },
 
+      addInventoryItemId: (itemId: string) => {
+        set((state) => {
+          const ownedItemIds = state.ownedItemIds ?? [];
+          if (ownedItemIds.includes(itemId)) return state;
+          console.log(`[GameStore] Inventory +1: ${itemId}`);
+          return { ownedItemIds: [...ownedItemIds, itemId] };
+        });
+      },
+
+      addDungeonChestGold: (amount: number) => {
+        if (amount <= 0) return;
+        console.log(`[GameStore] Dungeon chest gold +${amount} (no daily habit cap)`);
+        set((s) => ({ gold: s.gold + amount }));
+      },
+
       claimSageEpicQuestReward: (stat: StatType, xpBonus = 20) => {
         set((state) => {
           const econ = getEconomyPatchIfNewDay(state) ?? {};
@@ -399,6 +415,7 @@ export const useGameStore = create<GameStore>()(
         lastMorningGoldClaimDate: state.lastMorningGoldClaimDate,
         unlockedTitleIds: state.unlockedTitleIds,
         habitCompletionLog: state.habitCompletionLog,
+        ownedItemIds: state.ownedItemIds,
       }),
     },
   ),

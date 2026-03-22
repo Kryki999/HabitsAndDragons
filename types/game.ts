@@ -55,6 +55,8 @@ export interface GameState {
   unlockedTitleIds: string[];
   /** Per-habit grants for the current economy day (cleared at daily reset). */
   habitCompletionLog: Record<string, HabitCompletionLedger>;
+  /** Unikalne ID zdobytych przedmiotów kosmetycznych (loot z lochów). */
+  ownedItemIds: string[];
 }
 
 export interface GameActions {
@@ -81,6 +83,13 @@ export interface GameActions {
   purchaseDungeonKeyWithGold: () => boolean;
   /** Consume one key to enter a dungeon run. Returns false if no keys. */
   consumeDungeonKeyForRun: () => boolean;
+  /** Dodaje przedmiot do ekwipunku (bez duplikatów). */
+  addInventoryItemId: (itemId: string) => void;
+  /**
+   * Złoto ze skrzyń / lochów — bez limitu dziennego z nawyków.
+   * Wewnętrznie to zwykły przyrost salda (jak `addGold`).
+   */
+  addDungeonChestGold: (amount: number) => void;
 }
 
 export interface SuggestedHabit {

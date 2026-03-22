@@ -148,7 +148,7 @@ export default function LootDetailModal({ visible, onClose, payload, accentHint 
                       {payload.entry.goldMin} – {payload.entry.goldMax}{" "}
                       <Text style={styles.goldEmoji}>🪙</Text>
                     </Text>
-                    <Text style={styles.goldRollHint}>Rolled when you clear this dungeon (preview).</Text>
+                    <Text style={styles.goldRollHint}>Rolled when this gold pool drops from a dungeon clear.</Text>
                   </View>
                 </LinearGradient>
               </View>

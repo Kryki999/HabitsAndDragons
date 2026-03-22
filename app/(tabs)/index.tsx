@@ -10,7 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Swords, Zap, BookOpen, Plus, Mail, Settings, Coins, KeyRound } from 'lucide-react-native';
+import { Swords, Zap, BookOpen, Plus, Mail, Settings, Coins, KeyRound, Backpack } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
@@ -22,6 +22,7 @@ import AddHabitModal from '@/components/AddHabitModal';
 import ClassSelectionModal from '@/components/ClassSelectionModal';
 import CircularProgress from '@/components/CircularProgress';
 import LivingDiorama from '@/components/LivingDiorama';
+import BackpackModal from '@/components/BackpackModal';
 
 const { width } = Dimensions.get('window');
 
@@ -98,6 +99,7 @@ function StatRing({ stat, xp, delay }: { stat: StatType; xp: number; delay: numb
 export default function CastleScreen() {
   const insets = useSafeAreaInsets();
   const [modalVisible, setModalVisible] = useState(false);
+  const [backpackOpen, setBackpackOpen] = useState(false);
   const {
     gold, streak, habits, strengthXP, agilityXP, intelligenceXP, playerClass, dungeonKeys,
     getPlayerLevel, getCurrentLevelXP, getXPForNextLevel,
@@ -237,6 +239,31 @@ export default function CastleScreen() {
           <StatRing stat="intelligence" xp={intelligenceXP} delay={500} />
         </Animated.View>
 
+        <Animated.View style={[styles.backpackRow, { opacity: headerAnim }]}>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setBackpackOpen(true);
+            }}
+            style={({ pressed }) => [styles.backpackEntryOuter, pressed && styles.backpackEntryPressed]}
+          >
+            <LinearGradient
+              colors={[Colors.dark.surfaceLight, Colors.dark.surface]}
+              style={styles.backpackEntryGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.backpackEntryIconWrap}>
+                <Backpack color={Colors.dark.gold} size={22} strokeWidth={2.2} />
+              </View>
+              <View>
+                <Text style={styles.backpackEntryTitle}>Backpack</Text>
+                <Text style={styles.backpackEntrySubtitle}>Dungeon loot & cosmetics</Text>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
+
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
           <View style={styles.dividerBadge}>
@@ -311,6 +338,8 @@ export default function CastleScreen() {
         visible={playerClass === null}
         onSelect={setPlayerClass}
       />
+
+      <BackpackModal visible={backpackOpen} onClose={() => setBackpackOpen(false)} />
     </View>
   );
 }
@@ -454,6 +483,63 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: Colors.dark.textSecondary,
+    marginTop: 2,
+  },
+
+  backpackRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  backpackEntryOuter: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + '40',
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.dark.gold,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+      },
+      android: { elevation: 4 },
+      default: {},
+    }),
+  },
+  backpackEntryPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.98 }],
+  },
+  backpackEntryGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+  },
+  backpackEntryIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Colors.dark.background + 'cc',
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + '35',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backpackEntryTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.dark.text,
+    letterSpacing: 0.2,
+  },
+  backpackEntrySubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.dark.textMuted,
     marginTop: 2,
   },
 

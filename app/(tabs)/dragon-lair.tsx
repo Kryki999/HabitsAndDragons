@@ -8,6 +8,7 @@ import {
   ScrollView,
   Pressable,
   Alert,
+  Modal,
   useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -29,6 +30,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useGameStore } from "@/store/gameStore";
 import { DUNGEON_KEY_GOLD_PRICE } from "@/lib/economy";
+import { rollGoldAmount, rollWeightedDungeonEntry } from "@/lib/weightedLoot";
 import { LootGlyph } from "@/lib/lootGlyph";
 import type { StatType } from "@/types/game";
 import { sortDungeonLootByRarity, type DungeonLootEntry, type LootRarity } from "@/types/dungeonLoot";
@@ -500,11 +502,22 @@ export default function DragonLairScreen() {
   const purchaseDungeonKeyWithGold = useGameStore((s) => s.purchaseDungeonKeyWithGold);
   const consumeDungeonKeyForRun = useGameStore((s) => s.consumeDungeonKeyForRun);
   const addGold = useGameStore((s) => s.addGold);
+  const addDungeonChestGold = useGameStore((s) => s.addDungeonChestGold);
+  const addInventoryItemId = useGameStore((s) => s.addInventoryItemId);
   const addXP = useGameStore((s) => s.addXP);
 
   const [lootModal, setLootModal] = useState<{
     payload: LootModalPayload;
     accent: string;
+  } | null>(null);
+
+  /** Podsumowanie po przejściu lochu (ikona → ten sam LootDetailModal co w tabeli lootu). */
+  const [dungeonClearReward, setDungeonClearReward] = useState<{
+    dungeonName: string;
+    summary: string;
+    payload: LootModalPayload | null;
+    accent: string;
+    goldEarned?: number;
   } | null>(null);
 
   const headerAnim = useRef(new Animated.Value(0)).current;
@@ -600,22 +613,42 @@ export default function DragonLairScreen() {
       const dungeonMeta = DUNGEONS.find((d) => d.id === dungeonId);
       const dungeonName = dungeonMeta?.name ?? "the dungeon";
       const table = dungeonMeta?.lootTable ?? [];
-      const rolled = table[Math.floor(Math.random() * Math.max(table.length, 1))];
-      let body: string;
-      if (rolled?.kind === "gold") {
-        const amt =
-          Math.floor(Math.random() * (rolled.goldMax - rolled.goldMin + 1)) + rolled.goldMin;
-        body = `You cleared ${dungeonName} and salvaged ${amt} gold!`;
-      } else if (rolled?.kind === "item") {
-        body = `You cleared ${dungeonName} and discovered ${rolled.name}!`;
-      } else {
-        body = `You cleared ${dungeonName}!`;
+      try {
+        const rolled = rollWeightedDungeonEntry(table);
+        const accent = LOOT_RARITY_COLOR[rolled.rarity];
+        if (rolled.kind === "gold") {
+          const amt = rollGoldAmount(rolled);
+          addDungeonChestGold(amt);
+          setDungeonClearReward({
+            dungeonName,
+            summary: `You cleared ${dungeonName} and salvaged ${amt} gold!`,
+            payload: { type: "gold", entry: rolled },
+            accent,
+            goldEarned: amt,
+          });
+        } else {
+          const hadItem = (useGameStore.getState().ownedItemIds ?? []).includes(rolled.id);
+          addInventoryItemId(rolled.id);
+          const summary = hadItem
+            ? `You cleared ${dungeonName}. You already had ${rolled.name} — still a clean run!`
+            : `You cleared ${dungeonName}! ${rolled.name} is now in your backpack.`;
+          setDungeonClearReward({
+            dungeonName,
+            summary,
+            payload: { type: "item", entry: rolled },
+            accent,
+          });
+        }
+      } catch {
+        setDungeonClearReward({
+          dungeonName,
+          summary: `You cleared ${dungeonName}!`,
+          payload: null,
+          accent: "",
+        });
       }
-      Alert.alert("Dungeon Cleared", `${body}\n\n(Loot system preview.)`, [
-        { text: "Claim", style: "default" },
-      ]);
     },
-    [dungeonKeys, consumeDungeonKeyForRun],
+    [dungeonKeys, consumeDungeonKeyForRun, addDungeonChestGold, addInventoryItemId],
   );
 
   const handleBuyKey = useCallback(() => {
@@ -923,6 +956,102 @@ export default function DragonLairScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={dungeonClearReward !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDungeonClearReward(null)}
+      >
+        <View style={styles.clearRewardRoot}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDungeonClearReward(null)}>
+            <View style={styles.clearRewardBackdrop} />
+          </Pressable>
+          <View style={styles.clearRewardSheet}>
+            <LinearGradient
+              colors={["#2a1f42", "#1a1228", "#120c1c"]}
+              style={styles.clearRewardGradient}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+            >
+              <Text style={styles.clearRewardTitle}>Dungeon Cleared</Text>
+              {dungeonClearReward ? (
+                <>
+                  <Text style={styles.clearRewardDungeonName}>{dungeonClearReward.dungeonName}</Text>
+                  <Text style={styles.clearRewardSummary}>{dungeonClearReward.summary}</Text>
+
+                  {dungeonClearReward.payload ? (
+                    <Pressable
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setLootModal({
+                          payload: dungeonClearReward.payload!,
+                          accent: dungeonClearReward.accent,
+                        });
+                      }}
+                      style={({ pressed }) => [
+                        styles.clearRewardIconCard,
+                        pressed && styles.clearRewardIconCardPressed,
+                      ]}
+                    >
+                      <LinearGradient
+                        colors={[
+                          dungeonClearReward.accent + "44",
+                          Colors.dark.background + "ee",
+                        ]}
+                        style={[
+                          styles.clearRewardIconHalo,
+                          { borderColor: dungeonClearReward.accent + "66" },
+                        ]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <LootGlyph
+                          icon={
+                            dungeonClearReward.payload.type === "gold"
+                              ? "coins"
+                              : dungeonClearReward.payload.entry.icon
+                          }
+                          size={52}
+                          color={
+                            dungeonClearReward.payload.type === "gold"
+                              ? Colors.dark.gold
+                              : dungeonClearReward.accent
+                          }
+                        />
+                      </LinearGradient>
+                      <Text style={styles.clearRewardTapHint}>Tap for details</Text>
+                      {dungeonClearReward.goldEarned != null ? (
+                        <Text style={styles.clearRewardGoldLine}>
+                          +{dungeonClearReward.goldEarned}{" "}
+                          <Text style={styles.clearRewardGoldEmoji}>🪙</Text>
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  ) : null}
+
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      setDungeonClearReward(null);
+                    }}
+                    style={styles.clearRewardClaimBtn}
+                  >
+                    <LinearGradient
+                      colors={[...Colors.gradients.gold]}
+                      style={styles.clearRewardClaimGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                    >
+                      <Text style={styles.clearRewardClaimText}>Claim</Text>
+                    </LinearGradient>
+                  </Pressable>
+                </>
+              ) : null}
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
 
       <LootDetailModal
         visible={lootModal !== null}
@@ -1519,5 +1648,105 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800" as const,
     color: Colors.dark.text,
+  },
+  clearRewardRoot: {
+    flex: 1,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+    paddingHorizontal: 24,
+  },
+  clearRewardBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.78)",
+  },
+  clearRewardSheet: {
+    width: "100%" as const,
+    maxWidth: 360,
+  },
+  clearRewardGradient: {
+    borderRadius: 22,
+    paddingHorizontal: 22,
+    paddingVertical: 22,
+    borderWidth: 1,
+    borderColor: Colors.dark.borderGlow + "55",
+    alignItems: "center" as const,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 14 },
+        shadowOpacity: 0.4,
+        shadowRadius: 20,
+      },
+      android: { elevation: 14 },
+      default: {},
+    }),
+  },
+  clearRewardTitle: {
+    fontSize: 11,
+    fontWeight: "800" as const,
+    letterSpacing: 1.2,
+    textTransform: "uppercase" as const,
+    color: Colors.dark.gold,
+    marginBottom: 6,
+  },
+  clearRewardDungeonName: {
+    fontSize: 17,
+    fontWeight: "800" as const,
+    color: Colors.dark.text,
+    textAlign: "center" as const,
+    marginBottom: 10,
+  },
+  clearRewardSummary: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: Colors.dark.textSecondary,
+    textAlign: "center" as const,
+    marginBottom: 18,
+  },
+  clearRewardIconCard: {
+    alignItems: "center" as const,
+    marginBottom: 20,
+  },
+  clearRewardIconCardPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.98 }],
+  },
+  clearRewardIconHalo: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderWidth: 2,
+    marginBottom: 10,
+  },
+  clearRewardTapHint: {
+    fontSize: 12,
+    fontWeight: "700" as const,
+    color: Colors.dark.textMuted,
+  },
+  clearRewardGoldLine: {
+    marginTop: 6,
+    fontSize: 18,
+    fontWeight: "800" as const,
+    color: Colors.dark.gold,
+  },
+  clearRewardGoldEmoji: {
+    fontSize: 16,
+  },
+  clearRewardClaimBtn: {
+    alignSelf: "stretch" as const,
+    borderRadius: 14,
+    overflow: "hidden" as const,
+  },
+  clearRewardClaimGradient: {
+    paddingVertical: 14,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  clearRewardClaimText: {
+    fontSize: 16,
+    fontWeight: "800" as const,
+    color: "#1a1228",
   },
 });
