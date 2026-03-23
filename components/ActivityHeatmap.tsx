@@ -61,8 +61,8 @@ export default function ActivityHeatmap({ activityByDate, embedded, selectedDate
   return (
     <View style={[styles.wrap, embedded && styles.wrapEmbedded]}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Aktywność</Text>
-        <Text style={styles.sub}>Ostatnie {NUM_DAYS} dni</Text>
+        <Text style={styles.title}>Activity</Text>
+        <Text style={styles.sub}>Last {NUM_DAYS} days</Text>
       </View>
       <View style={styles.grid}>
         {rows.map((row, ri) => (
@@ -90,13 +90,13 @@ export default function ActivityHeatmap({ activityByDate, embedded, selectedDate
         ))}
       </View>
       <View style={styles.legendRow}>
-        <Text style={styles.legendMuted}>mniej</Text>
+        <Text style={styles.legendMuted}>less</Text>
         <View style={styles.legendDots}>
           {LEVEL_BG.map((c, i) => (
             <View key={i} style={[styles.legendCell, { backgroundColor: c }]} />
           ))}
         </View>
-        <Text style={styles.legendMuted}>więcej</Text>
+        <Text style={styles.legendMuted}>more</Text>
       </View>
     </View>
   );

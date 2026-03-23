@@ -70,7 +70,7 @@ export default function LivingDiorama() {
 
             {/* Global VFX: Weather */}
             {streak === 0 && (
-                <View pointerEvents="none" style={styles.layerWeather}>
+                <View style={[styles.layerWeather, styles.noPointerEvents]}>
                     <LottieView
                         source={require('@/assets/lottie/rain.json')}
                         autoPlay
@@ -81,7 +81,7 @@ export default function LivingDiorama() {
             )}
 
             {/* Local VFX: Campfire */}
-            <View pointerEvents="none" style={styles.layerCampfire}>
+            <View style={[styles.layerCampfire, styles.noPointerEvents]}>
                 <LottieView
                     source={require('@/assets/lottie/campfire.json')}
                     autoPlay
@@ -166,5 +166,8 @@ const styles = StyleSheet.create({
         width: 180,
         height: 240,
         zIndex: 4,
+    },
+    noPointerEvents: {
+        pointerEvents: 'none',
     },
 });

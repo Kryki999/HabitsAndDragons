@@ -62,7 +62,8 @@ export default function CircularProgress({
                     strokeLinecap="round"
                     fill="none"
                     rotation="-90"
-                    origin={`${size / 2}, ${size / 2}`}
+                    originX={size / 2}
+                    originY={size / 2}
                 />
             </Svg>
             <View style={[StyleSheet.absoluteFillObject, styles.childContainer]}>

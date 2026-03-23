@@ -51,7 +51,7 @@ function TypingOracle() {
   return (
     <View style={styles.typingBubble}>
       <View style={styles.chatBubbleAccent} />
-      <Text style={styles.typingMain}>Mędrzec wpatruje się w kryształową kulę</Text>
+      <Text style={styles.typingMain}>The Sage gazes into the crystal orb</Text>
       <Animated.Text style={[styles.typingDots, { opacity }]}>• • •</Animated.Text>
     </View>
   );
@@ -67,7 +67,7 @@ function ChatBubble({ message }: { message: SageChatMessage }) {
       </View>
       {message.createdAt ? (
         <Text style={[styles.chatMeta, isUser && styles.chatMetaUser]}>
-          {new Date(message.createdAt).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}
+          {new Date(message.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
         </Text>
       ) : null}
     </View>
@@ -172,28 +172,28 @@ export default function SageScreen() {
 
     const statLabel = currentQuest.stat.charAt(0).toUpperCase() + currentQuest.stat.slice(1);
     Alert.alert(
-      "⚡ Epicki Quest ukończony!",
-      `+50 złota 🪙\n+20 ${statLabel} XP\n\nMędrzec jest zadowolony z twojej determinacji.`,
+      "⚡ Epic Quest completed!",
+      `+50 gold 🪙\n+20 ${statLabel} XP\n\nThe Sage approves your resolve.`,
     );
   }, [questCompleted, sageEpicQuestClaimedToday, claimSageEpicQuestReward, currentQuest.stat]);
 
   const handleReroll = useCallback(() => {
     if (sageEpicQuestClaimedToday) {
-      Alert.alert("Nie można zmienić", "Nagrody za dzisiejszy quest zostały już odebrane.");
+      Alert.alert("Cannot reroll", "Today's quest reward was already claimed.");
       return;
     }
     if (sageEpicRerollsUsedToday >= 1) {
-      Alert.alert("Limit wyczerpany", "Możesz zmienić Epicki Quest tylko raz dziennie.");
+      Alert.alert("Reroll limit reached", "You can reroll the Epic Quest once per day.");
       return;
     }
     if (gold < GOLD_SAGE_EPIC_REROLL) {
-      Alert.alert("Za mało złota", `Potrzebujesz ${GOLD_SAGE_EPIC_REROLL} złota, by wylosować nowe propozycje.`);
+      Alert.alert("Not enough gold", `You need ${GOLD_SAGE_EPIC_REROLL} gold to reroll.`);
       return;
     }
     impactAsync(ImpactFeedbackStyle.Medium);
     const ok = paySageEpicReroll();
     if (!ok) {
-      Alert.alert("Nie udało się", "Spróbuj ponownie za chwilę.");
+      Alert.alert("Action failed", "Please try again in a moment.");
     }
   }, [
     sageEpicQuestClaimedToday,
@@ -211,7 +211,7 @@ export default function SageScreen() {
   );
 
   const handlePremiumCta = useCallback(() => {
-    Alert.alert("Wkrótce dostępne!", "Subskrypcja Legendarny Bohater pojawi się w kolejnej aktualizacji.");
+    Alert.alert("Coming soon", "Legendary Hero subscription will arrive in a future update.");
   }, []);
 
   const scrollChatToEnd = useCallback(() => {
@@ -308,10 +308,10 @@ export default function SageScreen() {
               <Wine size={26} color="#e8a060" />
             </LinearGradient>
             <View style={styles.headerTitles}>
-              <Text style={styles.title}>Tawerna Mędrca</Text>
+              <Text style={styles.title}>Sage Tavern</Text>
               <View style={styles.subtitleRow}>
                 <FlaskConical size={12} color={Colors.dark.textMuted} />
-                <Text style={styles.subtitle}>Eliksiry, świece i starożytne mapy</Text>
+                <Text style={styles.subtitle}>Elixirs, candles and ancient maps</Text>
               </View>
             </View>
           </View>
@@ -321,7 +321,7 @@ export default function SageScreen() {
               setLifeGoalOpen(true);
             }}
             style={({ pressed }) => [styles.settingsBtn, pressed && styles.settingsBtnPressed]}
-            accessibilityLabel="Ustawienia i personalizacja"
+            accessibilityLabel="Settings and personalization"
           >
             <LinearGradient colors={["#2a2038", "#1a1528"]} style={styles.settingsBtnInner}>
               <Settings size={22} color={Colors.dark.gold} />
@@ -329,10 +329,10 @@ export default function SageScreen() {
           </Pressable>
         </Animated.View>
 
-        <View style={styles.chatSection}>
+        <View style={[styles.sectionCard, styles.chatSection]}>
           <View style={styles.chatHeader}>
             <MessageCircle size={14} color={Colors.dark.purple} />
-            <Text style={styles.chatHeaderText}>RADY MĘDRCA</Text>
+            <Text style={styles.chatHeaderText}>SAGE CHAT</Text>
           </View>
           <ScrollView
             style={styles.chatWindowScroll}
@@ -352,7 +352,7 @@ export default function SageScreen() {
               <View style={styles.chatInputRow}>
                 <TextInput
                   style={styles.chatTextInput}
-                  placeholder="Napisz wiadomość do Mędrca…"
+                  placeholder="Write a message to the Sage..."
                   placeholderTextColor={Colors.dark.textMuted}
                   value={chatInput}
                   onChangeText={setChatInput}
@@ -370,7 +370,7 @@ export default function SageScreen() {
                     (isSageReplying || !chatInput.trim()) && styles.sendBtnDisabled,
                     pressed && !(isSageReplying || !chatInput.trim()) && styles.sendBtnPressed,
                   ]}
-                  accessibilityLabel="Wyślij wiadomość"
+                  accessibilityLabel="Send message"
                 >
                   <LinearGradient
                     colors={
@@ -389,21 +389,21 @@ export default function SageScreen() {
                   </LinearGradient>
                 </Pressable>
               </View>
-              <Text style={styles.chatInputHint}>Wyślij — Mędrzec odpowie z krótką radą.</Text>
+              <Text style={styles.chatInputHint}>Send and receive a short guidance reply.</Text>
             </LinearGradient>
           </View>
         </View>
 
-        <View style={styles.questSection}>
+        <View style={[styles.sectionCard, styles.questSection]}>
           <View style={styles.questHeader}>
             <Star size={14} color={Colors.dark.gold} />
-            <Text style={styles.questHeaderText}>EPICKI QUEST — DZIŚ</Text>
+            <Text style={styles.questHeaderText}>EPIC QUEST — TODAY</Text>
           </View>
 
           {pendingQuests.length > 0 ? (
             <View style={styles.pickSection}>
-              <Text style={styles.pickTitle}>Wybierz nowe zadanie</Text>
-              <Text style={styles.pickSub}>Jedno z trzech — stanie się twoim Epickim Questem na dziś.</Text>
+              <Text style={styles.pickTitle}>Choose a new quest</Text>
+              <Text style={styles.pickSub}>Pick one of three offers for today.</Text>
               {pendingQuests.map((q) => (
                 <Pressable
                   key={q.id}
@@ -440,7 +440,7 @@ export default function SageScreen() {
                   <View style={styles.questInfo}>
                     <Text style={styles.questTitle}>{currentQuest.text}</Text>
                     <Pressable
-                      onPress={() => Alert.alert("Zwój Mędrca", currentQuest.lore)}
+                      onPress={() => Alert.alert("Sage Lore", currentQuest.lore)}
                       style={styles.loreBtn}
                     >
                       <ScrollText size={14} color={Colors.dark.textMuted} />
@@ -449,7 +449,7 @@ export default function SageScreen() {
                     <View style={styles.questRewards}>
                       <View style={styles.questRewardChip}>
                         <Text style={styles.questRewardEmoji}>🪙</Text>
-                        <Text style={styles.questRewardText}>+50 złota</Text>
+                        <Text style={styles.questRewardText}>+50 gold</Text>
                       </View>
                       <View style={styles.questRewardChip}>
                         <Flame size={11} color={Colors.dark.fire} />
@@ -472,7 +472,7 @@ export default function SageScreen() {
                       },
                     ]}
                   >
-                    <Text style={styles.completedText}>⚡ QUEST UKOŃCZONY ⚡</Text>
+                    <Text style={styles.completedText}>⚡ QUEST COMPLETED ⚡</Text>
                   </Animated.View>
                 )}
 
@@ -486,7 +486,7 @@ export default function SageScreen() {
                     {questCompleted ? (
                       <View style={[styles.completeBtn, styles.completeBtnDone]}>
                         <View style={styles.completeBtnInner}>
-                          <Text style={[styles.completeBtnText, { color: Colors.dark.emerald }]}>✓ Nagrody odebrane</Text>
+                          <Text style={[styles.completeBtnText, { color: Colors.dark.emerald }]}>✓ Rewards claimed</Text>
                         </View>
                       </View>
                     ) : (
@@ -498,7 +498,7 @@ export default function SageScreen() {
                           end={{ x: 1, y: 0 }}
                         >
                           <Scroll size={18} color="#1a1228" />
-                          <Text style={styles.completeBtnText}>Ukończ Epicki Quest</Text>
+                          <Text style={styles.completeBtnText}>Complete Epic Quest</Text>
                         </LinearGradient>
                         <View style={styles.completeBtnBottom} />
                       </View>
@@ -533,15 +533,16 @@ export default function SageScreen() {
                   (rerollDisabled || pendingQuests.length > 0) && { color: Colors.dark.textMuted },
                 ]}
               >
-                Zmień zadanie ({GOLD_SAGE_EPIC_REROLL} 🪙)
+                Reroll quest ({GOLD_SAGE_EPIC_REROLL} 🪙)
               </Text>
             </LinearGradient>
           </Pressable>
-          <Text style={styles.rerollHint}>Max 1 zmiana dziennie · najpierw wybierz propozycję, jeśli jest aktywna</Text>
+          <Text style={styles.rerollHint}>Max 1 reroll per day · finish pending pick first</Text>
         </View>
 
-        <Text style={styles.pricingSectionTitle}>Plany</Text>
-        <ScrollView
+        <View style={styles.sectionCard}>
+          <Text style={styles.pricingSectionTitle}>Plans</Text>
+          <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           nestedScrollEnabled
@@ -554,12 +555,12 @@ export default function SageScreen() {
             colors={["#1e1a28", "#16121f"]}
             style={[styles.planCard, styles.planCardCarousel, { width: pricingCardWidth }]}
           >
-            <Text style={styles.planName}>Darmowy Odkrywca</Text>
-            <Text style={styles.planPrice}>0 zł</Text>
+            <Text style={styles.planName}>Free Explorer</Text>
+            <Text style={styles.planPrice}>$0</Text>
             <View style={styles.planBullets}>
-              <Text style={styles.planBullet}>• Podstawowy tracker nawyków</Text>
-              <Text style={styles.planBullet}>• Bazowe zadania i progresja</Text>
-              <Text style={styles.planBullet}>• Epicki Quest (jeden dziennie)</Text>
+              <Text style={styles.planBullet}>• Core habit tracker</Text>
+              <Text style={styles.planBullet}>• Base progression and quests</Text>
+              <Text style={styles.planBullet}>• One Epic Quest daily</Text>
             </View>
           </LinearGradient>
 
@@ -573,20 +574,21 @@ export default function SageScreen() {
                 <Text style={styles.premiumBadgeText}>PREMIUM</Text>
               </LinearGradient>
             </View>
-            <Text style={styles.planNamePremium}>Legendarny Bohater</Text>
-            <Text style={styles.planPricePremium}>Wkrótce</Text>
+            <Text style={styles.planNamePremium}>Legendary Hero</Text>
+            <Text style={styles.planPricePremium}>Coming soon</Text>
             <View style={styles.planBullets}>
-              <Text style={styles.planBulletLight}>✦ Spersonalizowany Trener AI</Text>
-              <Text style={styles.planBulletLight}>✦ Nielimitowany czat z Mędrcem</Text>
-              <Text style={styles.planBulletLight}>✦ Analityka nawyków</Text>
+              <Text style={styles.planBulletLight}>✦ Personalized AI coach</Text>
+              <Text style={styles.planBulletLight}>✦ Unlimited Sage chat</Text>
+              <Text style={styles.planBulletLight}>✦ Habit analytics</Text>
             </View>
             <Pressable onPress={handlePremiumCta} style={styles.ctaPremium}>
               <LinearGradient colors={[...Colors.gradients.gold]} style={styles.ctaPremiumGrad}>
-                <Text style={styles.ctaPremiumText}>Wybierz Premium</Text>
+                <Text style={styles.ctaPremiumText}>Choose Premium</Text>
               </LinearGradient>
             </Pressable>
           </LinearGradient>
-        </ScrollView>
+          </ScrollView>
+        </View>
       </ScrollView>
 
       <LifeGoalModal visible={lifeGoalOpen} onClose={() => setLifeGoalOpen(false)} />
@@ -862,6 +864,14 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 20,
   },
+  sectionCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "66",
+    backgroundColor: Colors.dark.surface + "66",
+    padding: 12,
+    marginBottom: 16,
+  },
   questHeader: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
@@ -925,6 +935,7 @@ const styles = StyleSheet.create({
   },
   questCardGradient: {
     padding: 18,
+    position: "relative" as const,
   },
   questTop: {
     flexDirection: "row" as const,
@@ -942,12 +953,16 @@ const styles = StyleSheet.create({
     fontWeight: "700" as const,
     color: Colors.dark.text,
     marginBottom: 8,
+    paddingRight: 72,
   },
   loreBtn: {
+    position: "absolute" as const,
+    right: 0,
+    top: 0,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 6,
-    marginBottom: 8,
+    marginBottom: 0,
   },
   loreBtnText: {
     fontSize: 11,

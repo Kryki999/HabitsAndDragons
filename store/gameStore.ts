@@ -107,7 +107,6 @@ function ensureHabitDefaults(habit: Habit): Habit {
     ...habit,
     taskType,
     isActive: habit.isActive ?? true,
-    timeOfDay: habit.timeOfDay ?? 'anytime',
     currentStreak: taskType === 'daily' ? (habit.currentStreak ?? 0) : undefined,
     longestStreak: taskType === 'daily' ? (habit.longestStreak ?? 0) : undefined,
     totalCompletions: taskType === 'daily' ? (habit.totalCompletions ?? 0) : undefined,
@@ -335,7 +334,19 @@ export const useGameStore = create<GameStore>()(
           if (!habit || !habit.completedToday) return base;
 
           const ledger = base.habitCompletionLog[habitId];
-          const updatedHabits = base.habits.map(h => (h.id === habitId ? { ...h, completedToday: false } : h));
+          const updatedHabits = base.habits.map((h) => {
+            if (h.id !== habitId) return h;
+            if (h.taskType !== 'daily') return { ...h, completedToday: false };
+            const today = getTodayString();
+            const completionDates = (h.completionDates ?? []).filter((d) => d !== today);
+            return {
+              ...h,
+              completedToday: false,
+              currentStreak: Math.max(0, (h.currentStreak ?? 0) - 1),
+              completionDates,
+              totalCompletions: Math.max(0, (h.totalCompletions ?? 0) - 1),
+            };
+          });
 
           const nextLog = { ...base.habitCompletionLog };
           delete nextLog[habitId];

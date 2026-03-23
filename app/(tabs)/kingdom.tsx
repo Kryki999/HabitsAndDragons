@@ -366,12 +366,12 @@ export default function KingdomScreen() {
       .eq("player_id", targetPlayerId)
       .maybeSingle();
     if (friendErr || !friend?.user_id) {
-      Alert.alert("Nie znaleziono", "Nie znaleziono gracza o takim Player ID.");
+      Alert.alert("Not found", "No player exists with that Player ID.");
       setFriendBusy(false);
       return;
     }
     if (friend.user_id === user.id) {
-      Alert.alert("To Twoje konto", "Nie mo?esz doda? samego siebie.");
+      Alert.alert("This is your account", "You cannot add yourself.");
       setFriendBusy(false);
       return;
     }
@@ -461,13 +461,13 @@ export default function KingdomScreen() {
         ))}
 
         <View style={styles.socialCard}>
-          <Text style={styles.socialTitle}>Dodaj towarzysza broni</Text>
+          <Text style={styles.socialTitle}>Add Ally</Text>
           <View style={styles.socialRow}>
             <TextInput
               style={styles.socialInput}
               value={friendPlayerId}
               onChangeText={setFriendPlayerId}
-              placeholder="Player ID znajomego"
+              placeholder="Friend Player ID"
               placeholderTextColor={Colors.dark.textMuted}
               autoCapitalize="characters"
               editable={!friendBusy}
@@ -484,14 +484,14 @@ export default function KingdomScreen() {
 
         <View style={styles.sectionBar}>
           <Flame size={15} color={Colors.dark.fire} />
-          <Text style={styles.sectionTitle}>Towarzysze</Text>
+          <Text style={styles.sectionTitle}>Allies</Text>
         </View>
         {mappedFriends.length > 0 ? (
           mappedFriends.map((hero, i) => (
             <RealmRivalRow key={hero.id} hero={hero} rank={i + 1} onInspectItem={openLootItem} />
           ))
         ) : (
-          <Text style={styles.noFriendsText}>Brak znajomych w kr?lestwie. Dodaj pierwszego towarzysza.</Text>
+          <Text style={styles.noFriendsText}>No allies in your kingdom yet. Add your first friend.</Text>
         )}
 
         <View style={styles.footer}>

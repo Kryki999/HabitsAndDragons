@@ -8,12 +8,14 @@ import {
   ScrollView,
   useWindowDimensions,
   Platform,
+  Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { X, ScrollText } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import ActivityHeatmap from "@/components/ActivityHeatmap";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
+import { useGameStore } from "@/store/gameStore";
 
 type Props = {
   visible: boolean;
@@ -32,9 +34,32 @@ export default function ActivityChroniclesModal({
   const { width } = useWindowDimensions();
   const modalMaxW = Math.min(width - 32, 400);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedHabitId, setSelectedHabitId] = useState<string>("general");
+  const allHabits = useGameStore((s) => s.habits);
+  const habits = useMemo(
+    () => allHabits.filter((h) => h.isActive && h.taskType === "daily"),
+    [allHabits],
+  );
+  const removeHabit = useGameStore((s) => s.removeHabit);
+  const selectedHabit = useMemo(
+    () => habits.find((h) => h.id === selectedHabitId) ?? null,
+    [habits, selectedHabitId],
+  );
+  const selectedActivityByDate = useMemo(() => {
+    if (!selectedHabit) return activityByDate;
+    const out: Record<string, { completions: number; xpFromHabits: number }> = {};
+    for (const date of selectedHabit.completionDates ?? []) {
+      out[date] = { completions: 1, xpFromHabits: 0 };
+    }
+    return out;
+  }, [selectedHabit, activityByDate]);
   const selectedTasks = useMemo(
-    () => (selectedDate ? completedHabitNamesByDate[selectedDate] ?? [] : []),
-    [completedHabitNamesByDate, selectedDate],
+    () => {
+      if (!selectedDate) return [];
+      if (!selectedHabit) return completedHabitNamesByDate[selectedDate] ?? [];
+      return (selectedHabit.completionDates ?? []).includes(selectedDate) ? [selectedHabit.name] : [];
+    },
+    [completedHabitNamesByDate, selectedDate, selectedHabit],
   );
 
   const handleClose = useCallback(() => {
@@ -59,13 +84,13 @@ export default function ActivityChroniclesModal({
             <View style={styles.headerRow}>
               <View style={styles.headerTitleRow}>
                 <ScrollText size={22} color={Colors.dark.emerald} />
-                <Text style={styles.title}>Kroniki</Text>
+                <Text style={styles.title}>Chronicles</Text>
               </View>
               <Pressable onPress={handleClose} style={styles.closeBtn} hitSlop={12}>
                 <X size={22} color={Colors.dark.textMuted} />
               </Pressable>
             </View>
-            <Text style={styles.subtitle}>Archiwum aktywności — ostatnie tygodnie Twojej drogi</Text>
+            <Text style={styles.subtitle}>Track your journey and habit mastery.</Text>
 
             <ScrollView
               style={styles.scroll}
@@ -73,9 +98,46 @@ export default function ActivityChroniclesModal({
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
+              <View style={styles.selectorWrap}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.selectorRow}>
+                    <Pressable
+                      onPress={() => setSelectedHabitId("general")}
+                      style={[styles.selectorChip, selectedHabitId === "general" && styles.selectorChipActive]}
+                    >
+                      <Text style={[styles.selectorChipText, selectedHabitId === "general" && styles.selectorChipTextActive]}>
+                        General History
+                      </Text>
+                    </Pressable>
+                    {habits.map((h) => (
+                      <Pressable
+                        key={h.id}
+                        onPress={() => setSelectedHabitId(h.id)}
+                        style={[styles.selectorChip, selectedHabitId === h.id && styles.selectorChipActive]}
+                      >
+                        <Text style={[styles.selectorChipText, selectedHabitId === h.id && styles.selectorChipTextActive]}>
+                          {h.icon} {h.name}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {selectedHabit ? (
+                <View style={styles.habitStatsCard}>
+                  <Text style={styles.habitStatsTitle}>Habit Mastery</Text>
+                  <View style={styles.habitStatsRow}>
+                    <Text style={styles.habitStat}>Current Streak: {selectedHabit.currentStreak ?? 0}</Text>
+                    <Text style={styles.habitStat}>Best Streak: {selectedHabit.longestStreak ?? 0}</Text>
+                    <Text style={styles.habitStat}>Total: {selectedHabit.totalCompletions ?? 0}</Text>
+                  </View>
+                </View>
+              ) : null}
+
               <View style={styles.heatmapWrap}>
                 <ActivityHeatmap
-                  activityByDate={activityByDate}
+                  activityByDate={selectedActivityByDate}
                   embedded
                   selectedDate={selectedDate}
                   onSelectDate={setSelectedDate}
@@ -84,7 +146,7 @@ export default function ActivityChroniclesModal({
 
               <View style={styles.dayDetailsCard}>
                 <Text style={styles.dayDetailsTitle}>
-                  {selectedDate ? `Dziennik dnia: ${selectedDate}` : "Kliknij kratkę, by zobaczyć zadania dnia"}
+                  {selectedDate ? `Day log: ${selectedDate}` : "Tap a heatmap cell to inspect that day"}
                 </Text>
                 {selectedDate ? (
                   selectedTasks.length > 0 ? (
@@ -94,12 +156,29 @@ export default function ActivityChroniclesModal({
                       </Text>
                     ))
                   ) : (
-                    <Text style={styles.emptyTasks}>Brak zapisanych zadań dla tego dnia.</Text>
+                    <Text style={styles.emptyTasks}>No tasks recorded for this date.</Text>
                   )
                 ) : (
-                  <Text style={styles.emptyTasks}>Wybierz dzień na heatmapie.</Text>
+                  <Text style={styles.emptyTasks}>Choose a day from the heatmap.</Text>
                 )}
               </View>
+
+              {selectedHabit ? (
+                <View style={styles.manageRow}>
+                  <Pressable onPress={() => Alert.alert("Coming soon", "Habit edit panel will be added here.")} style={styles.manageBtn}>
+                    <Text style={styles.manageBtnText}>Edit Habit</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      removeHabit(selectedHabit.id);
+                      setSelectedHabitId("general");
+                    }}
+                    style={[styles.manageBtn, styles.archiveBtn]}
+                  >
+                    <Text style={[styles.manageBtnText, styles.archiveBtnText]}>Archive Habit</Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </ScrollView>
           </LinearGradient>
         </View>
@@ -178,6 +257,54 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.dark.emerald + "28",
   },
+  selectorWrap: {
+    marginBottom: 10,
+  },
+  selectorRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  selectorChip: {
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: Colors.dark.surface,
+  },
+  selectorChipActive: {
+    borderColor: Colors.dark.gold + "66",
+    backgroundColor: Colors.dark.gold + "12",
+  },
+  selectorChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: Colors.dark.textMuted,
+  },
+  selectorChipTextActive: {
+    color: Colors.dark.gold,
+  },
+  habitStatsCard: {
+    marginBottom: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    backgroundColor: Colors.dark.surface + "aa",
+    padding: 10,
+  },
+  habitStatsTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: Colors.dark.text,
+    marginBottom: 6,
+  },
+  habitStatsRow: {
+    gap: 4,
+  },
+  habitStat: {
+    fontSize: 12,
+    color: Colors.dark.textSecondary,
+  },
   dayDetailsCard: {
     marginTop: 12,
     borderRadius: 14,
@@ -201,5 +328,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.dark.textMuted,
     fontStyle: "italic",
+  },
+  manageRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    gap: 8,
+  },
+  manageBtn: {
+    flex: 1,
+    borderRadius: 10,
+    backgroundColor: Colors.dark.surface,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+  manageBtnText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: Colors.dark.text,
+  },
+  archiveBtn: {
+    backgroundColor: "#3b1b24",
+    borderColor: "#6d3040",
+  },
+  archiveBtnText: {
+    color: "#ffd7db",
   },
 });

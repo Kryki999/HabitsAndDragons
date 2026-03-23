@@ -10,12 +10,12 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Swords, Zap, BookOpen, Plus, Mail, Settings, Coins, KeyRound, Backpack, ScrollText, Trophy, Infinity as InfinityIcon } from 'lucide-react-native';
+import { Swords, Zap, BookOpen, Plus, Mail, Settings, Coins, KeyRound, Backpack, ScrollText, Trophy } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
-import { StatType, TimeOfDay, HabitDifficulty, TaskType } from '@/types/game';
+import { StatType, HabitDifficulty, TaskType } from '@/types/game';
 import { getXPProgressInCurrentLevel } from '@/lib/playerLevel';
 import HabitCard from '@/components/HabitCard';
 import AddHabitModal from '@/components/AddHabitModal';
@@ -28,7 +28,6 @@ import MailboxModal from '@/components/MailboxModal';
 import AchievementsModal from '@/components/AchievementsModal';
 import PlayerProfileModal from '@/components/PlayerProfileModal';
 import { useAuth } from '@/providers/AuthProvider';
-import HabitMasteryModal from '@/components/HabitMasteryModal';
 
 const STAT_CONFIG: Record<StatType, { color: string; label: string; icon: typeof Swords }> = {
   strength: { color: Colors.dark.ruby, label: 'STR', icon: Swords },
@@ -36,18 +35,12 @@ const STAT_CONFIG: Record<StatType, { color: string; label: string; icon: typeof
   intelligence: { color: Colors.dark.cyan, label: 'INT', icon: BookOpen },
 };
 
-const TIME_LABELS: Record<TimeOfDay, { label: string; emoji: string }> = {
-  morning: { label: 'Morning Rituals', emoji: '🌅' },
-  anytime: { label: 'Anytime Quests', emoji: '♾️' },
-  evening: { label: 'Evening Quests', emoji: '🌙' },
-};
-
 const CASTLE_TIERS = [
-  { minLevel: 1, namePl: 'Skromny Namiot', emoji: '🏕️', desc: 'Skromny początek przygody' },
-  { minLevel: 3, namePl: 'Drewniana Wieża', emoji: '🪵', desc: 'Pierwsze palisady i wieżyczka strażnicza' },
-  { minLevel: 5, namePl: 'Warowny Bastion', emoji: '🏯', desc: 'Mury rosną w górę — bezpieczniejszy obóz' },
-  { minLevel: 8, namePl: 'Wielki Zamek', emoji: '⚔️', desc: 'Królestwo nabiera majestatu' },
-  { minLevel: 12, namePl: 'Smocza Forteca', emoji: '🐉', desc: 'Legendy rodzą się w cieniu smoków' },
+  { minLevel: 1, namePl: 'Humble Camp', emoji: '🏕️', desc: 'Your journey begins with simple discipline.' },
+  { minLevel: 3, namePl: 'Wooden Watchtower', emoji: '🪵', desc: 'Your first defenses rise.' },
+  { minLevel: 5, namePl: 'Fortified Bastion', emoji: '🏯', desc: 'The walls stand stronger each day.' },
+  { minLevel: 8, namePl: 'Grand Castle', emoji: '⚔️', desc: 'Your kingdom gains true momentum.' },
+  { minLevel: 12, namePl: 'Dragon Fortress', emoji: '🐉', desc: 'Legends are forged in your halls.' },
 ];
 
 function getCastleTier(level: number) {
@@ -135,8 +128,6 @@ export default function CastleScreen() {
   const [chroniclesOpen, setChroniclesOpen] = useState(false);
   const [achievementsOpen, setAchievementsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [masteryOpen, setMasteryOpen] = useState(false);
-  const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
   const [hudFilter, setHudFilter] = useState<'all' | 'daily' | 'one-off'>('all');
   const { user, playerId, signOut } = useAuth();
   const {
@@ -176,7 +167,6 @@ export default function CastleScreen() {
     description: string;
     stat: StatType;
     taskType: TaskType;
-    timeOfDay: TimeOfDay;
     icon: string;
     difficulty: HabitDifficulty;
   }) => {
@@ -200,15 +190,6 @@ export default function CastleScreen() {
     () => activeHabits.filter((h) => (hudFilter === 'all' ? true : h.taskType === hudFilter)),
     [activeHabits, hudFilter],
   );
-  const selectedHabit = useMemo(
-    () => habits.find((h) => h.id === selectedHabitId) ?? null,
-    [habits, selectedHabitId],
-  );
-  const groupedHabits = useMemo(() => {
-    const groups: Record<TimeOfDay, typeof habits> = { morning: [], anytime: [], evening: [] };
-    visibleHabits.forEach(h => groups[h.timeOfDay].push(h));
-    return groups;
-  }, [visibleHabits]);
 
   const completedCount = useMemo(() => visibleHabits.filter(h => h.completedToday).length, [visibleHabits]);
   const totalCount = visibleHabits.length;
@@ -306,7 +287,7 @@ export default function CastleScreen() {
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            <Text style={styles.castleCaptionLevel}>Poziom {playerLevel}</Text>
+            <Text style={styles.castleCaptionLevel}>Level {playerLevel}</Text>
             <Text style={styles.castleCaptionTitle}>
               {castleTier.emoji} {castleTier.namePl}
             </Text>
@@ -331,8 +312,8 @@ export default function CastleScreen() {
               <View style={styles.dashboardIconCircle}>
                 <ScrollText color={Colors.dark.emerald} size={22} strokeWidth={2.2} />
               </View>
-              <Text style={styles.dashboardCardTitle}>Kroniki</Text>
-              <Text style={styles.dashboardCardSub}>Historia aktywności</Text>
+              <Text style={styles.dashboardCardTitle}>Chronicles</Text>
+              <Text style={styles.dashboardCardSub}>Activity history</Text>
             </LinearGradient>
           </Pressable>
           <Pressable
@@ -351,8 +332,8 @@ export default function CastleScreen() {
               <View style={[styles.dashboardIconCircle, styles.dashboardIconCircleGold]}>
                 <Backpack color={Colors.dark.gold} size={22} strokeWidth={2.2} />
               </View>
-              <Text style={styles.dashboardCardTitle}>Ekwipunek</Text>
-              <Text style={styles.dashboardCardSub}>Łup z lochów</Text>
+              <Text style={styles.dashboardCardTitle}>Backpack</Text>
+              <Text style={styles.dashboardCardSub}>Dungeon loot</Text>
             </LinearGradient>
           </Pressable>
         </Animated.View>
@@ -381,8 +362,8 @@ export default function CastleScreen() {
               <View style={[styles.dashboardIconCircle, styles.dashboardIconCircleGold]}>
                 <Trophy color={Colors.dark.gold} size={22} strokeWidth={2.2} />
               </View>
-              <Text style={styles.dashboardCardTitle}>Osiągnięcia</Text>
-              <Text style={styles.dashboardCardSub}>Gablota trofeów</Text>
+              <Text style={styles.dashboardCardTitle}>Achievements</Text>
+              <Text style={styles.dashboardCardSub}>Trophy room</Text>
             </LinearGradient>
           </Pressable>
         </Animated.View>
@@ -398,9 +379,9 @@ export default function CastleScreen() {
         </View>
         <View style={styles.filterTabs}>
           {[
-            { key: 'all', label: 'Wszystkie' },
-            { key: 'daily', label: 'Główna Fabuła 🔁' },
-            { key: 'one-off', label: 'Misje Poboczne 🎯' },
+            { key: 'all', label: 'All' },
+            { key: 'daily', label: 'Habits' },
+            { key: 'one-off', label: 'Side Quests' },
           ].map((tab) => (
             <Pressable
               key={tab.key}
@@ -423,36 +404,15 @@ export default function CastleScreen() {
               <Text style={styles.emptyDesc}>Tap the + button to forge your first daily habit</Text>
             </View>
           ) : (
-            (['morning', 'anytime', 'evening'] as TimeOfDay[]).map(time => {
-              const group = groupedHabits[time];
-              if (group.length === 0) return null;
-              const timeCfg = TIME_LABELS[time];
-              return (
-                <View key={time} style={styles.timeGroup}>
-                  <View style={styles.timeGroupHeaderRow}>
-                    {time === 'anytime' ? (
-                      <InfinityIcon size={12} color={Colors.dark.textSecondary} />
-                    ) : (
-                      <Text style={styles.timeGroupEmoji}>{timeCfg.emoji}</Text>
-                    )}
-                    <Text style={styles.timeGroupHeader}>{timeCfg.label}</Text>
-                  </View>
-                  {group.map(habit => (
-                    <HabitCard
-                      key={habit.id}
-                      habit={habit}
-                      onComplete={handleComplete}
-                      onUncomplete={handleUncomplete}
-                      onDelete={handleRemove}
-                      onLongPress={(h) => {
-                        setSelectedHabitId(h.id);
-                        setMasteryOpen(true);
-                      }}
-                    />
-                  ))}
-                </View>
-              );
-            })
+            visibleHabits.map(habit => (
+              <HabitCard
+                key={habit.id}
+                habit={habit}
+                onComplete={handleComplete}
+                onUncomplete={handleUncomplete}
+                onDelete={handleRemove}
+              />
+            ))
           )}
           <View style={{ height: 100 }} />
         </View>
@@ -510,16 +470,6 @@ export default function CastleScreen() {
         playerId={playerId}
         level={playerLevel}
         onSignOut={signOut}
-      />
-      <HabitMasteryModal
-        visible={masteryOpen}
-        habit={selectedHabit}
-        onClose={() => setMasteryOpen(false)}
-        onArchive={(id) => {
-          handleRemove(id);
-          setMasteryOpen(false);
-        }}
-        onEdit={() => setMasteryOpen(false)}
       />
     </View>
   );
@@ -837,23 +787,7 @@ const styles = StyleSheet.create({
   habitsSection: {
     paddingHorizontal: 20,
   },
-  timeGroup: {
-    marginBottom: 12,
-  },
-  timeGroupHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
-  },
-  timeGroupEmoji: {
-    fontSize: 12,
-  },
-  timeGroupHeader: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.dark.textSecondary,
-  },
+  timeGroup: { marginBottom: 12 },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 40,

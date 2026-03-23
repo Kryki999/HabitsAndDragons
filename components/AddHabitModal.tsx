@@ -12,11 +12,11 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
-import { X, Swords, Zap, BookOpen, ChevronRight, Scroll, PenTool, Infinity as InfinityIcon } from 'lucide-react-native';
+import { X, Swords, Zap, BookOpen, ChevronRight, Scroll, PenTool } from 'lucide-react-native';
 import { impactAsync, selectionAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '@/constants/colors';
-import { StatType, TimeOfDay, SuggestedHabit, HabitDifficulty, TaskType } from '@/types/game';
+import { StatType, SuggestedHabit, HabitDifficulty, TaskType } from '@/types/game';
 import { suggestedHabits } from '@/mocks/suggestedHabits';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -25,12 +25,6 @@ const STAT_OPTIONS: { value: StatType; label: string; color: string; icon: typeo
   { value: 'strength', label: 'Strength', color: Colors.dark.ruby, icon: Swords },
   { value: 'agility', label: 'Agility', color: Colors.dark.emerald, icon: Zap },
   { value: 'intelligence', label: 'Intelligence', color: Colors.dark.cyan, icon: BookOpen },
-];
-
-const TIME_OPTIONS: { value: TimeOfDay; label: string; emoji: string }[] = [
-  { value: 'morning', label: 'Morning', emoji: '🌅' },
-  { value: 'anytime', label: 'Anytime', emoji: '♾️' },
-  { value: 'evening', label: 'Evening', emoji: '🌙' },
 ];
 
 const DIFFICULTY_OPTIONS: { value: HabitDifficulty; label: string; hint: string }[] = [
@@ -47,7 +41,6 @@ interface AddHabitModalProps {
     description: string;
     stat: StatType;
     taskType: TaskType;
-    timeOfDay: TimeOfDay;
     icon: string;
     difficulty: HabitDifficulty;
   }) => void;
@@ -104,7 +97,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
   const [customDesc, setCustomDesc] = useState('');
   const [selectedStat, setSelectedStat] = useState<StatType>('strength');
   const [selectedTaskType, setSelectedTaskType] = useState<TaskType>('daily');
-  const [selectedTime, setSelectedTime] = useState<TimeOfDay>('morning');
   const [selectedIcon, setSelectedIcon] = useState('⚔️');
   const [selectedDifficulty, setSelectedDifficulty] = useState<HabitDifficulty>('medium');
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -118,7 +110,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
       setCustomDesc('');
       setSelectedStat('strength');
       setSelectedTaskType('daily');
-      setSelectedTime('anytime');
       setSelectedIcon('⚔️');
       setSelectedDifficulty('medium');
       Animated.spring(slideAnim, {
@@ -151,7 +142,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
       description: habit.description,
       stat: habit.stat,
       taskType: habit.taskType,
-      timeOfDay: habit.timeOfDay,
       icon: habit.icon,
       difficulty: habit.difficulty,
     });
@@ -166,12 +156,11 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
       description: customDesc.trim() || customName.trim(),
       stat: selectedStat,
       taskType: selectedTaskType,
-      timeOfDay: selectedTime,
       icon: selectedIcon,
       difficulty: selectedDifficulty,
     });
     handleClose();
-  }, [customName, customDesc, selectedStat, selectedTime, selectedIcon, selectedDifficulty, onAddHabit, handleClose]);
+  }, [customName, customDesc, selectedStat, selectedTaskType, selectedIcon, selectedDifficulty, onAddHabit, handleClose]);
 
   const renderChooseView = () => (
     <View style={styles.chooseContainer}>
@@ -245,12 +234,12 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
         </Pressable>
         <Text style={styles.sectionTitle}>Suggested Quests</Text>
 
-        <Text style={styles.timeGroupLabel}>🔁 Codzienne Nawyki</Text>
+        <Text style={styles.timeGroupLabel}>🔁 Daily Habits</Text>
         {dailyHabits.map(h => (
           <SuggestedHabitItem key={h.name} habit={h} onSelect={handleSelectSuggested} />
         ))}
 
-        <Text style={styles.timeGroupLabel}>🎯 Szybkie Questy</Text>
+        <Text style={styles.timeGroupLabel}>🎯 Quick Quests</Text>
         {quickQuests.map(h => (
           <SuggestedHabitItem key={h.name} habit={h} onSelect={handleSelectSuggested} />
         ))}
@@ -277,13 +266,13 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
               onPress={() => setSelectedTaskType('daily')}
               style={[styles.taskTypeBtn, selectedTaskType === 'daily' && styles.taskTypeBtnActive]}
             >
-              <Text style={[styles.taskTypeText, selectedTaskType === 'daily' && styles.taskTypeTextActive]}>🔁 Codzienny Nawyk</Text>
+              <Text style={[styles.taskTypeText, selectedTaskType === 'daily' && styles.taskTypeTextActive]}>🔁 Daily Habit</Text>
             </Pressable>
             <Pressable
               onPress={() => setSelectedTaskType('one-off')}
               style={[styles.taskTypeBtn, selectedTaskType === 'one-off' && styles.taskTypeBtnActive]}
             >
-              <Text style={[styles.taskTypeText, selectedTaskType === 'one-off' && styles.taskTypeTextActive]}>🎯 Jednorazowy Quest</Text>
+              <Text style={[styles.taskTypeText, selectedTaskType === 'one-off' && styles.taskTypeTextActive]}>🎯 One-off Quest</Text>
             </Pressable>
           </View>
 
@@ -373,36 +362,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
                   {d.label}
                 </Text>
                 <Text style={styles.diffHint}>{d.hint}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={styles.fieldLabel}>Preferred Time</Text>
-          <View style={styles.statRow}>
-            {TIME_OPTIONS.map(time => (
-              <Pressable
-                key={time.value}
-                onPress={() => {
-                  selectionAsync();
-                  setSelectedTime(time.value);
-                }}
-                style={[
-                  styles.timeOption,
-                  selectedTime === time.value && { borderColor: Colors.dark.gold, backgroundColor: Colors.dark.gold + '12' },
-                ]}
-                testID={`time-option-${time.value}`}
-              >
-                {time.value === 'anytime' ? (
-                  <InfinityIcon size={16} color={selectedTime === time.value ? Colors.dark.gold : Colors.dark.textMuted} />
-                ) : (
-                  <Text style={styles.timeEmoji}>{time.emoji}</Text>
-                )}
-                <Text style={[
-                  styles.timeOptionText,
-                  { color: selectedTime === time.value ? Colors.dark.gold : Colors.dark.textMuted },
-                ]}>
-                  {time.label}
-                </Text>
               </Pressable>
             ))}
           </View>

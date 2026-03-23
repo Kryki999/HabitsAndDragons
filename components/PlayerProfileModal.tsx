@@ -20,7 +20,7 @@ export default function PlayerProfileModal({ visible, onClose, email, playerId, 
   const copyPlayerId = async () => {
     if (!playerId) return;
     await ClipboardApi.setStringAsync(playerId);
-    Alert.alert("Skopiowano", "Player ID został skopiowany do schowka.");
+    Alert.alert("Copied", "Player ID copied to clipboard.");
   };
 
   const handleSignOut = async () => {
@@ -43,7 +43,7 @@ export default function PlayerProfileModal({ visible, onClose, email, playerId, 
         <View style={styles.sheet}>
           <LinearGradient colors={["#1c1430", "#130f20"]} style={styles.sheetInner}>
             <View style={styles.header}>
-              <Text style={styles.title}>Profil Gracza</Text>
+              <Text style={styles.title}>Player Profile</Text>
               <Pressable onPress={onClose} style={styles.closeBtn}>
                 <X size={18} color={Colors.dark.textMuted} />
               </Pressable>
@@ -54,21 +54,21 @@ export default function PlayerProfileModal({ visible, onClose, email, playerId, 
                 <User size={26} color={Colors.dark.gold} />
               </View>
               <Text style={styles.name}>Player</Text>
-              <Text style={styles.level}>Poziom {level}</Text>
+              <Text style={styles.level}>Level {level}</Text>
             </View>
 
             <View style={styles.infoBlock}>
-              <Text style={styles.label}>E-mail konta</Text>
-              <Text style={styles.value}>{email ?? "Brak"}</Text>
+              <Text style={styles.label}>Account email</Text>
+              <Text style={styles.value}>{email ?? "None"}</Text>
             </View>
 
             <View style={styles.infoBlock}>
               <Text style={styles.label}>Player ID</Text>
               <View style={styles.playerIdRow}>
-                <Text style={styles.playerIdValue}>{playerId ?? "Tworzenie..."}</Text>
+                <Text style={styles.playerIdValue}>{playerId ?? "Generating..."}</Text>
                 <Pressable onPress={copyPlayerId} disabled={!playerId} style={styles.copyBtn}>
                   <Clipboard size={14} color={Colors.dark.gold} />
-                  <Text style={styles.copyBtnText}>Kopiuj</Text>
+                  <Text style={styles.copyBtnText}>Copy ID</Text>
                 </Pressable>
               </View>
             </View>
@@ -76,7 +76,7 @@ export default function PlayerProfileModal({ visible, onClose, email, playerId, 
             <Pressable onPress={handleSignOut} disabled={busy} style={styles.logoutWrap}>
               <LinearGradient colors={["#4b1d26", "#311218"]} style={styles.logoutBtn}>
                 <LogOut size={16} color="#ffd7db" />
-                <Text style={styles.logoutText}>{busy ? "Wylogowywanie..." : "Wyloguj się"}</Text>
+                <Text style={styles.logoutText}>{busy ? "Signing out..." : "Sign out"}</Text>
               </LinearGradient>
             </Pressable>
           </LinearGradient>

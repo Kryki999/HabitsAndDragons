@@ -29,10 +29,9 @@ interface HabitCardProps {
   onComplete: (id: string) => void;
   onUncomplete: (id: string) => void;
   onDelete: (id: string) => void;
-  onLongPress?: (habit: Habit) => void;
 }
 
-function HabitCard({ habit, onComplete, onUncomplete, onDelete, onLongPress }: HabitCardProps) {
+function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps) {
   const pressAnim = useRef(new Animated.Value(0)).current;
   const checkAnim = useRef(new Animated.Value(habit.completedToday ? 1 : 0)).current;
   const statCfg = STAT_CONFIG[habit.stat];
@@ -104,11 +103,6 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete, onLongPress }: H
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       onPress={handlePress}
-      onLongPress={() => {
-        impactAsync(ImpactFeedbackStyle.Heavy);
-        onLongPress?.(habit);
-      }}
-      delayLongPress={300}
       testID={`habit-card-${habit.id}`}
     >
       <Animated.View

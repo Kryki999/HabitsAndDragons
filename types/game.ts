@@ -1,6 +1,5 @@
 export type StatType = 'strength' | 'agility' | 'intelligence';
 
-export type TimeOfDay = 'morning' | 'anytime' | 'evening';
 export type TaskType = 'daily' | 'one-off';
 
 export type PlayerClass = 'warrior' | 'hunter' | 'mage' | 'paladin';
@@ -27,7 +26,6 @@ export interface Habit {
   description: string;
   stat: StatType;
   taskType: TaskType;
-  timeOfDay: TimeOfDay;
   isActive: boolean;
   currentStreak?: number;
   longestStreak?: number;
@@ -118,7 +116,6 @@ export interface GameActions {
     description: string;
     stat: StatType;
     taskType: TaskType;
-    timeOfDay: TimeOfDay;
     icon: string;
     difficulty?: HabitDifficulty;
   }) => void;
@@ -175,7 +172,6 @@ export interface SuggestedHabit {
   rpgDescription: string;
   stat: StatType;
   taskType: TaskType;
-  timeOfDay: TimeOfDay;
   icon: string;
   difficulty: HabitDifficulty;
 }
