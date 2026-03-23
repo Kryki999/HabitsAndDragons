@@ -6,6 +6,9 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Colors from "@/constants/colors";
 import DailyLoginSync from "@/components/DailyLoginSync";
+import AuthGate from "@/components/AuthGate";
+import CloudSync from "@/components/CloudSync";
+import { AuthProvider } from "@/providers/AuthProvider";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -22,6 +25,8 @@ function RootLayoutNav() {
         contentStyle: { backgroundColor: Colors.dark.background },
       }}
     >
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   );
@@ -35,9 +40,13 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <DailyLoginSync />
-        <StatusBar style="light" />
-        <RootLayoutNav />
+        <AuthProvider>
+          <DailyLoginSync />
+          <CloudSync />
+          <StatusBar style="light" />
+          <RootLayoutNav />
+          <AuthGate />
+        </AuthProvider>
       </GestureHandlerRootView>
     </QueryClientProvider>
   );

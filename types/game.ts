@@ -142,6 +142,8 @@ export interface GameActions {
   setSageFocus: (focus: SageLifeFocus) => void;
   /** Dodaje wiadomość do historii czatu (id i createdAt generowane w store). */
   appendSageChatMessage: (message: { role: SageChatRole; text: string }) => void;
+  /** Nadpisuje lokalny postęp snapshotem z chmury po zalogowaniu. */
+  hydrateFromCloud: (snapshot: Partial<GameState>) => void;
 }
 
 export interface SuggestedHabit {

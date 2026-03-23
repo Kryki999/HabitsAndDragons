@@ -151,6 +151,19 @@ export const useGameStore = create<GameStore>()(
       },
 
       setSageFocus: (sageFocus) => set({ sageFocus }),
+      hydrateFromCloud: (snapshot) =>
+        set((state) => {
+          const merged = {
+            ...state,
+            ...snapshot,
+            sageChatMessages:
+              Array.isArray(snapshot.sageChatMessages) && snapshot.sageChatMessages.length > 0
+                ? snapshot.sageChatMessages
+                : state.sageChatMessages,
+            sageFocus: snapshot.sageFocus ?? state.sageFocus,
+          };
+          return merged;
+        }),
 
       completeHabit: (habitId: string) => {
         set((state) => {

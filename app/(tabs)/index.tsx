@@ -19,7 +19,6 @@ import { StatType, TimeOfDay, HabitDifficulty } from '@/types/game';
 import { getXPProgressInCurrentLevel } from '@/lib/playerLevel';
 import HabitCard from '@/components/HabitCard';
 import AddHabitModal from '@/components/AddHabitModal';
-import ClassSelectionModal from '@/components/ClassSelectionModal';
 import CircularProgress from '@/components/CircularProgress';
 import LivingDiorama from '@/components/LivingDiorama';
 import BackpackModal from '@/components/BackpackModal';
@@ -107,10 +106,10 @@ export default function CastleScreen() {
   const [mailboxOpen, setMailboxOpen] = useState(false);
   const [chroniclesOpen, setChroniclesOpen] = useState(false);
   const {
-    gold, streak, habits, strengthXP, agilityXP, intelligenceXP, playerClass, dungeonKeys,
+    gold, streak, habits, strengthXP, agilityXP, intelligenceXP, dungeonKeys,
     activityByDate,
     getPlayerLevel, getCurrentLevelXP, getXPForNextLevel,
-    completeHabit, uncompleteHabit, addHabit, removeHabit, setPlayerClass,
+    completeHabit, uncompleteHabit, addHabit, removeHabit,
   } = useGameStore();
 
   const playerLevel = getPlayerLevel();
@@ -384,11 +383,6 @@ export default function CastleScreen() {
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onAddHabit={handleAddHabit}
-      />
-
-      <ClassSelectionModal
-        visible={playerClass === null}
-        onSelect={setPlayerClass}
       />
 
       <BackpackModal visible={backpackOpen} onClose={() => setBackpackOpen(false)} />
