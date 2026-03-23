@@ -9,6 +9,8 @@ import {
   Pressable,
   Alert,
   useWindowDimensions,
+  TextInput,
+  KeyboardAvoidingView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -17,7 +19,7 @@ import {
   Scroll,
   Star,
   MessageCircle,
-  Lock,
+  Send,
   Settings,
   Wine,
   FlaskConical,
@@ -30,68 +32,45 @@ import { useGameStore } from "@/store/gameStore";
 import { getEpicQuestById, EPIC_QUEST_DEFINITIONS } from "@/constants/epicQuests";
 import { GOLD_SAGE_EPIC_REROLL } from "@/lib/economy";
 import LifeGoalModal from "@/components/LifeGoalModal";
+import { fetchSageReply } from "@/lib/sageLlm";
+import type { SageChatMessage } from "@/types/game";
 
-const SAGE_QUOTES = [
-  {
-    text: "Smoka, którego musisz pokonać, nie ma poza jaskinią — to nawyk, przed którym uciekasz.",
-    author: "Starszy Mędrzec",
-  },
-  {
-    text: "Prawdziwą bitwę wojownik stacza każdego ranka, w ciszy zanim obudzi się świat.",
-    author: "Mistrz Kael",
-  },
-  {
-    text: "Konsekwencja to zaklęcie, które zamienia chłopów w królów.",
-    author: "Arcymag Cierń",
-  },
-];
-
-const CHAT_MESSAGES = [
-  {
-    sender: "sage",
-    text: "Witaj ponownie, śmiały poszukiwaczu. Gwiazdy szepczą o twojej podróży…",
-  },
-  {
-    sender: "sage",
-    text: "Ukończ Epicki Quest poniżej, by zdobyć bonusowe złoto. Mędrzec patrzy i nagradza odważnych.",
-  },
-  {
-    sender: "sage",
-    text: "Pamiętaj: każdy odhaczony nawyk to zaklęcie rzucane na chaos przeciętności.",
-  },
-];
-
-function SageMessage({ message, delay }: { message: { sender: string; text: string }; delay: number }) {
-  const entryAnim = useRef(new Animated.Value(0)).current;
-
+function TypingOracle() {
+  const dot = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.sequence([
-      Animated.delay(delay),
-      Animated.spring(entryAnim, {
-        toValue: 1,
-        friction: 8,
-        tension: 50,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(dot, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.timing(dot, { toValue: 0, duration: 400, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [dot]);
+  const opacity = dot.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] });
   return (
-    <Animated.View
-      style={[
-        styles.chatBubble,
-        {
-          opacity: entryAnim,
-          transform: [
-            { translateY: entryAnim.interpolate({ inputRange: [0, 1], outputRange: [15, 0] }) },
-            { scale: entryAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) },
-          ],
-        },
-      ]}
-    >
+    <View style={styles.typingBubble}>
       <View style={styles.chatBubbleAccent} />
-      <Text style={styles.chatBubbleText}>{message.text}</Text>
-    </Animated.View>
+      <Text style={styles.typingMain}>Mędrzec wpatruje się w kryształową kulę</Text>
+      <Animated.Text style={[styles.typingDots, { opacity }]}>• • •</Animated.Text>
+    </View>
+  );
+}
+
+function ChatBubble({ message }: { message: SageChatMessage }) {
+  const isUser = message.role === "user";
+  return (
+    <View style={[styles.chatBubbleWrap, isUser && styles.chatBubbleWrapUser]}>
+      <View style={[styles.chatBubble, isUser && styles.chatBubbleUser]}>
+        {!isUser && <View style={styles.chatBubbleAccent} />}
+        <Text style={[styles.chatBubbleText, isUser && styles.chatBubbleTextUser]}>{message.text}</Text>
+      </View>
+      {message.createdAt ? (
+        <Text style={[styles.chatMeta, isUser && styles.chatMetaUser]}>
+          {new Date(message.createdAt).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -108,10 +87,18 @@ export default function SageScreen() {
   const sageEpicQuestId = useGameStore((s) => s.sageEpicQuestId);
   const sageEpicRerollPendingIds = useGameStore((s) => s.sageEpicRerollPendingIds);
   const sageEpicRerollsUsedToday = useGameStore((s) => s.sageEpicRerollsUsedToday);
+  const sageChatMessages = useGameStore((s) => s.sageChatMessages);
+  const appendSageChatMessage = useGameStore((s) => s.appendSageChatMessage);
+  const playerClass = useGameStore((s) => s.playerClass);
+  const streak = useGameStore((s) => s.streak);
+  const sageFocus = useGameStore((s) => s.sageFocus);
+  const getPlayerLevel = useGameStore((s) => s.getPlayerLevel);
 
   const [questCompleted, setQuestCompleted] = useState(false);
   const [lifeGoalOpen, setLifeGoalOpen] = useState(false);
-  const [currentQuote] = useState(() => SAGE_QUOTES[Math.floor(Math.random() * SAGE_QUOTES.length)]);
+  const [chatInput, setChatInput] = useState("");
+  const [isSageReplying, setIsSageReplying] = useState(false);
+  const chatScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     ensureSageEpicState();
@@ -227,6 +214,46 @@ export default function SageScreen() {
     Alert.alert("Wkrótce dostępne!", "Subskrypcja Legendarny Bohater pojawi się w kolejnej aktualizacji.");
   }, []);
 
+  const scrollChatToEnd = useCallback(() => {
+    requestAnimationFrame(() => {
+      chatScrollRef.current?.scrollToEnd({ animated: true });
+    });
+  }, []);
+
+  useEffect(() => {
+    scrollChatToEnd();
+  }, [sageChatMessages.length, isSageReplying, scrollChatToEnd]);
+
+  const handleSendSageMessage = useCallback(async () => {
+    const trimmed = chatInput.trim();
+    if (!trimmed || isSageReplying) return;
+    selectionAsync();
+    setChatInput("");
+    appendSageChatMessage({ role: "user", text: trimmed });
+    setIsSageReplying(true);
+    try {
+      const messages = useGameStore.getState().sageChatMessages;
+      const level = getPlayerLevel();
+      const { text } = await fetchSageReply(messages, {
+        playerClass,
+        level,
+        streak,
+        sageFocus,
+      });
+      appendSageChatMessage({ role: "sage", text });
+    } finally {
+      setIsSageReplying(false);
+    }
+  }, [
+    chatInput,
+    isSageReplying,
+    appendSageChatMessage,
+    getPlayerLevel,
+    playerClass,
+    streak,
+    sageFocus,
+  ]);
+
   const rerollDisabled =
     sageEpicQuestClaimedToday ||
     sageEpicRerollsUsedToday >= 1 ||
@@ -234,6 +261,11 @@ export default function SageScreen() {
     (sageEpicRerollPendingIds?.length ?? 0) > 0;
 
   return (
+    <KeyboardAvoidingView
+      style={styles.keyboardRoot}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
+    >
     <View style={styles.container}>
       <LinearGradient
         colors={[...Colors.gradients.sage]}
@@ -251,6 +283,8 @@ export default function SageScreen() {
       />
 
       <ScrollView
+        ref={chatScrollRef}
+        keyboardShouldPersistTaps="handled"
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
@@ -258,6 +292,7 @@ export default function SageScreen() {
         ]}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
+        onContentSizeChange={scrollChatToEnd}
       >
         <Animated.View
           style={[
@@ -300,27 +335,55 @@ export default function SageScreen() {
             <Text style={styles.chatHeaderText}>RADY MĘDRCA</Text>
           </View>
           <View style={styles.chatWindow}>
-            {CHAT_MESSAGES.map((msg, i) => (
-              <SageMessage key={i} message={msg} delay={200 + i * 180} />
+            {sageChatMessages.map((msg) => (
+              <ChatBubble key={msg.id} message={msg} />
             ))}
-            <SageMessage
-              message={{
-                sender: "sage",
-                text: `„${currentQuote.text}” — ${currentQuote.author}`,
-              }}
-              delay={200 + CHAT_MESSAGES.length * 180}
-            />
+            {isSageReplying ? <TypingOracle /> : null}
           </View>
 
-          <View style={styles.lockedInputOuter}>
-            <LinearGradient colors={["#2a1a10", "#1f1528"]} style={styles.lockedInputGlow}>
-              <View style={styles.lockedInputRow}>
-                <Lock size={18} color={Colors.dark.gold} />
-                <Text style={styles.lockedInputPlaceholder}>Napisz wiadomość do Mędrca…</Text>
+          <View style={styles.chatInputOuter}>
+            <LinearGradient colors={["#2a1a10", "#1f1528"]} style={styles.chatInputGlow}>
+              <View style={styles.chatInputRow}>
+                <TextInput
+                  style={styles.chatTextInput}
+                  placeholder="Napisz wiadomość do Mędrca…"
+                  placeholderTextColor={Colors.dark.textMuted}
+                  value={chatInput}
+                  onChangeText={setChatInput}
+                  editable={!isSageReplying}
+                  multiline
+                  maxLength={2000}
+                  returnKeyType="default"
+                  blurOnSubmit={false}
+                />
+                <Pressable
+                  onPress={handleSendSageMessage}
+                  disabled={isSageReplying || !chatInput.trim()}
+                  style={({ pressed }) => [
+                    styles.sendBtn,
+                    (isSageReplying || !chatInput.trim()) && styles.sendBtnDisabled,
+                    pressed && !(isSageReplying || !chatInput.trim()) && styles.sendBtnPressed,
+                  ]}
+                  accessibilityLabel="Wyślij wiadomość"
+                >
+                  <LinearGradient
+                    colors={
+                      isSageReplying || !chatInput.trim()
+                        ? ["#2a2535", "#1e1a28"]
+                        : [...Colors.gradients.gold]
+                    }
+                    style={styles.sendBtnInner}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Send
+                      size={20}
+                      color={isSageReplying || !chatInput.trim() ? Colors.dark.textMuted : "#1a1228"}
+                    />
+                  </LinearGradient>
+                </Pressable>
               </View>
-              <Text style={styles.lockedHint}>
-                Wymaga subskrypcji Premium, by rozmawiać z Mędrcem
-              </Text>
+              <Text style={styles.chatInputHint}>Wyślij — Mędrzec odpowie z krótką radą.</Text>
             </LinearGradient>
           </View>
         </View>
@@ -523,10 +586,14 @@ export default function SageScreen() {
 
       <LifeGoalModal visible={lifeGoalOpen} onClose={() => setLifeGoalOpen(false)} />
     </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardRoot: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.dark.background,
@@ -641,17 +708,31 @@ const styles = StyleSheet.create({
   chatWindow: {
     marginBottom: 12,
   },
+  chatBubbleWrap: {
+    marginBottom: 10,
+    maxWidth: "92%",
+    alignSelf: "flex-start",
+  },
+  chatBubbleWrapUser: {
+    alignSelf: "flex-end",
+  },
   chatBubble: {
     backgroundColor: Colors.dark.surface,
     borderRadius: 14,
     borderTopLeftRadius: 4,
     padding: 14,
-    marginBottom: 8,
     borderWidth: 1,
     borderColor: Colors.dark.border,
     position: "relative" as const,
     overflow: "hidden" as const,
-    marginLeft: 4,
+    marginLeft: 0,
+  },
+  chatBubbleUser: {
+    backgroundColor: "#2a2038",
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 4,
+    borderColor: Colors.dark.gold + "44",
+    marginRight: 0,
   },
   chatBubbleAccent: {
     position: "absolute" as const,
@@ -667,43 +748,105 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     paddingLeft: 6,
   },
-  lockedInputOuter: {
+  chatBubbleTextUser: {
+    paddingLeft: 0,
+  },
+  chatMeta: {
+    fontSize: 10,
+    color: Colors.dark.textMuted,
+    marginTop: 4,
+    marginLeft: 6,
+  },
+  chatMetaUser: {
+    marginLeft: 0,
+    marginRight: 6,
+    textAlign: "right" as const,
+    alignSelf: "flex-end",
+  },
+  typingBubble: {
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 14,
+    borderTopLeftRadius: 4,
+    padding: 14,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: Colors.dark.purple + "55",
+    position: "relative" as const,
+    overflow: "hidden" as const,
+    maxWidth: "92%",
+  },
+  typingMain: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+    fontStyle: "italic" as const,
+    paddingLeft: 6,
+    marginBottom: 6,
+  },
+  typingDots: {
+    fontSize: 18,
+    color: Colors.dark.gold,
+    paddingLeft: 6,
+    letterSpacing: 4,
+  },
+  chatInputOuter: {
     borderRadius: 16,
     overflow: "hidden" as const,
     ...Platform.select({
       ios: {
         shadowColor: Colors.dark.gold,
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.45,
-        shadowRadius: 14,
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
       },
       android: { elevation: 6 },
       default: {},
     }),
   },
-  lockedInputGlow: {
+  chatInputGlow: {
     borderRadius: 16,
-    padding: 14,
+    padding: 12,
     borderWidth: 1.5,
     borderColor: Colors.dark.gold + "55",
   },
-  lockedInputRow: {
+  chatInputRow: {
     flexDirection: "row" as const,
-    alignItems: "center" as const,
+    alignItems: "flex-end" as const,
     gap: 10,
-    opacity: 0.75,
   },
-  lockedInputPlaceholder: {
+  chatTextInput: {
     flex: 1,
-    fontSize: 14,
-    color: Colors.dark.textMuted,
-    fontStyle: "italic" as const,
+    minHeight: 44,
+    maxHeight: 120,
+    fontSize: 15,
+    color: Colors.dark.text,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === "ios" ? 10 : 8,
+    backgroundColor: "#120a14",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
   },
-  lockedHint: {
-    marginTop: 10,
-    fontSize: 12,
-    color: Colors.dark.gold,
-    fontWeight: "600" as const,
+  sendBtn: {
+    borderRadius: 12,
+    overflow: "hidden" as const,
+  },
+  sendBtnDisabled: {
+    opacity: 0.85,
+  },
+  sendBtnPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.98 }],
+  },
+  sendBtnInner: {
+    width: 46,
+    height: 46,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  chatInputHint: {
+    marginTop: 8,
+    fontSize: 11,
+    color: Colors.dark.textMuted,
     textAlign: "center" as const,
   },
   questSection: {

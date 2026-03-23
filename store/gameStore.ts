@@ -1,7 +1,15 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Habit, StatType, PlayerClass, GameState, GameActions, HabitDifficulty } from '@/types/game';
+import {
+  Habit,
+  StatType,
+  PlayerClass,
+  GameState,
+  GameActions,
+  HabitDifficulty,
+  SageChatMessage,
+} from '@/types/game';
 import { getLevelFromXP, getXPProgressInCurrentLevel } from '@/lib/playerLevel';
 import {
   DIFFICULTY_BASE_REWARDS,
@@ -19,6 +27,14 @@ import { resolveLootItemById } from '@/lib/itemCatalog';
 import { sellPriceForRarity } from '@/lib/inventoryEconomy';
 
 type GameStore = GameState & GameActions;
+
+const SAGE_CHAT_WELCOME: SageChatMessage = {
+  id: 'welcome',
+  role: 'sage',
+  text:
+    'Witaj, wędrowcze. Gwiazdy szepczą o twojej drodze — napisz, czego szukasz w kręgu nawyków, a wskażę igłę w mgle.',
+  createdAt: '',
+};
 
 function getTodayString(): string {
   return new Date().toISOString().split('T')[0];
@@ -121,6 +137,20 @@ export const useGameStore = create<GameStore>()(
       equippedRelicId: null,
       activityByDate: {},
       hapticsEnabled: true,
+      sageFocus: 'body',
+      sageChatMessages: [SAGE_CHAT_WELCOME],
+
+      appendSageChatMessage: ({ role, text }) => {
+        const msg: SageChatMessage = {
+          id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
+          role,
+          text,
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({ sageChatMessages: [...s.sageChatMessages, msg] }));
+      },
+
+      setSageFocus: (sageFocus) => set({ sageFocus }),
 
       completeHabit: (habitId: string) => {
         set((state) => {
@@ -565,7 +595,21 @@ export const useGameStore = create<GameStore>()(
         equippedRelicId: state.equippedRelicId,
         activityByDate: state.activityByDate,
         hapticsEnabled: state.hapticsEnabled,
+        sageFocus: state.sageFocus,
+        sageChatMessages: state.sageChatMessages,
       }),
+      merge: (persisted, current) => {
+        const p = persisted as Partial<GameState> | undefined;
+        return {
+          ...current,
+          ...p,
+          sageFocus: p?.sageFocus ?? current.sageFocus,
+          sageChatMessages:
+            Array.isArray(p?.sageChatMessages) && p.sageChatMessages.length > 0
+              ? p.sageChatMessages
+              : current.sageChatMessages,
+        };
+      },
     },
   ),
 );

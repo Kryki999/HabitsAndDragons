@@ -4,6 +4,19 @@ export type TimeOfDay = 'morning' | 'day' | 'evening';
 
 export type PlayerClass = 'warrior' | 'hunter' | 'mage';
 
+/** Cel życiowy / fokus Mędrca — wpływa na rady AI. */
+export type SageLifeFocus = 'body' | 'mind' | 'work';
+
+export type SageChatRole = 'user' | 'sage';
+
+export interface SageChatMessage {
+  id: string;
+  role: SageChatRole;
+  text: string;
+  /** ISO 8601 */
+  createdAt: string;
+}
+
 /** Task difficulty — drives base XP and gold per completion. */
 export type HabitDifficulty = 'easy' | 'medium' | 'hard';
 
@@ -76,6 +89,10 @@ export interface GameState {
   activityByDate: Record<string, { completions: number; xpFromHabits: number }>;
   /** Globalny przełącznik wibracji (Settings). */
   hapticsEnabled: boolean;
+  /** Priorytet rad Mędrca / LLM (ciało, umysł, praca). */
+  sageFocus: SageLifeFocus;
+  /** Historia czatu z Mędrcem (persystowana). */
+  sageChatMessages: SageChatMessage[];
 }
 
 export interface GameActions {
@@ -122,6 +139,9 @@ export interface GameActions {
    */
   addDungeonChestGold: (amount: number) => void;
   setHapticsEnabled: (enabled: boolean) => void;
+  setSageFocus: (focus: SageLifeFocus) => void;
+  /** Dodaje wiadomość do historii czatu (id i createdAt generowane w store). */
+  appendSageChatMessage: (message: { role: SageChatRole; text: string }) => void;
 }
 
 export interface SuggestedHabit {
