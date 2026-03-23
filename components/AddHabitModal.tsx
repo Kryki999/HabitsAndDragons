@@ -12,11 +12,11 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
-import { X, Swords, Zap, BookOpen, ChevronRight, Scroll, PenTool } from 'lucide-react-native';
+import { X, Swords, Zap, BookOpen, ChevronRight, Scroll, PenTool, Infinity as InfinityIcon } from 'lucide-react-native';
 import { impactAsync, selectionAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '@/constants/colors';
-import { StatType, TimeOfDay, SuggestedHabit, HabitDifficulty } from '@/types/game';
+import { StatType, TimeOfDay, SuggestedHabit, HabitDifficulty, TaskType } from '@/types/game';
 import { suggestedHabits } from '@/mocks/suggestedHabits';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -29,7 +29,7 @@ const STAT_OPTIONS: { value: StatType; label: string; color: string; icon: typeo
 
 const TIME_OPTIONS: { value: TimeOfDay; label: string; emoji: string }[] = [
   { value: 'morning', label: 'Morning', emoji: '🌅' },
-  { value: 'day', label: 'Day', emoji: '☀️' },
+  { value: 'anytime', label: 'Anytime', emoji: '♾️' },
   { value: 'evening', label: 'Evening', emoji: '🌙' },
 ];
 
@@ -46,6 +46,7 @@ interface AddHabitModalProps {
     name: string;
     description: string;
     stat: StatType;
+    taskType: TaskType;
     timeOfDay: TimeOfDay;
     icon: string;
     difficulty: HabitDifficulty;
@@ -102,6 +103,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
   const [customName, setCustomName] = useState('');
   const [customDesc, setCustomDesc] = useState('');
   const [selectedStat, setSelectedStat] = useState<StatType>('strength');
+  const [selectedTaskType, setSelectedTaskType] = useState<TaskType>('daily');
   const [selectedTime, setSelectedTime] = useState<TimeOfDay>('morning');
   const [selectedIcon, setSelectedIcon] = useState('⚔️');
   const [selectedDifficulty, setSelectedDifficulty] = useState<HabitDifficulty>('medium');
@@ -115,7 +117,8 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
       setCustomName('');
       setCustomDesc('');
       setSelectedStat('strength');
-      setSelectedTime('morning');
+      setSelectedTaskType('daily');
+      setSelectedTime('anytime');
       setSelectedIcon('⚔️');
       setSelectedDifficulty('medium');
       Animated.spring(slideAnim, {
@@ -147,6 +150,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
       name: habit.name,
       description: habit.description,
       stat: habit.stat,
+      taskType: habit.taskType,
       timeOfDay: habit.timeOfDay,
       icon: habit.icon,
       difficulty: habit.difficulty,
@@ -161,6 +165,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
       name: customName.trim(),
       description: customDesc.trim() || customName.trim(),
       stat: selectedStat,
+      taskType: selectedTaskType,
       timeOfDay: selectedTime,
       icon: selectedIcon,
       difficulty: selectedDifficulty,
@@ -230,9 +235,8 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
   );
 
   const renderSuggestedView = () => {
-    const morningHabits = suggestedHabits.filter(h => h.timeOfDay === 'morning');
-    const dayHabits = suggestedHabits.filter(h => h.timeOfDay === 'day');
-    const eveningHabits = suggestedHabits.filter(h => h.timeOfDay === 'evening');
+    const dailyHabits = suggestedHabits.filter(h => h.taskType === 'daily');
+    const quickQuests = suggestedHabits.filter(h => h.taskType === 'one-off');
 
     return (
       <ScrollView style={styles.suggestedContainer} showsVerticalScrollIndicator={false}>
@@ -241,18 +245,13 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
         </Pressable>
         <Text style={styles.sectionTitle}>Suggested Quests</Text>
 
-        <Text style={styles.timeGroupLabel}>🌅 Morning Rituals</Text>
-        {morningHabits.map(h => (
+        <Text style={styles.timeGroupLabel}>🔁 Codzienne Nawyki</Text>
+        {dailyHabits.map(h => (
           <SuggestedHabitItem key={h.name} habit={h} onSelect={handleSelectSuggested} />
         ))}
 
-        <Text style={styles.timeGroupLabel}>☀️ Daytime Challenges</Text>
-        {dayHabits.map(h => (
-          <SuggestedHabitItem key={h.name} habit={h} onSelect={handleSelectSuggested} />
-        ))}
-
-        <Text style={styles.timeGroupLabel}>🌙 Evening Quests</Text>
-        {eveningHabits.map(h => (
+        <Text style={styles.timeGroupLabel}>🎯 Szybkie Questy</Text>
+        {quickQuests.map(h => (
           <SuggestedHabitItem key={h.name} habit={h} onSelect={handleSelectSuggested} />
         ))}
         <View style={{ height: 40 }} />
@@ -273,6 +272,20 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
             <Text style={styles.backText}>← Back</Text>
           </Pressable>
           <Text style={styles.sectionTitle}>Craft Your Quest</Text>
+          <View style={styles.taskTypeSwitch}>
+            <Pressable
+              onPress={() => setSelectedTaskType('daily')}
+              style={[styles.taskTypeBtn, selectedTaskType === 'daily' && styles.taskTypeBtnActive]}
+            >
+              <Text style={[styles.taskTypeText, selectedTaskType === 'daily' && styles.taskTypeTextActive]}>🔁 Codzienny Nawyk</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setSelectedTaskType('one-off')}
+              style={[styles.taskTypeBtn, selectedTaskType === 'one-off' && styles.taskTypeBtnActive]}
+            >
+              <Text style={[styles.taskTypeText, selectedTaskType === 'one-off' && styles.taskTypeTextActive]}>🎯 Jednorazowy Quest</Text>
+            </Pressable>
+          </View>
 
           <Text style={styles.fieldLabel}>Quest Name</Text>
           <TextInput
@@ -364,7 +377,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
             ))}
           </View>
 
-          <Text style={styles.fieldLabel}>Time of Day</Text>
+          <Text style={styles.fieldLabel}>Preferred Time</Text>
           <View style={styles.statRow}>
             {TIME_OPTIONS.map(time => (
               <Pressable
@@ -379,7 +392,11 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
                 ]}
                 testID={`time-option-${time.value}`}
               >
-                <Text style={styles.timeEmoji}>{time.emoji}</Text>
+                {time.value === 'anytime' ? (
+                  <InfinityIcon size={16} color={selectedTime === time.value ? Colors.dark.gold : Colors.dark.textMuted} />
+                ) : (
+                  <Text style={styles.timeEmoji}>{time.emoji}</Text>
+                )}
                 <Text style={[
                   styles.timeOptionText,
                   { color: selectedTime === time.value ? Colors.dark.gold : Colors.dark.textMuted },
@@ -552,6 +569,34 @@ const styles = StyleSheet.create({
     fontWeight: '800' as const,
     color: Colors.dark.text,
     marginBottom: 16,
+  },
+  taskTypeSwitch: {
+    flexDirection: 'row' as const,
+    gap: 8,
+    marginBottom: 14,
+  },
+  taskTypeBtn: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.dark.border,
+    backgroundColor: Colors.dark.surface,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center' as const,
+  },
+  taskTypeBtnActive: {
+    borderColor: Colors.dark.gold,
+    backgroundColor: Colors.dark.gold + '15',
+  },
+  taskTypeText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: Colors.dark.textMuted,
+    textAlign: 'center' as const,
+  },
+  taskTypeTextActive: {
+    color: Colors.dark.gold,
   },
   timeGroupLabel: {
     fontSize: 14,

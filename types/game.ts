@@ -1,8 +1,9 @@
 export type StatType = 'strength' | 'agility' | 'intelligence';
 
-export type TimeOfDay = 'morning' | 'day' | 'evening';
+export type TimeOfDay = 'morning' | 'anytime' | 'evening';
+export type TaskType = 'daily' | 'one-off';
 
-export type PlayerClass = 'warrior' | 'hunter' | 'mage';
+export type PlayerClass = 'warrior' | 'hunter' | 'mage' | 'paladin';
 
 /** Cel życiowy / fokus Mędrca — wpływa na rady AI. */
 export type SageLifeFocus = 'body' | 'mind' | 'work';
@@ -25,7 +26,13 @@ export interface Habit {
   name: string;
   description: string;
   stat: StatType;
+  taskType: TaskType;
   timeOfDay: TimeOfDay;
+  isActive: boolean;
+  currentStreak?: number;
+  longestStreak?: number;
+  totalCompletions?: number;
+  completionDates?: string[];
   completedToday: boolean;
   icon: string;
   /** Older saves may omit; treated as `medium`. */
@@ -76,6 +83,12 @@ export interface GameState {
   unlockedTitleIds: string[];
   /** Per-habit grants for the current economy day (cleared at daily reset). */
   habitCompletionLog: Record<string, HabitCompletionLedger>;
+  /** Łączna liczba ukończonych nawyków STR w historii gracza. */
+  completedStrengthQuests: number;
+  /** Łączna liczba ukończonych nawyków AGI w historii gracza. */
+  completedAgilityQuests: number;
+  /** Łączna liczba ukończonych nawyków INT w historii gracza. */
+  completedIntelligenceQuests: number;
   /** Stack przedmiotów z lochów — ID mogą się powtarzać (duplikaty). */
   ownedItemIds: string[];
   /** Aktywny strój / zbroja (kosmetyk). */
@@ -87,6 +100,8 @@ export interface GameState {
    * `completions` = liczba odhaczonych nawyków; `xpFromHabits` = XP z nawyków tego dnia.
    */
   activityByDate: Record<string, { completions: number; xpFromHabits: number }>;
+  /** Dzienny log nazw wykonanych zadań do podglądu z heatmapy. */
+  completedHabitNamesByDate: Record<string, string[]>;
   /** Globalny przełącznik wibracji (Settings). */
   hapticsEnabled: boolean;
   /** Priorytet rad Mędrca / LLM (ciało, umysł, praca). */
@@ -98,7 +113,15 @@ export interface GameState {
 export interface GameActions {
   completeHabit: (habitId: string) => void;
   uncompleteHabit: (habitId: string) => void;
-  addHabit: (habit: Omit<Habit, 'id' | 'completedToday'>) => void;
+  addHabit: (habit: {
+    name: string;
+    description: string;
+    stat: StatType;
+    taskType: TaskType;
+    timeOfDay: TimeOfDay;
+    icon: string;
+    difficulty?: HabitDifficulty;
+  }) => void;
   removeHabit: (habitId: string) => void;
   getPlayerLevel: () => number;
   getTotalXP: () => number;
@@ -151,6 +174,7 @@ export interface SuggestedHabit {
   description: string;
   rpgDescription: string;
   stat: StatType;
+  taskType: TaskType;
   timeOfDay: TimeOfDay;
   icon: string;
   difficulty: HabitDifficulty;

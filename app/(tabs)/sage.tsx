@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
-  Sparkles,
   Flame,
   Scroll,
   Star,
@@ -24,6 +23,7 @@ import {
   Wine,
   FlaskConical,
   Dices,
+  ScrollText,
 } from "lucide-react-native";
 import { impactAsync, selectionAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -334,12 +334,18 @@ export default function SageScreen() {
             <MessageCircle size={14} color={Colors.dark.purple} />
             <Text style={styles.chatHeaderText}>RADY MĘDRCA</Text>
           </View>
-          <View style={styles.chatWindow}>
+          <ScrollView
+            style={styles.chatWindowScroll}
+            contentContainerStyle={styles.chatWindow}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             {sageChatMessages.map((msg) => (
               <ChatBubble key={msg.id} message={msg} />
             ))}
             {isSageReplying ? <TypingOracle /> : null}
-          </View>
+          </ScrollView>
 
           <View style={styles.chatInputOuter}>
             <LinearGradient colors={["#2a1a10", "#1f1528"]} style={styles.chatInputGlow}>
@@ -433,6 +439,13 @@ export default function SageScreen() {
                   <Text style={styles.questEmoji}>{currentQuest.emoji}</Text>
                   <View style={styles.questInfo}>
                     <Text style={styles.questTitle}>{currentQuest.text}</Text>
+                    <Pressable
+                      onPress={() => Alert.alert("Zwój Mędrca", currentQuest.lore)}
+                      style={styles.loreBtn}
+                    >
+                      <ScrollText size={14} color={Colors.dark.textMuted} />
+                      <Text style={styles.loreBtnText}>Lore</Text>
+                    </Pressable>
                     <View style={styles.questRewards}>
                       <View style={styles.questRewardChip}>
                         <Text style={styles.questRewardEmoji}>🪙</Text>
@@ -462,39 +475,38 @@ export default function SageScreen() {
                     <Text style={styles.completedText}>⚡ QUEST UKOŃCZONY ⚡</Text>
                   </Animated.View>
                 )}
+
+                {pendingQuests.length === 0 && (
+                  <Pressable
+                    onPress={handleCompleteQuest}
+                    disabled={questCompleted}
+                    testID="complete-epic-quest"
+                    style={styles.questCtaWrap}
+                  >
+                    {questCompleted ? (
+                      <View style={[styles.completeBtn, styles.completeBtnDone]}>
+                        <View style={styles.completeBtnInner}>
+                          <Text style={[styles.completeBtnText, { color: Colors.dark.emerald }]}>✓ Nagrody odebrane</Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.completeBtn}>
+                        <LinearGradient
+                          colors={[...Colors.gradients.gold]}
+                          style={styles.completeBtnGradient}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                        >
+                          <Scroll size={18} color="#1a1228" />
+                          <Text style={styles.completeBtnText}>Ukończ Epicki Quest</Text>
+                        </LinearGradient>
+                        <View style={styles.completeBtnBottom} />
+                      </View>
+                    )}
+                  </Pressable>
+                )}
               </LinearGradient>
             </Animated.View>
-          )}
-
-          {pendingQuests.length === 0 && (
-            <Pressable
-              onPress={handleCompleteQuest}
-              disabled={questCompleted}
-              testID="complete-epic-quest"
-            >
-              <View style={[styles.completeBtn, questCompleted && styles.completeBtnDone]}>
-                {questCompleted ? (
-                  <View style={styles.completeBtnInner}>
-                    <Text style={[styles.completeBtnText, { color: Colors.dark.emerald }]}>
-                      ✓ Nagrody odebrane
-                    </Text>
-                  </View>
-                ) : (
-                  <>
-                    <LinearGradient
-                      colors={[...Colors.gradients.gold]}
-                      style={styles.completeBtnGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                    >
-                      <Scroll size={18} color="#1a1228" />
-                      <Text style={styles.completeBtnText}>Ukończ Epicki Quest</Text>
-                    </LinearGradient>
-                    <View style={styles.completeBtnBottom} />
-                  </>
-                )}
-              </View>
-            </Pressable>
           )}
 
           <Pressable
@@ -526,13 +538,6 @@ export default function SageScreen() {
             </LinearGradient>
           </Pressable>
           <Text style={styles.rerollHint}>Max 1 zmiana dziennie · najpierw wybierz propozycję, jeśli jest aktywna</Text>
-        </View>
-
-        <View style={styles.soonBanner}>
-          <Sparkles size={16} color={Colors.dark.textMuted} />
-          <Text style={styles.soonText}>
-            Zaplecze Mędrca (Sklep & Koło Fortuny) — Wkrótce otwarcie!
-          </Text>
         </View>
 
         <Text style={styles.pricingSectionTitle}>Plany</Text>
@@ -705,8 +710,12 @@ const styles = StyleSheet.create({
     color: Colors.dark.textMuted,
     letterSpacing: 1.5,
   },
-  chatWindow: {
+  chatWindowScroll: {
+    maxHeight: 300,
     marginBottom: 12,
+  },
+  chatWindow: {
+    paddingRight: 2,
   },
   chatBubbleWrap: {
     marginBottom: 10,
@@ -934,6 +943,17 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
     marginBottom: 8,
   },
+  loreBtn: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    marginBottom: 8,
+  },
+  loreBtnText: {
+    fontSize: 11,
+    color: Colors.dark.textMuted,
+    fontWeight: "700" as const,
+  },
   questRewards: {
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
@@ -1026,24 +1046,8 @@ const styles = StyleSheet.create({
     height: 5,
     backgroundColor: Colors.dark.goldDark,
   },
-  soonBanner: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 10,
-    padding: 16,
-    borderRadius: 14,
-    backgroundColor: "#0d081220",
-    borderWidth: 1,
-    borderColor: Colors.dark.border + "88",
-    opacity: 0.72,
-    marginBottom: 24,
-  },
-  soonText: {
-    flex: 1,
-    fontSize: 13,
-    color: Colors.dark.textMuted,
-    fontStyle: "italic" as const,
-    lineHeight: 20,
+  questCtaWrap: {
+    marginTop: 14,
   },
   pricingSectionTitle: {
     fontSize: 13,

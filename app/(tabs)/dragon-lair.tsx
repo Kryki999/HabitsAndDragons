@@ -713,7 +713,7 @@ export default function DragonLairScreen() {
               <Sparkles size={26} color="#fff" />
             </LinearGradient>
           </View>
-          <Text style={styles.title}>Dragons & Dungeons</Text>
+          <Text style={styles.title}>Dungeons & Dragons</Text>
           <Text style={styles.subtitle}>Trophy hall & forbidden depths</Text>
         </Animated.View>
 

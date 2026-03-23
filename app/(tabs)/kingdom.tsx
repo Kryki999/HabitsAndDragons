@@ -6,9 +6,12 @@ import {
   Animated,
   Platform,
   ScrollView,
+  TextInput,
+  Pressable,
+  Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Castle, Crown, Flame, Shirt, Sparkles, Trophy } from "lucide-react-native";
+import { Castle, Crown, Flame, Shirt, Sparkles, Trophy, UserPlus } from "lucide-react-native";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
@@ -19,17 +22,34 @@ import RarityItemSlot from "@/components/RarityItemSlot";
 import LootDetailModal, { type LootModalPayload } from "@/components/LootDetailModal";
 import { resolveLootItemById } from "@/lib/itemCatalog";
 import { LOOT_RARITY_COLOR } from "@/constants/lootRarity";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/providers/AuthProvider";
+import { getLevelFromXP } from "@/lib/playerLevel";
+
+type FriendRow = {
+  user_id: string;
+  player_id: string | null;
+  player_class: PlayerClass | null;
+  game_state: {
+    streak?: number;
+    strengthXP?: number;
+    agilityXP?: number;
+    intelligenceXP?: number;
+  } | null;
+};
 
 const CLASS_LABEL: Record<PlayerClass, string> = {
   warrior: "Warrior",
   hunter: "Hunter",
   mage: "Mage",
+  paladin: "Paladin",
 };
 
 const CLASS_COLOR: Record<PlayerClass, string> = {
   warrior: Colors.dark.ruby,
   hunter: Colors.dark.emerald,
   mage: Colors.dark.cyan,
+  paladin: Colors.dark.gold,
 };
 
 function computePlayerRank(playerStreak: number): number {
@@ -114,7 +134,7 @@ function RealmPlayerSticky({
             <Text style={styles.statChipVal}>Lv.{level}</Text>
           </View>
           <View style={styles.statChip}>
-            <Text style={styles.statEmoji}>🔥</Text>
+            <Text style={styles.statEmoji}>????</Text>
             <Text style={[styles.statChipVal, { color: Colors.dark.fire }]}>{streak}</Text>
           </View>
         </View>
@@ -129,7 +149,7 @@ function RealmPlayerSticky({
             <RarityItemSlot
               itemId={outfitId}
               size={64}
-              emptyLabel="—"
+              emptyLabel="???"
               onPress={outfitId ? () => onInspectItem(outfitId) : undefined}
             />
           </View>
@@ -141,7 +161,7 @@ function RealmPlayerSticky({
             <RarityItemSlot
               itemId={relicId}
               size={64}
-              emptyLabel="—"
+              emptyLabel="???"
               onPress={relicId ? () => onInspectItem(relicId) : undefined}
             />
           </View>
@@ -198,9 +218,9 @@ function RealmRivalRow({
               <Text style={styles.rivalMetaText}>
                 Lv.<Text style={{ color: Colors.dark.gold, fontWeight: "800" }}>{hero.level}</Text>
               </Text>
-              <Text style={styles.streakSep}>·</Text>
+              <Text style={styles.streakSep}>??</Text>
               <Text style={styles.rivalMetaText}>
-                🔥 <Text style={{ color: Colors.dark.fire, fontWeight: "800" }}>{hero.streak}</Text>
+                ???? <Text style={{ color: Colors.dark.fire, fontWeight: "800" }}>{hero.streak}</Text>
               </Text>
             </View>
           </View>
@@ -208,7 +228,7 @@ function RealmRivalRow({
             <RarityItemSlot
               itemId={hero.outfitItemId}
               size={44}
-              emptyLabel="—"
+              emptyLabel="???"
               onPress={
                 hero.outfitItemId
                   ? () => {
@@ -220,7 +240,7 @@ function RealmRivalRow({
             <RarityItemSlot
               itemId={hero.relicItemId}
               size={44}
-              emptyLabel="—"
+              emptyLabel="???"
               onPress={
                 hero.relicItemId
                   ? () => {
@@ -238,6 +258,7 @@ function RealmRivalRow({
 
 export default function KingdomScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const streak = useGameStore((s) => s.streak);
   const playerClass = useGameStore((s) => s.playerClass);
   const getPlayerLevel = useGameStore((s) => s.getPlayerLevel);
@@ -245,6 +266,9 @@ export default function KingdomScreen() {
   const equippedRelicId = useGameStore((s) => s.equippedRelicId);
 
   const [lootPayload, setLootPayload] = useState<LootModalPayload | null>(null);
+  const [friendPlayerId, setFriendPlayerId] = useState("");
+  const [friendBusy, setFriendBusy] = useState(false);
+  const [friends, setFriends] = useState<FriendRow[]>([]);
 
   const openLootItem = useCallback((itemId: string) => {
     const entry = resolveLootItemById(itemId);
@@ -266,6 +290,52 @@ export default function KingdomScreen() {
   );
 
   const playerRank = useMemo(() => computePlayerRank(streak), [streak]);
+  const mappedFriends = useMemo<RealmMockHero[]>(() => {
+    return friends.map((f) => {
+      const gs = f.game_state ?? {};
+      const lvl = getLevelFromXP((gs.strengthXP ?? 0) + (gs.agilityXP ?? 0) + (gs.intelligenceXP ?? 0));
+      return {
+        id: `friend_${f.user_id}`,
+        name: f.player_id ?? "Unknown",
+        playerClass: f.player_class ?? "warrior",
+        level: lvl,
+        streak: gs.streak ?? 0,
+        outfitItemId: null,
+        relicItemId: null,
+      };
+    });
+  }, [friends]);
+
+  const loadFriends = useCallback(async () => {
+    if (!user?.id) return;
+    const { data: links, error: linkErr } = await supabase
+      .from("friendships")
+      .select("requester_id, addressee_id")
+      .eq("status", "accepted")
+      .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
+    if (linkErr) {
+      console.warn("[kingdom] friendships fetch failed", linkErr.message);
+      return;
+    }
+    const ids = new Set<string>();
+    for (const l of links ?? []) {
+      const other = l.requester_id === user.id ? l.addressee_id : l.requester_id;
+      if (other && other !== user.id) ids.add(other);
+    }
+    if (ids.size === 0) {
+      setFriends([]);
+      return;
+    }
+    const { data: profs, error: profErr } = await supabase
+      .from("profiles")
+      .select("user_id, player_id, player_class, game_state")
+      .in("user_id", [...ids]);
+    if (profErr) {
+      console.warn("[kingdom] profiles fetch failed", profErr.message);
+      return;
+    }
+    setFriends((profs as FriendRow[]) ?? []);
+  }, [user?.id]);
 
   useEffect(() => {
     Animated.spring(headerAnim, {
@@ -281,6 +351,48 @@ export default function KingdomScreen() {
       ]),
     ).start();
   }, [headerAnim, orbAnim]);
+
+  useEffect(() => {
+    loadFriends();
+  }, [loadFriends]);
+
+  const handleAddFriend = useCallback(async () => {
+    if (!user?.id || !friendPlayerId.trim() || friendBusy) return;
+    setFriendBusy(true);
+    const targetPlayerId = friendPlayerId.trim().toUpperCase();
+    const { data: friend, error: friendErr } = await supabase
+      .from("profiles")
+      .select("user_id")
+      .eq("player_id", targetPlayerId)
+      .maybeSingle();
+    if (friendErr || !friend?.user_id) {
+      Alert.alert("Nie znaleziono", "Nie znaleziono gracza o takim Player ID.");
+      setFriendBusy(false);
+      return;
+    }
+    if (friend.user_id === user.id) {
+      Alert.alert("To Twoje konto", "Nie mo?esz doda? samego siebie.");
+      setFriendBusy(false);
+      return;
+    }
+    const { error } = await supabase.from("friendships").upsert(
+      {
+        requester_id: user.id,
+        addressee_id: friend.user_id,
+        status: "accepted",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "requester_id,addressee_id" },
+    );
+    if (error) {
+      Alert.alert("B??d", error.message);
+      setFriendBusy(false);
+      return;
+    }
+    setFriendPlayerId("");
+    await loadFriends();
+    setFriendBusy(false);
+  }, [friendBusy, friendPlayerId, loadFriends, user?.id]);
 
   return (
     <View style={styles.container}>
@@ -334,7 +446,7 @@ export default function KingdomScreen() {
             </LinearGradient>
             <View>
               <Text style={styles.heroTitle}>Kingdom</Text>
-              <Text style={styles.heroSubtitle}>Top Heroes · Mock leaderboard</Text>
+              <Text style={styles.heroSubtitle}>Top Heroes ? Mock leaderboard</Text>
             </View>
           </View>
         </Animated.View>
@@ -348,9 +460,43 @@ export default function KingdomScreen() {
           <RealmRivalRow key={hero.id} hero={hero} rank={i + 1} onInspectItem={openLootItem} />
         ))}
 
+        <View style={styles.socialCard}>
+          <Text style={styles.socialTitle}>Dodaj towarzysza broni</Text>
+          <View style={styles.socialRow}>
+            <TextInput
+              style={styles.socialInput}
+              value={friendPlayerId}
+              onChangeText={setFriendPlayerId}
+              placeholder="Player ID znajomego"
+              placeholderTextColor={Colors.dark.textMuted}
+              autoCapitalize="characters"
+              editable={!friendBusy}
+            />
+            <Pressable
+              onPress={handleAddFriend}
+              disabled={friendBusy || !friendPlayerId.trim()}
+              style={({ pressed }) => [styles.socialBtn, pressed && styles.socialBtnPressed]}
+            >
+              <UserPlus size={14} color={Colors.dark.gold} />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.sectionBar}>
+          <Flame size={15} color={Colors.dark.fire} />
+          <Text style={styles.sectionTitle}>Towarzysze</Text>
+        </View>
+        {mappedFriends.length > 0 ? (
+          mappedFriends.map((hero, i) => (
+            <RealmRivalRow key={hero.id} hero={hero} rank={i + 1} onInspectItem={openLootItem} />
+          ))
+        ) : (
+          <Text style={styles.noFriendsText}>Brak znajomych w kr?lestwie. Dodaj pierwszego towarzysza.</Text>
+        )}
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            The mist hides countless banners… Friends & live ranks are coming in a future age.
+            The mist hides countless banners? Friends & live ranks are coming in a future age.
           </Text>
         </View>
       </ScrollView>
@@ -544,6 +690,56 @@ const styles = StyleSheet.create({
     color: Colors.dark.textMuted,
     letterSpacing: 1.6,
     textTransform: "uppercase",
+  },
+  socialCard: {
+    marginTop: 8,
+    marginBottom: 14,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "88",
+    backgroundColor: Colors.dark.surface + "cc",
+  },
+  socialTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: Colors.dark.text,
+    marginBottom: 8,
+  },
+  socialRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  socialInput: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    backgroundColor: Colors.dark.background + "dd",
+    color: Colors.dark.text,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    fontSize: 13,
+  },
+  socialBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + "66",
+    backgroundColor: Colors.dark.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  socialBtnPressed: {
+    opacity: 0.9,
+  },
+  noFriendsText: {
+    fontSize: 12,
+    color: Colors.dark.textMuted,
+    fontStyle: "italic",
+    marginBottom: 6,
   },
   rivalCard: {
     marginBottom: 10,

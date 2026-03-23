@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -19,12 +19,23 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   activityByDate: Record<string, { completions: number; xpFromHabits: number }>;
+  completedHabitNamesByDate: Record<string, string[]>;
 };
 
 /** Modal w stylu plecaka — historia aktywności (heatmapa). */
-export default function ActivityChroniclesModal({ visible, onClose, activityByDate }: Props) {
+export default function ActivityChroniclesModal({
+  visible,
+  onClose,
+  activityByDate,
+  completedHabitNamesByDate,
+}: Props) {
   const { width } = useWindowDimensions();
   const modalMaxW = Math.min(width - 32, 400);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const selectedTasks = useMemo(
+    () => (selectedDate ? completedHabitNamesByDate[selectedDate] ?? [] : []),
+    [completedHabitNamesByDate, selectedDate],
+  );
 
   const handleClose = useCallback(() => {
     impactAsync(ImpactFeedbackStyle.Light);
@@ -63,7 +74,31 @@ export default function ActivityChroniclesModal({ visible, onClose, activityByDa
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.heatmapWrap}>
-                <ActivityHeatmap activityByDate={activityByDate} embedded />
+                <ActivityHeatmap
+                  activityByDate={activityByDate}
+                  embedded
+                  selectedDate={selectedDate}
+                  onSelectDate={setSelectedDate}
+                />
+              </View>
+
+              <View style={styles.dayDetailsCard}>
+                <Text style={styles.dayDetailsTitle}>
+                  {selectedDate ? `Dziennik dnia: ${selectedDate}` : "Kliknij kratkę, by zobaczyć zadania dnia"}
+                </Text>
+                {selectedDate ? (
+                  selectedTasks.length > 0 ? (
+                    selectedTasks.map((taskName, idx) => (
+                      <Text key={`${selectedDate}_${idx}_${taskName}`} style={styles.taskRow}>
+                        • {taskName}
+                      </Text>
+                    ))
+                  ) : (
+                    <Text style={styles.emptyTasks}>Brak zapisanych zadań dla tego dnia.</Text>
+                  )
+                ) : (
+                  <Text style={styles.emptyTasks}>Wybierz dzień na heatmapie.</Text>
+                )}
               </View>
             </ScrollView>
           </LinearGradient>
@@ -142,5 +177,29 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.background + "dd",
     borderWidth: 1,
     borderColor: Colors.dark.emerald + "28",
+  },
+  dayDetailsCard: {
+    marginTop: 12,
+    borderRadius: 14,
+    backgroundColor: Colors.dark.surface + "cc",
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    padding: 12,
+    gap: 6,
+  },
+  dayDetailsTitle: {
+    fontSize: 12,
+    color: Colors.dark.textSecondary,
+    fontWeight: "700",
+  },
+  taskRow: {
+    fontSize: 13,
+    color: Colors.dark.text,
+    lineHeight: 19,
+  },
+  emptyTasks: {
+    fontSize: 12,
+    color: Colors.dark.textMuted,
+    fontStyle: "italic",
   },
 });

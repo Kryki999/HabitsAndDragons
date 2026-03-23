@@ -56,6 +56,7 @@ function getEconomyPatchIfNewDay(state: GameState): Partial<GameState> | null {
     firstDungeonKeyDroppedToday: false,
     sageEpicQuestClaimedToday: false,
     habitCompletionLog: {},
+    completedHabitNamesByDate: {},
     lastEconomyResetDate: today,
     sageEpicQuestDate: today,
     sageEpicQuestId: pickRandomEpicQuestId(),
@@ -69,6 +70,9 @@ function collectNewTitles(
   strengthXP: number,
   agilityXP: number,
   intelligenceXP: number,
+  completedStrengthQuests: number,
+  completedAgilityQuests: number,
+  completedIntelligenceQuests: number,
 ): string[] {
   const have = new Set(unlockedIds);
   const out: string[] = [];
@@ -77,9 +81,16 @@ function collectNewTitles(
     agility: agilityXP,
     intelligence: intelligenceXP,
   };
+  const completedByStat: Record<StatType, number> = {
+    strength: completedStrengthQuests,
+    agility: completedAgilityQuests,
+    intelligence: completedIntelligenceQuests,
+  };
   for (const def of TITLE_DEFINITIONS) {
     if (have.has(def.id)) continue;
-    if (getLevelFromXP(xpByStat[def.stat]) >= def.requiredStatLevel) {
+    const meetsLevel = def.requiredStatLevel ? getLevelFromXP(xpByStat[def.stat]) >= def.requiredStatLevel : true;
+    const meetsCompleted = def.requiredCompletedQuests ? completedByStat[def.stat] >= def.requiredCompletedQuests : true;
+    if (meetsLevel && meetsCompleted) {
       out.push(def.id);
     }
   }
@@ -88,6 +99,20 @@ function collectNewTitles(
 
 function resolveDifficulty(habit: Habit): HabitDifficulty {
   return habit.difficulty ?? 'medium';
+}
+
+function ensureHabitDefaults(habit: Habit): Habit {
+  const taskType = habit.taskType ?? 'daily';
+  return {
+    ...habit,
+    taskType,
+    isActive: habit.isActive ?? true,
+    timeOfDay: habit.timeOfDay ?? 'anytime',
+    currentStreak: taskType === 'daily' ? (habit.currentStreak ?? 0) : undefined,
+    longestStreak: taskType === 'daily' ? (habit.longestStreak ?? 0) : undefined,
+    totalCompletions: taskType === 'daily' ? (habit.totalCompletions ?? 0) : undefined,
+    completionDates: taskType === 'daily' ? (habit.completionDates ?? []) : undefined,
+  };
 }
 
 function patchActivityForDay(
@@ -105,6 +130,33 @@ function patchActivityForDay(
     return next;
   }
   return { ...activityByDate, [date]: { completions, xpFromHabits } };
+}
+
+function appendCompletedHabitNameForDay(
+  logByDate: Record<string, string[]>,
+  date: string,
+  habitName: string,
+): Record<string, string[]> {
+  const prev = logByDate[date] ?? [];
+  return { ...logByDate, [date]: [...prev, habitName] };
+}
+
+function removeCompletedHabitNameForDay(
+  logByDate: Record<string, string[]>,
+  date: string,
+  habitName: string,
+): Record<string, string[]> {
+  const prev = logByDate[date] ?? [];
+  if (prev.length === 0) return logByDate;
+  const idx = prev.lastIndexOf(habitName);
+  if (idx < 0) return logByDate;
+  const nextDay = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
+  if (nextDay.length === 0) {
+    const next = { ...logByDate };
+    delete next[date];
+    return next;
+  }
+  return { ...logByDate, [date]: nextDay };
 }
 
 export const useGameStore = create<GameStore>()(
@@ -132,6 +184,10 @@ export const useGameStore = create<GameStore>()(
       lastMorningGoldClaimDate: null,
       unlockedTitleIds: [],
       habitCompletionLog: {},
+      completedStrengthQuests: 0,
+      completedAgilityQuests: 0,
+      completedIntelligenceQuests: 0,
+      completedHabitNamesByDate: {},
       ownedItemIds: [],
       equippedOutfitId: null,
       equippedRelicId: null,
@@ -169,7 +225,7 @@ export const useGameStore = create<GameStore>()(
         set((state) => {
           const econ = getEconomyPatchIfNewDay(state) ?? {};
           const base = { ...state, ...econ };
-          const habit = base.habits.find(h => h.id === habitId);
+          const habit = base.habits.find(h => h.id === habitId && h.isActive);
           if (!habit || habit.completedToday) return base;
 
           const rewards = DIFFICULTY_BASE_REWARDS[resolveDifficulty(habit)];
@@ -191,12 +247,29 @@ export const useGameStore = create<GameStore>()(
           const strengthXP = habit.stat === 'strength' ? newStatXp : base.strengthXP;
           const agilityXP = habit.stat === 'agility' ? newStatXp : base.agilityXP;
           const intelligenceXP = habit.stat === 'intelligence' ? newStatXp : base.intelligenceXP;
+          const completedStrengthQuests = base.completedStrengthQuests + (habit.stat === 'strength' ? 1 : 0);
+          const completedAgilityQuests = base.completedAgilityQuests + (habit.stat === 'agility' ? 1 : 0);
+          const completedIntelligenceQuests = base.completedIntelligenceQuests + (habit.stat === 'intelligence' ? 1 : 0);
 
-          const updatedHabits = base.habits.map(h =>
-            h.id === habitId ? { ...h, completedToday: true } : h
-          );
-          const allDone = updatedHabits.every(h => h.completedToday);
           const today = getTodayString();
+          const updatedHabits = base.habits.map((h) => {
+            if (h.id !== habitId) return h;
+            const next = { ...h, completedToday: true };
+            if (h.taskType === 'daily') {
+              const completionDates = [...(h.completionDates ?? [])];
+              if (!completionDates.includes(today)) completionDates.push(today);
+              const currentStreak = (h.currentStreak ?? 0) + 1;
+              return {
+                ...next,
+                completionDates,
+                currentStreak,
+                longestStreak: Math.max(h.longestStreak ?? 0, currentStreak),
+                totalCompletions: (h.totalCompletions ?? 0) + 1,
+              };
+            }
+            return next;
+          });
+          const allDone = updatedHabits.filter((h) => h.isActive).every((h) => h.completedToday);
           const isNewStreakDay = base.lastCompletionDate !== today;
 
           let newStreak = base.streak;
@@ -204,17 +277,33 @@ export const useGameStore = create<GameStore>()(
             newStreak = base.streak + 1;
           }
 
-          const newTitles = collectNewTitles(base.unlockedTitleIds, strengthXP, agilityXP, intelligenceXP);
+          const newTitles = collectNewTitles(
+            base.unlockedTitleIds,
+            strengthXP,
+            agilityXP,
+            intelligenceXP,
+            completedStrengthQuests,
+            completedAgilityQuests,
+            completedIntelligenceQuests,
+          );
 
           console.log(
             `[GameStore] complete ${habit.name} [${resolveDifficulty(habit)}] task#${newTaskIndex} fatigue=${fatigueMul} +${xpGranted} ${habit.stat}XP +${goldGranted}g key=${keyDropped}`,
           );
 
           const activityByDate = patchActivityForDay(base.activityByDate ?? {}, today, 1, xpGranted);
+          const completedHabitNamesByDate = appendCompletedHabitNameForDay(
+            base.completedHabitNamesByDate ?? {},
+            today,
+            habit.name,
+          );
 
           return {
             ...base,
-            habits: updatedHabits,
+            habits:
+              habit.taskType === 'one-off'
+                ? updatedHabits.map((h) => (h.id === habitId ? { ...h, isActive: false } : h))
+                : updatedHabits,
             [xpKey]: newStatXp,
             gold: base.gold + goldGranted,
             streak: newStreak,
@@ -228,8 +317,12 @@ export const useGameStore = create<GameStore>()(
               ...base.habitCompletionLog,
               [habitId]: { taskDayIndex: newTaskIndex, xpGranted, goldGranted, keyDropped },
             },
+            completedStrengthQuests,
+            completedAgilityQuests,
+            completedIntelligenceQuests,
             unlockedTitleIds: [...base.unlockedTitleIds, ...newTitles],
             activityByDate,
+            completedHabitNamesByDate,
           };
         });
       },
@@ -238,13 +331,11 @@ export const useGameStore = create<GameStore>()(
         set((state) => {
           const econ = getEconomyPatchIfNewDay(state) ?? {};
           const base = { ...state, ...econ };
-          const habit = base.habits.find(h => h.id === habitId);
+          const habit = base.habits.find(h => h.id === habitId && h.isActive);
           if (!habit || !habit.completedToday) return base;
 
           const ledger = base.habitCompletionLog[habitId];
-          const updatedHabits = base.habits.map(h =>
-            h.id === habitId ? { ...h, completedToday: false } : h
-          );
+          const updatedHabits = base.habits.map(h => (h.id === habitId ? { ...h, completedToday: false } : h));
 
           const nextLog = { ...base.habitCompletionLog };
           delete nextLog[habitId];
@@ -262,6 +353,11 @@ export const useGameStore = create<GameStore>()(
           const firstDungeonKeyDroppedToday = Object.values(nextLog).some(l => l.keyDropped);
           const today = getTodayString();
           const activityByDate = patchActivityForDay(base.activityByDate ?? {}, today, -1, -ledger.xpGranted);
+          const completedHabitNamesByDate = removeCompletedHabitNameForDay(
+            base.completedHabitNamesByDate ?? {},
+            today,
+            habit.name,
+          );
 
           return {
             ...base,
@@ -275,6 +371,7 @@ export const useGameStore = create<GameStore>()(
             firstDungeonKeyDroppedToday,
             habitCompletionLog: nextLog,
             activityByDate,
+            completedHabitNamesByDate,
           };
         });
       },
@@ -282,6 +379,12 @@ export const useGameStore = create<GameStore>()(
       addHabit: (habit) => {
         const newHabit: Habit = {
           ...habit,
+          taskType: habit.taskType ?? 'daily',
+          isActive: true,
+          currentStreak: (habit.taskType ?? 'daily') === 'daily' ? 0 : undefined,
+          longestStreak: (habit.taskType ?? 'daily') === 'daily' ? 0 : undefined,
+          totalCompletions: (habit.taskType ?? 'daily') === 'daily' ? 0 : undefined,
+          completionDates: (habit.taskType ?? 'daily') === 'daily' ? [] : undefined,
           difficulty: habit.difficulty ?? 'medium',
           id: `habit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           completedToday: false,
@@ -297,34 +400,15 @@ export const useGameStore = create<GameStore>()(
           const habit = base.habits.find(h => h.id === habitId);
           if (!habit) return base;
 
-          if (habit.completedToday && base.habitCompletionLog[habitId]) {
-            const ledger = base.habitCompletionLog[habitId];
-            const xpKey = `${habit.stat}XP` as 'strengthXP' | 'agilityXP' | 'intelligenceXP';
-            const nextLog = { ...base.habitCompletionLog };
-            delete nextLog[habitId];
-            const firstDungeonKeyDroppedToday = Object.values(nextLog).some(l => l.keyDropped);
-            const today = getTodayString();
-            const activityByDate = patchActivityForDay(base.activityByDate ?? {}, today, -1, -ledger.xpGranted);
-            return {
-              ...base,
-              habits: base.habits.filter(h => h.id !== habitId),
-              allCompletedToday: false,
-              [xpKey]: base[xpKey] - ledger.xpGranted,
-              gold: base.gold - ledger.goldGranted,
-              dungeonKeys: ledger.keyDropped ? Math.max(0, base.dungeonKeys - 1) : base.dungeonKeys,
-              tasksCompletedToday: Math.max(0, base.tasksCompletedToday - 1),
-              goldFromStandardTasksToday: Math.max(0, base.goldFromStandardTasksToday - ledger.goldGranted),
-              firstDungeonKeyDroppedToday,
-              habitCompletionLog: nextLog,
-              activityByDate,
-            };
-          }
-
           const nextLog = { ...base.habitCompletionLog };
           delete nextLog[habitId];
+          const remainingHabits = base.habits.map((h) => (h.id === habitId ? { ...h, isActive: false } : h));
           return {
             ...base,
-            habits: base.habits.filter(h => h.id !== habitId),
+            habits: remainingHabits,
+            allCompletedToday:
+              remainingHabits.filter((h) => h.isActive).length > 0 &&
+              remainingHabits.filter((h) => h.isActive).every((h) => h.completedToday),
             habitCompletionLog: nextLog,
           };
         });
@@ -374,7 +458,15 @@ export const useGameStore = create<GameStore>()(
           const strengthXP = stat === 'strength' ? newXp : state.strengthXP;
           const agilityXP = stat === 'agility' ? newXp : state.agilityXP;
           const intelligenceXP = stat === 'intelligence' ? newXp : state.intelligenceXP;
-          const newTitles = collectNewTitles(state.unlockedTitleIds, strengthXP, agilityXP, intelligenceXP);
+          const newTitles = collectNewTitles(
+            state.unlockedTitleIds,
+            strengthXP,
+            agilityXP,
+            intelligenceXP,
+            state.completedStrengthQuests,
+            state.completedAgilityQuests,
+            state.completedIntelligenceQuests,
+          );
           return {
             [xpKey]: newXp,
             unlockedTitleIds: [...state.unlockedTitleIds, ...newTitles],
@@ -518,7 +610,15 @@ export const useGameStore = create<GameStore>()(
           const strengthXP = stat === 'strength' ? newXp : base.strengthXP;
           const agilityXP = stat === 'agility' ? newXp : base.agilityXP;
           const intelligenceXP = stat === 'intelligence' ? newXp : base.intelligenceXP;
-          const newTitles = collectNewTitles(base.unlockedTitleIds, strengthXP, agilityXP, intelligenceXP);
+          const newTitles = collectNewTitles(
+            base.unlockedTitleIds,
+            strengthXP,
+            agilityXP,
+            intelligenceXP,
+            base.completedStrengthQuests,
+            base.completedAgilityQuests,
+            base.completedIntelligenceQuests,
+          );
           console.log(`[GameStore] Sage Epic Quest +${GOLD_EPIC_QUEST_SAGE} gold (extra pool), +${xpBonus} ${stat} XP`);
           const today = getTodayString();
           const activityByDate = patchActivityForDay(base.activityByDate ?? {}, today, 1, xpBonus);
@@ -571,9 +671,22 @@ export const useGameStore = create<GameStore>()(
 
         console.log(`[GameStore] Resetting daily habits. Streak: ${newStreak}`);
         set({
-          habits: state.habits.map(h => ({ ...h, completedToday: false })),
+          habits: state.habits
+            .map((h) => ensureHabitDefaults(h))
+            .map((h) => {
+              if (!h.isActive) return h;
+              if (h.taskType === 'one-off') {
+                if (h.completedToday) return { ...h, completedToday: false, isActive: false };
+                return { ...h, completedToday: false };
+              }
+              if (!h.completedToday) {
+                return { ...h, completedToday: false, currentStreak: 0 };
+              }
+              return { ...h, completedToday: false };
+            }),
           allCompletedToday: false,
           streak: newStreak,
+          habitCompletionLog: {},
         });
       },
     }),
@@ -603,10 +716,14 @@ export const useGameStore = create<GameStore>()(
         lastMorningGoldClaimDate: state.lastMorningGoldClaimDate,
         unlockedTitleIds: state.unlockedTitleIds,
         habitCompletionLog: state.habitCompletionLog,
+        completedStrengthQuests: state.completedStrengthQuests,
+        completedAgilityQuests: state.completedAgilityQuests,
+        completedIntelligenceQuests: state.completedIntelligenceQuests,
         ownedItemIds: state.ownedItemIds,
         equippedOutfitId: state.equippedOutfitId,
         equippedRelicId: state.equippedRelicId,
         activityByDate: state.activityByDate,
+        completedHabitNamesByDate: state.completedHabitNamesByDate,
         hapticsEnabled: state.hapticsEnabled,
         sageFocus: state.sageFocus,
         sageChatMessages: state.sageChatMessages,
@@ -616,11 +733,13 @@ export const useGameStore = create<GameStore>()(
         return {
           ...current,
           ...p,
+          habits: (p?.habits ?? current.habits).map((h) => ensureHabitDefaults(h)),
           sageFocus: p?.sageFocus ?? current.sageFocus,
           sageChatMessages:
             Array.isArray(p?.sageChatMessages) && p.sageChatMessages.length > 0
               ? p.sageChatMessages
               : current.sageChatMessages,
+          completedHabitNamesByDate: p?.completedHabitNamesByDate ?? current.completedHabitNamesByDate,
         };
       },
     },

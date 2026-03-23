@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import Colors from "@/constants/colors";
 
 const NUM_DAYS = 56;
@@ -31,10 +31,12 @@ type Props = {
   activityByDate: Record<string, { completions: number; xpFromHabits: number }>;
   /** W modalu — mniejszy margines zewnętrzny. */
   embedded?: boolean;
+  selectedDate?: string | null;
+  onSelectDate?: (dateKey: string) => void;
 };
 
 /** GitHub-style contribution grid — oldest left→right, newest bottom-right corner. */
-export default function ActivityHeatmap({ activityByDate, embedded }: Props) {
+export default function ActivityHeatmap({ activityByDate, embedded, selectedDate, onSelectDate }: Props) {
   const cells = useMemo(() => {
     const out: { key: string; level: number }[] = [];
     const end = new Date();
@@ -66,16 +68,20 @@ export default function ActivityHeatmap({ activityByDate, embedded }: Props) {
         {rows.map((row, ri) => (
           <View key={ri} style={styles.row}>
             {row.map((cell) => (
-              <View
+              <Pressable
                 key={cell.key}
+                onPress={onSelectDate ? () => onSelectDate(cell.key) : undefined}
                 style={[
                   styles.cell,
                   {
                     backgroundColor: LEVEL_BG[cell.level] ?? LEVEL_BG[0],
                     borderColor:
-                      cell.level >= 3
+                      selectedDate === cell.key
+                        ? Colors.dark.gold
+                        : cell.level >= 3
                         ? Colors.dark.gold + "55"
                         : Colors.dark.border + "44",
+                    borderWidth: selectedDate === cell.key ? 1.5 : 1,
                   },
                 ]}
               />

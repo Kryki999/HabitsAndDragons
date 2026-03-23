@@ -23,10 +23,14 @@ export type CloudGameState = Pick<
   | "lastMorningGoldClaimDate"
   | "unlockedTitleIds"
   | "habitCompletionLog"
+  | "completedStrengthQuests"
+  | "completedAgilityQuests"
+  | "completedIntelligenceQuests"
   | "ownedItemIds"
   | "equippedOutfitId"
   | "equippedRelicId"
   | "activityByDate"
+  | "completedHabitNamesByDate"
   | "hapticsEnabled"
   | "sageFocus"
   | "sageChatMessages"
@@ -55,10 +59,14 @@ export function pickCloudGameState(state: GameState): CloudGameState {
     lastMorningGoldClaimDate: state.lastMorningGoldClaimDate,
     unlockedTitleIds: state.unlockedTitleIds,
     habitCompletionLog: state.habitCompletionLog,
+    completedStrengthQuests: state.completedStrengthQuests,
+    completedAgilityQuests: state.completedAgilityQuests,
+    completedIntelligenceQuests: state.completedIntelligenceQuests,
     ownedItemIds: state.ownedItemIds,
     equippedOutfitId: state.equippedOutfitId,
     equippedRelicId: state.equippedRelicId,
     activityByDate: state.activityByDate,
+    completedHabitNamesByDate: state.completedHabitNamesByDate,
     hapticsEnabled: state.hapticsEnabled,
     sageFocus: state.sageFocus,
     sageChatMessages: state.sageChatMessages,

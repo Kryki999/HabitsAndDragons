@@ -5,7 +5,8 @@ export interface TitleDefinition {
   name: string;
   description: string;
   stat: StatType;
-  requiredStatLevel: number;
+  requiredStatLevel?: number;
+  requiredCompletedQuests?: number;
 }
 
 /** Unlocks when the given stat reaches the milestone level (per-stat level uses the same curve as global). */
@@ -22,4 +23,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
   { id: 'int_25', name: 'Arcane Scholar', description: 'Reached Intelligence level 25.', stat: 'intelligence', requiredStatLevel: 25 },
   { id: 'int_50', name: 'Archmage Ascendant', description: 'Reached Intelligence level 50.', stat: 'intelligence', requiredStatLevel: 50 },
   { id: 'int_100', name: 'Oracle of Ages', description: 'Reached Intelligence level 100.', stat: 'intelligence', requiredStatLevel: 100 },
+  { id: 'str_quests_30', name: 'Herkules', description: 'Ukończono 30 zadań Siły (STR).', stat: 'strength', requiredCompletedQuests: 30 },
+  { id: 'agi_quests_30', name: 'Żelazne Płuca', description: 'Ukończono 30 zadań Zwinności (AGI).', stat: 'agility', requiredCompletedQuests: 30 },
+  { id: 'int_quests_30', name: 'Mól Książkowy', description: 'Ukończono 30 zadań Inteligencji (INT).', stat: 'intelligence', requiredCompletedQuests: 30 },
 ];

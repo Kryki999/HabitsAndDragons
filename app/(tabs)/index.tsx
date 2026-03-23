@@ -7,15 +7,15 @@ import {
   ScrollView,
   Pressable,
   Platform,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Swords, Zap, BookOpen, Plus, Mail, Settings, Coins, KeyRound, Backpack, ScrollText } from 'lucide-react-native';
+import { Swords, Zap, BookOpen, Plus, Mail, Settings, Coins, KeyRound, Backpack, ScrollText, Trophy, Infinity as InfinityIcon } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
-import { StatType, TimeOfDay, HabitDifficulty } from '@/types/game';
+import { StatType, TimeOfDay, HabitDifficulty, TaskType } from '@/types/game';
 import { getXPProgressInCurrentLevel } from '@/lib/playerLevel';
 import HabitCard from '@/components/HabitCard';
 import AddHabitModal from '@/components/AddHabitModal';
@@ -25,8 +25,10 @@ import BackpackModal from '@/components/BackpackModal';
 import ActivityChroniclesModal from '@/components/ActivityChroniclesModal';
 import SettingsModal from '@/components/SettingsModal';
 import MailboxModal from '@/components/MailboxModal';
-
-const { width } = Dimensions.get('window');
+import AchievementsModal from '@/components/AchievementsModal';
+import PlayerProfileModal from '@/components/PlayerProfileModal';
+import { useAuth } from '@/providers/AuthProvider';
+import HabitMasteryModal from '@/components/HabitMasteryModal';
 
 const STAT_CONFIG: Record<StatType, { color: string; label: string; icon: typeof Swords }> = {
   strength: { color: Colors.dark.ruby, label: 'STR', icon: Swords },
@@ -36,7 +38,7 @@ const STAT_CONFIG: Record<StatType, { color: string; label: string; icon: typeof
 
 const TIME_LABELS: Record<TimeOfDay, { label: string; emoji: string }> = {
   morning: { label: 'Morning Rituals', emoji: '🌅' },
-  day: { label: 'Daytime Challenges', emoji: '☀️' },
+  anytime: { label: 'Anytime Quests', emoji: '♾️' },
   evening: { label: 'Evening Quests', emoji: '🌙' },
 };
 
@@ -56,11 +58,26 @@ function getCastleTier(level: number) {
   return tier;
 }
 
-function StatRing({ stat, xp, delay }: { stat: StatType; xp: number; delay: number }) {
+function StatRing({
+  stat,
+  xp,
+  delay,
+  compact,
+  compactScale = 1,
+}: {
+  stat: StatType;
+  xp: number;
+  delay: number;
+  compact?: boolean;
+  compactScale?: number;
+}) {
   const cfg = STAT_CONFIG[stat];
   const getStatLevel = useGameStore(s => s.getStatLevel);
   const level = getStatLevel(stat);
   const entryAnim = useRef(new Animated.Value(0)).current;
+  const ringSize = compact ? Math.round(34 * compactScale) : 42;
+  const ringStroke = compact ? Math.max(1.6, 2 * compactScale) : 2.5;
+  const iconSize = compact ? Math.round(12 * compactScale) : 15;
 
   const xpInLevel = useMemo(() => {
     const { current, needed } = getXPProgressInCurrentLevel(xp);
@@ -75,19 +92,26 @@ function StatRing({ stat, xp, delay }: { stat: StatType; xp: number; delay: numb
   }, [xpInLevel]);
 
   return (
-    <Animated.View style={[styles.statRingContainer, {
-      opacity: entryAnim,
-      transform: [{ scale: entryAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }],
-    }]}>
+    <Animated.View
+      style={[
+        styles.statRingContainer,
+        compact && styles.statRingContainerCompact,
+        compact && { width: Math.round(58 * compactScale) },
+        {
+          opacity: entryAnim,
+          transform: [{ scale: entryAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }],
+        },
+      ]}
+    >
       <CircularProgress
         progress={xpInLevel}
-        size={42}
-        strokeWidth={2.5}
+        size={ringSize}
+        strokeWidth={ringStroke}
         color={cfg.color}
         backgroundColor={Colors.dark.surfaceLight}
       >
         <View style={styles.statRingIcon}>
-          <cfg.icon size={15} color={cfg.color} />
+          <cfg.icon size={iconSize} color={cfg.color} />
         </View>
       </CircularProgress>
       <View style={styles.statRingLabelContainer}>
@@ -100,14 +124,25 @@ function StatRing({ stat, xp, delay }: { stat: StatType; xp: number; delay: numb
 
 export default function CastleScreen() {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isSmallScreen = width < 380;
+  const isVerySmallScreen = width < 350;
+  const compactStatScale = isVerySmallScreen ? 0.82 : isSmallScreen ? 0.92 : 1;
   const [modalVisible, setModalVisible] = useState(false);
   const [backpackOpen, setBackpackOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mailboxOpen, setMailboxOpen] = useState(false);
   const [chroniclesOpen, setChroniclesOpen] = useState(false);
+  const [achievementsOpen, setAchievementsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [masteryOpen, setMasteryOpen] = useState(false);
+  const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
+  const [hudFilter, setHudFilter] = useState<'all' | 'daily' | 'one-off'>('all');
+  const { user, playerId, signOut } = useAuth();
   const {
     gold, streak, habits, strengthXP, agilityXP, intelligenceXP, dungeonKeys,
-    activityByDate,
+    activityByDate, completedHabitNamesByDate, unlockedTitleIds,
+    completedStrengthQuests, completedAgilityQuests, completedIntelligenceQuests,
     getPlayerLevel, getCurrentLevelXP, getXPForNextLevel,
     completeHabit, uncompleteHabit, addHabit, removeHabit,
   } = useGameStore();
@@ -140,6 +175,7 @@ export default function CastleScreen() {
     name: string;
     description: string;
     stat: StatType;
+    taskType: TaskType;
     timeOfDay: TimeOfDay;
     icon: string;
     difficulty: HabitDifficulty;
@@ -159,14 +195,23 @@ export default function CastleScreen() {
     removeHabit(id);
   }, [removeHabit]);
 
+  const activeHabits = useMemo(() => habits.filter((h) => h.isActive), [habits]);
+  const visibleHabits = useMemo(
+    () => activeHabits.filter((h) => (hudFilter === 'all' ? true : h.taskType === hudFilter)),
+    [activeHabits, hudFilter],
+  );
+  const selectedHabit = useMemo(
+    () => habits.find((h) => h.id === selectedHabitId) ?? null,
+    [habits, selectedHabitId],
+  );
   const groupedHabits = useMemo(() => {
-    const groups: Record<TimeOfDay, typeof habits> = { morning: [], day: [], evening: [] };
-    habits.forEach(h => groups[h.timeOfDay].push(h));
+    const groups: Record<TimeOfDay, typeof habits> = { morning: [], anytime: [], evening: [] };
+    visibleHabits.forEach(h => groups[h.timeOfDay].push(h));
     return groups;
-  }, [habits]);
+  }, [visibleHabits]);
 
-  const completedCount = useMemo(() => habits.filter(h => h.completedToday).length, [habits]);
-  const totalCount = habits.length;
+  const completedCount = useMemo(() => visibleHabits.filter(h => h.completedToday).length, [visibleHabits]);
+  const totalCount = visibleHabits.length;
 
   return (
     <View style={styles.container}>
@@ -178,7 +223,13 @@ export default function CastleScreen() {
       }]}>
         <View style={styles.hudRow}>
           {/* Left: Avatar & Name */}
-          <View style={styles.hudLeft}>
+          <Pressable
+            style={({ pressed }) => [styles.hudLeft, pressed && styles.hudLeftPressed]}
+            onPress={() => {
+              impactAsync(ImpactFeedbackStyle.Light);
+              setProfileOpen(true);
+            }}
+          >
             <CircularProgress
               progress={xpProgress}
               size={40}
@@ -194,7 +245,7 @@ export default function CastleScreen() {
               <Text style={styles.playerName} numberOfLines={1}>Player</Text>
               <Text style={styles.playerLevelText}>Lv.{playerLevel}</Text>
             </View>
-          </View>
+          </Pressable>
 
           {/* Center: Pill Badges */}
           <View style={styles.pillBadgesContainer}>
@@ -306,13 +357,34 @@ export default function CastleScreen() {
           </Pressable>
         </Animated.View>
 
-        {/* Stat Hub */}
-        <Animated.View style={[styles.statHubContainer, {
-          opacity: headerAnim,
-        }]}>
-          <StatRing stat="strength" xp={strengthXP} delay={200} />
-          <StatRing stat="agility" xp={agilityXP} delay={350} />
-          <StatRing stat="intelligence" xp={intelligenceXP} delay={500} />
+        <Animated.View style={[styles.dashboardRow, styles.dashboardRowSecond, { opacity: headerAnim }]}>
+          <View style={styles.statsLooseHalf}>
+            <View style={styles.statsLooseInner}>
+              <StatRing stat="strength" xp={strengthXP} delay={220} compact compactScale={compactStatScale} />
+              <StatRing stat="agility" xp={agilityXP} delay={300} compact compactScale={compactStatScale} />
+              <StatRing stat="intelligence" xp={intelligenceXP} delay={380} compact compactScale={compactStatScale} />
+            </View>
+          </View>
+          <Pressable
+            onPress={() => {
+              impactAsync(ImpactFeedbackStyle.Light);
+              setAchievementsOpen(true);
+            }}
+            style={({ pressed }) => [styles.dashboardCardOuter, pressed && styles.dashboardCardPressed]}
+          >
+            <LinearGradient
+              colors={['#2b2436', '#1d1727']}
+              style={styles.dashboardCardGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={[styles.dashboardIconCircle, styles.dashboardIconCircleGold]}>
+                <Trophy color={Colors.dark.gold} size={22} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.dashboardCardTitle}>Osiągnięcia</Text>
+              <Text style={styles.dashboardCardSub}>Gablota trofeów</Text>
+            </LinearGradient>
+          </Pressable>
         </Animated.View>
 
         <View style={styles.divider}>
@@ -324,6 +396,24 @@ export default function CastleScreen() {
           </View>
           <View style={styles.dividerLine} />
         </View>
+        <View style={styles.filterTabs}>
+          {[
+            { key: 'all', label: 'Wszystkie' },
+            { key: 'daily', label: 'Główna Fabuła 🔁' },
+            { key: 'one-off', label: 'Misje Poboczne 🎯' },
+          ].map((tab) => (
+            <Pressable
+              key={tab.key}
+              onPress={() => {
+                impactAsync(ImpactFeedbackStyle.Light);
+                setHudFilter(tab.key as 'all' | 'daily' | 'one-off');
+              }}
+              style={[styles.filterTab, hudFilter === tab.key && styles.filterTabActive]}
+            >
+              <Text style={[styles.filterTabText, hudFilter === tab.key && styles.filterTabTextActive]}>{tab.label}</Text>
+            </Pressable>
+          ))}
+        </View>
 
         <View style={styles.habitsSection}>
           {totalCount === 0 ? (
@@ -333,15 +423,20 @@ export default function CastleScreen() {
               <Text style={styles.emptyDesc}>Tap the + button to forge your first daily habit</Text>
             </View>
           ) : (
-            (['morning', 'day', 'evening'] as TimeOfDay[]).map(time => {
+            (['morning', 'anytime', 'evening'] as TimeOfDay[]).map(time => {
               const group = groupedHabits[time];
               if (group.length === 0) return null;
               const timeCfg = TIME_LABELS[time];
               return (
                 <View key={time} style={styles.timeGroup}>
-                  <Text style={styles.timeGroupHeader}>
-                    {timeCfg.emoji} {timeCfg.label}
-                  </Text>
+                  <View style={styles.timeGroupHeaderRow}>
+                    {time === 'anytime' ? (
+                      <InfinityIcon size={12} color={Colors.dark.textSecondary} />
+                    ) : (
+                      <Text style={styles.timeGroupEmoji}>{timeCfg.emoji}</Text>
+                    )}
+                    <Text style={styles.timeGroupHeader}>{timeCfg.label}</Text>
+                  </View>
                   {group.map(habit => (
                     <HabitCard
                       key={habit.id}
@@ -349,6 +444,10 @@ export default function CastleScreen() {
                       onComplete={handleComplete}
                       onUncomplete={handleUncomplete}
                       onDelete={handleRemove}
+                      onLongPress={(h) => {
+                        setSelectedHabitId(h.id);
+                        setMasteryOpen(true);
+                      }}
                     />
                   ))}
                 </View>
@@ -391,10 +490,37 @@ export default function CastleScreen() {
         visible={chroniclesOpen}
         onClose={() => setChroniclesOpen(false)}
         activityByDate={activityByDate ?? {}}
+        completedHabitNamesByDate={completedHabitNamesByDate ?? {}}
       />
 
       <SettingsModal visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <MailboxModal visible={mailboxOpen} onClose={() => setMailboxOpen(false)} />
+      <AchievementsModal
+        visible={achievementsOpen}
+        onClose={() => setAchievementsOpen(false)}
+        unlockedTitleIds={unlockedTitleIds}
+        completedStrengthQuests={completedStrengthQuests}
+        completedAgilityQuests={completedAgilityQuests}
+        completedIntelligenceQuests={completedIntelligenceQuests}
+      />
+      <PlayerProfileModal
+        visible={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        email={user?.email ?? null}
+        playerId={playerId}
+        level={playerLevel}
+        onSignOut={signOut}
+      />
+      <HabitMasteryModal
+        visible={masteryOpen}
+        habit={selectedHabit}
+        onClose={() => setMasteryOpen(false)}
+        onArchive={(id) => {
+          handleRemove(id);
+          setMasteryOpen(false);
+        }}
+        onEdit={() => setMasteryOpen(false)}
+      />
     </View>
   );
 }
@@ -428,6 +554,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     flex: 1, // allow truncation if needed
+  },
+  hudLeftPressed: {
+    opacity: 0.9,
   },
   avatarInner: {
     width: 34,
@@ -520,6 +649,9 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 14,
   },
+  dashboardRowSecond: {
+    alignItems: 'stretch',
+  },
   dashboardCardOuter: {
     flex: 1,
     minWidth: 0,
@@ -604,17 +736,23 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // --- Stat Hub Styles ---
-  statHubContainer: {
+  statsLooseHalf: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statsLooseInner: {
     flexDirection: 'row',
+    width: '100%',
     justifyContent: 'space-evenly',
-    alignItems: 'flex-start',
-    paddingHorizontal: 10,
-    marginBottom: 10,
+    alignItems: 'center',
   },
   statRingContainer: {
     alignItems: 'center',
     width: 80,
+  },
+  statRingContainerCompact: {
+    width: 58,
   },
   statRingIcon: {
     justifyContent: 'center',
@@ -668,17 +806,53 @@ const styles = StyleSheet.create({
     color: Colors.dark.textMuted,
     letterSpacing: 1.5,
   },
+  filterTabs: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  filterTab: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    backgroundColor: Colors.dark.surface,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  filterTabActive: {
+    borderColor: Colors.dark.gold + '66',
+    backgroundColor: Colors.dark.gold + '14',
+  },
+  filterTabText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.dark.textMuted,
+    textAlign: 'center',
+  },
+  filterTabTextActive: {
+    color: Colors.dark.gold,
+  },
   habitsSection: {
     paddingHorizontal: 20,
   },
   timeGroup: {
     marginBottom: 12,
   },
+  timeGroupHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  timeGroupEmoji: {
+    fontSize: 12,
+  },
   timeGroupHeader: {
     fontSize: 13,
     fontWeight: '700',
     color: Colors.dark.textSecondary,
-    marginBottom: 10,
   },
   emptyState: {
     alignItems: 'center',

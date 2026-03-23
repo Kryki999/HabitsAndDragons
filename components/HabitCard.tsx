@@ -7,7 +7,7 @@ import {
   Pressable,
   Platform,
 } from 'react-native';
-import { Check, Swords, Zap, BookOpen, Trash2 } from 'lucide-react-native';
+import { Check, Swords, Zap, BookOpen, Trash2, Flame, Target } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import Colors from '@/constants/colors';
 import { Habit, StatType, HabitDifficulty } from '@/types/game';
@@ -29,9 +29,10 @@ interface HabitCardProps {
   onComplete: (id: string) => void;
   onUncomplete: (id: string) => void;
   onDelete: (id: string) => void;
+  onLongPress?: (habit: Habit) => void;
 }
 
-function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps) {
+function HabitCard({ habit, onComplete, onUncomplete, onDelete, onLongPress }: HabitCardProps) {
   const pressAnim = useRef(new Animated.Value(0)).current;
   const checkAnim = useRef(new Animated.Value(habit.completedToday ? 1 : 0)).current;
   const statCfg = STAT_CONFIG[habit.stat];
@@ -103,6 +104,11 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       onPress={handlePress}
+      onLongPress={() => {
+        impactAsync(ImpactFeedbackStyle.Heavy);
+        onLongPress?.(habit);
+      }}
+      delayLongPress={300}
       testID={`habit-card-${habit.id}`}
     >
       <Animated.View
@@ -134,6 +140,23 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
                     +{statCfg.label}
                   </Text>
                 </View>
+                {habit.taskType === 'daily' ? (
+                  <View style={styles.typeBadge}>
+                    <Flame size={10} color={(habit.currentStreak ?? 0) > 0 ? Colors.dark.fire : Colors.dark.textMuted} />
+                    <Text
+                      style={[
+                        styles.typeBadgeText,
+                        { color: (habit.currentStreak ?? 0) > 0 ? Colors.dark.fire : Colors.dark.textMuted },
+                      ]}
+                    >
+                      {habit.currentStreak ?? 0}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.typeBadge}>
+                    <Target size={10} color={Colors.dark.textMuted} />
+                  </View>
+                )}
                 <Text style={styles.diffBadge}>{DIFF_SHORT[diffKey]}</Text>
               </View>
             </View>
@@ -234,6 +257,15 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800' as const,
     color: Colors.dark.textMuted,
+  },
+  typeBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontWeight: '800' as const,
   },
   statBadgeText: {
     fontSize: 11,

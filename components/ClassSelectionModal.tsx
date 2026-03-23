@@ -9,7 +9,7 @@ import {
   Platform,
   Dimensions,
 } from 'react-native';
-import { Swords, Zap, BookOpen, Shield, Target, Wand2 } from 'lucide-react-native';
+import { Swords, Shield, Target, Wand2, Crown } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import Colors from '@/constants/colors';
@@ -62,6 +62,17 @@ const CLASSES: ClassOption[] = [
     accentColor: Colors.dark.cyan,
     icon: Wand2,
     emoji: '🔮',
+  },
+  {
+    id: 'paladin',
+    name: 'Paladin',
+    title: 'The Sacred Balance',
+    description: 'A balanced hybrid of resolve and wisdom. Paladins build body and mind in equal measure.',
+    statFocus: 'Strength & Intelligence',
+    colors: ['#f4ca73', '#8f6ee6'] as const,
+    accentColor: Colors.dark.gold,
+    icon: Crown,
+    emoji: '🛡️',
   },
 ];
 
@@ -225,6 +236,11 @@ export default function ClassSelectionModal({ visible, onSelect }: ClassSelectio
             />
           ))}
         </View>
+
+        <Text style={styles.sageQuote}>
+          Pamiętaj, wędrowcze – klasa to tylko twoja dusza, nie twoje więzienie. Mag może dźwigać żelazo na
+          siłowni, a Wojownik może zgłębiać księgi. Wybierz to, z czym najbardziej rezonujesz.
+        </Text>
       </View>
     </Modal>
   );
@@ -284,6 +300,14 @@ const styles = StyleSheet.create({
   },
   classList: {
     gap: 14,
+  },
+  sageQuote: {
+    marginTop: 18,
+    textAlign: 'center',
+    color: Colors.dark.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    fontStyle: 'italic',
   },
   classCard: {
     borderRadius: 16,
