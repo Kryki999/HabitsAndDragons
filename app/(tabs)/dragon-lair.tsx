@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useCallback, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import {
   View,
   Text,
@@ -8,26 +9,20 @@ import {
   ScrollView,
   Pressable,
   Alert,
-  Modal,
   useWindowDimensions,
+  ImageBackground,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
-  Flame,
-  Snowflake,
-  Crown,
-  Lock,
-  Shield,
   Plus,
   RotateCcw,
   Sparkles,
-  ChevronRight,
   Coins,
-  DoorOpen,
+  Lock,
+  Snowflake,
 } from "lucide-react-native";
 import {
   impactAsync,
-  selectionAsync,
   notificationAsync,
   ImpactFeedbackStyle,
   NotificationFeedbackType,
@@ -36,94 +31,58 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useGameStore } from "@/store/gameStore";
 import { DUNGEON_KEY_GOLD_PRICE } from "@/lib/economy";
-import { rollGoldAmount, rollWeightedDungeonEntry } from "@/lib/weightedLoot";
-import { LootGlyph } from "@/lib/lootGlyph";
 import type { StatType } from "@/types/game";
-import { LOOT_RARITY_COLOR } from "@/constants/lootRarity";
-import { sortDungeonLootByRarity, type DungeonLootEntry, type LootRarity } from "@/types/dungeonLoot";
-import { DUNGEONS, type DungeonData } from "@/constants/dungeons";
-import LootDetailModal, { type LootModalPayload } from "@/components/LootDetailModal";
+import {
+  DRAGON_CONFIGS,
+  ELIXIR_OF_TIME_GOLD_COST,
+  type DragonConfig,
+  type DragonId,
+  type DungeonChallengeConfig,
+  type DungeonChallengeId,
+} from "@/constants/gameplayConfig";
+import DungeonsSection, { PORTRAIT_CARD_HEIGHT_RATIO } from "@/components/dungeons";
+import BattleSimulationModal, {
+  type BattleApiResult,
+} from "@/components/BattleSimulationModal";
 
-interface DragonData {
-  id: string;
-  name: string;
-  subtitle: string;
-  streakRequired: number;
-  colors: readonly [string, string];
-  accentColor: string;
-  icon: React.ReactNode;
-  lockedIcon: React.ReactNode;
+const DRAGON_LIST = Object.values(DRAGON_CONFIGS);
+
+function formatSwitchCooldownRemaining(iso: string | null): string | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso) - Date.now();
+  if (ms <= 0) return null;
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
-const DRAGONS: DragonData[] = [
-  {
-    id: "red",
-    name: "Red Dragon",
-    subtitle: "Guardian of Embers",
-    streakRequired: 10,
-    colors: ["#ff6b35", "#cc2a1a"] as const,
-    accentColor: "#ff6b35",
-    icon: <Flame size={34} color="#fff" />,
-    lockedIcon: <Flame size={34} color="#4a3a3a" />,
-  },
-  {
-    id: "ice",
-    name: "Ice Wyvern",
-    subtitle: "Frost Sentinel",
-    streakRequired: 20,
-    colors: ["#45d4e8", "#1a6a8a"] as const,
-    accentColor: "#45d4e8",
-    icon: <Snowflake size={34} color="#fff" />,
-    lockedIcon: <Snowflake size={34} color="#3a4a4a" />,
-  },
-  {
-    id: "golden",
-    name: "Golden Dragon",
-    subtitle: "The Eternal Sovereign",
-    streakRequired: 30,
-    colors: ["#ffc845", "#cc8800"] as const,
-    accentColor: "#ffc845",
-    icon: <Crown size={34} color="#fff" />,
-    lockedIcon: <Crown size={34} color="#4a4a3a" />,
-  },
-];
-
-/** Stały „viewport” listy lootu (~3 wiersze); reszta przewijana — nie rozciąga karty. */
-const DUNGEON_LOOT_SCROLL_MAX_HEIGHT = 210;
-
-const LOOT_RARITY_LABEL: Record<LootRarity, string> = {
-  common: "Common",
-  uncommon: "Uncommon",
-  rare: "Rare",
-  epic: "Epic",
-  legendary: "Legendary",
-};
-
-function formatLootRowPrimary(entry: DungeonLootEntry): string {
-  if (entry.kind === "gold") {
-    return `Gold · ${entry.goldMin}–${entry.goldMax}`;
-  }
-  return entry.name;
-}
-
-function DragonCard({
+function PortraitDragonCard({
   dragon,
   streak,
-  delay,
-  compact,
+  activeDragonId,
   cardWidth,
+  cardHeight,
+  delay,
+  switchCooldownLabel,
+  onSetActive,
 }: {
-  dragon: DragonData;
+  dragon: DragonConfig;
   streak: number;
-  delay: number;
-  compact: boolean;
+  activeDragonId: string | null;
   cardWidth: number;
+  cardHeight: number;
+  delay: number;
+  switchCooldownLabel: string | null;
+  onSetActive: (id: DragonId) => void;
 }) {
-  const unlocked = streak >= dragon.streakRequired;
-  const scaleAnim = useRef(new Animated.Value(0.92)).current;
+  const unlocked = streak >= dragon.unlockStreak;
+  const isActive = activeDragonId === dragon.id;
+  const scaleAnim = useRef(new Animated.Value(0.94)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const glowAnim = useRef(new Animated.Value(0.4)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0.45)).current;
 
   useEffect(() => {
     Animated.sequence([
@@ -145,348 +104,139 @@ function DragonCard({
   }, [delay, scaleAnim, fadeAnim]);
 
   useEffect(() => {
-    if (unlocked && !compact) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowAnim, {
-            toValue: 0.9,
-            duration: 2000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(glowAnim, {
-            toValue: 0.4,
-            duration: 2000,
-            useNativeDriver: true,
-          }),
-        ]),
-      ).start();
+    if (!isActive || !unlocked) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 0.95,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0.4,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isActive, unlocked, glowAnim]);
 
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.02,
-            duration: 1500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 1500,
-            useNativeDriver: true,
-          }),
-        ]),
-      ).start();
-    }
-  }, [unlocked, compact, glowAnim, pulseAnim]);
+  const goldPct = Math.round((dragon.buffs.goldMultiplier - 1) * 100);
+  const keyPct = Math.round(dragon.buffs.keyDropChanceBonus * 100);
+  const winPct = Math.round(dragon.buffs.bossWinChanceBonus * 100);
 
-  const progress = Math.min(streak / dragon.streakRequired, 1);
-
-  const c = compact;
-  const iconSize = c ? 74 : 88;
-  const iconRadius = iconSize / 2;
-  const iconGlyphSize = c ? 34 : 34;
+  const canPressSet = unlocked && !isActive && !switchCooldownLabel;
 
   return (
     <Animated.View
       style={[
-        styles.dragonCardWrap,
+        styles.portraitCardWrap,
         { width: cardWidth },
-        {
-          opacity: fadeAnim,
-          transform: [{ scale: scaleAnim }, { scale: pulseAnim }],
-        },
+        { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
       ]}
     >
-      {unlocked && !c && (
+      {isActive && unlocked ? (
         <Animated.View
+          pointerEvents="none"
           style={[
-            styles.cardGlow,
+            styles.activeEpicRing,
             {
               opacity: glowAnim,
-              backgroundColor: dragon.accentColor + "12",
-              borderColor: dragon.accentColor + "30",
+              borderColor: Colors.dark.gold + "cc",
+              shadowColor: Colors.dark.gold,
             },
           ]}
         />
-      )}
-
+      ) : null}
       <View
         style={[
-          c ? styles.cardInnerCompact : styles.cardInner,
-          c && styles.dragonCardCompactBoost,
-          unlocked
-            ? { borderColor: dragon.accentColor + "50" }
-            : { borderColor: Colors.dark.border },
+          styles.portraitCardShell,
+          {
+            height: cardHeight,
+            borderColor: isActive ? Colors.dark.gold + "aa" : dragon.accentColor + "55",
+            borderWidth: isActive ? 3 : 2,
+          },
         ]}
       >
-        <View style={[styles.dragonIconArea, c && styles.dragonIconAreaCompact]}>
-          {unlocked ? (
-            <LinearGradient
-              colors={[...dragon.colors]}
-              style={[
-                styles.dragonIconCircle,
-                {
-                  width: iconSize,
-                  height: iconSize,
-                  borderRadius: iconRadius,
-                },
-              ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              {React.cloneElement(dragon.icon as React.ReactElement<{ size?: number }>, {
-                size: iconGlyphSize,
-              })}
-            </LinearGradient>
-          ) : (
-            <View
-              style={[
-                styles.dragonIconCircleLocked,
-                {
-                  width: iconSize,
-                  height: iconSize,
-                  borderRadius: iconRadius,
-                },
-              ]}
-            >
-              {React.cloneElement(dragon.lockedIcon as React.ReactElement<{ size?: number }>, {
-                size: iconGlyphSize,
-              })}
-              <View style={styles.lockOverlay}>
-                <Lock size={c ? 16 : 20} color="#8a7a6a" />
+        <ImageBackground
+          source={dragon.imageAsset}
+          style={styles.portraitImage}
+          imageStyle={styles.portraitImageInner}
+        >
+          {!unlocked ? (
+            <View style={styles.dragonLockVeil}>
+              <Lock size={56} color="#ffffffcc" strokeWidth={2.6} />
+              <Text style={styles.dragonLockReq}>Requires {dragon.unlockStreak} 🔥 streak</Text>
+              <Text style={styles.dragonLockProg}>
+                {streak} / {dragon.unlockStreak}
+              </Text>
+            </View>
+          ) : null}
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.45)", "rgba(0,0,0,0.92)"]}
+            locations={[0.38, 0.62, 1]}
+            style={styles.portraitGradient}
+          >
+            <Text style={styles.portraitDragonName}>{dragon.name}</Text>
+            <Text style={[styles.portraitDragonSub, { color: dragon.accentColor + "ee" }]}>
+              {dragon.subtitle}
+            </Text>
+            {unlocked ? (
+              <View style={styles.buffRow}>
+                <View style={styles.buffChip}>
+                  <Text style={styles.buffEmoji}>🪙</Text>
+                  <Text style={styles.buffText}>+{goldPct}% gold</Text>
+                </View>
+                <View style={styles.buffChip}>
+                  <Text style={styles.buffEmoji}>🗝️</Text>
+                  <Text style={styles.buffText}>+{keyPct}% key</Text>
+                </View>
+                <View style={styles.buffChip}>
+                  <Text style={styles.buffEmoji}>⚔️</Text>
+                  <Text style={styles.buffText}>+{winPct}% win</Text>
+                </View>
               </View>
-            </View>
-          )}
-        </View>
-
-        <Text
-          style={[
-            c ? styles.dragonNameCompact : styles.dragonName,
-            c && styles.dragonNameCompactLarge,
-            !unlocked && { color: Colors.dark.textMuted },
-          ]}
-          numberOfLines={1}
-        >
-          {dragon.name}
-        </Text>
-        <Text
-          style={[
-            c ? styles.dragonSubtitleCompact : styles.dragonSubtitle,
-            unlocked && { color: dragon.accentColor + "bb" },
-          ]}
-          numberOfLines={1}
-        >
-          {dragon.subtitle}
-        </Text>
-
-        {unlocked ? (
-          <View
-            style={[
-              c ? styles.activeBadgeCompact : styles.activeBadge,
-              { backgroundColor: dragon.accentColor + "20", borderColor: dragon.accentColor + "50" },
-            ]}
-          >
-            <Shield size={c ? 10 : 12} color={dragon.accentColor} />
-            <Text style={[c ? styles.activeBadgeTextCompact : styles.activeBadgeText, { color: dragon.accentColor }]}>
-              Guardian Active
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.lockedSection, c && styles.lockedSectionCompact]}>
-            <View style={[styles.progressBarBg, c && styles.progressBarBgCompact]}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  {
-                    width: `${progress * 100}%`,
-                    backgroundColor: dragon.accentColor + "60",
-                  },
+            ) : null}
+            {unlocked ? (
+              <Pressable
+                onPress={() => {
+                  if (!canPressSet) {
+                    if (switchCooldownLabel) {
+                      Alert.alert("Dragon cooldown", `Wait ${switchCooldownLabel} to switch companion.`);
+                    }
+                    return;
+                  }
+                  impactAsync(ImpactFeedbackStyle.Medium);
+                  onSetActive(dragon.id);
+                }}
+                style={({ pressed }) => [
+                  styles.setActiveBtn,
+                  (!canPressSet || isActive) && styles.setActiveBtnMuted,
+                  pressed && canPressSet && !isActive && styles.setActiveBtnPressed,
                 ]}
-              />
-            </View>
-            <Text style={c ? styles.requirementTextCompact : styles.requirementText}>
-              Requires {dragon.streakRequired} 🔥 Streak
-            </Text>
-            <Text style={c ? styles.progressTextCompact : styles.progressText}>
-              {streak} / {dragon.streakRequired}
-            </Text>
-          </View>
-        )}
-      </View>
-    </Animated.View>
-  );
-}
-
-function DungeonCard({
-  dungeon,
-  cardWidth,
-  delay,
-  canEnter,
-  onEnter,
-  onLootEntryPress,
-}: {
-  dungeon: DungeonData;
-  cardWidth: number;
-  delay: number;
-  canEnter: boolean;
-  onEnter: (id: string) => void;
-  onLootEntryPress: (entry: DungeonLootEntry) => void;
-}) {
-  const scaleAnim = useRef(new Animated.Value(0.92)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const iconSize = 58;
-  const iconRadius = 29;
-
-  useEffect(() => {
-    Animated.sequence([
-      Animated.delay(delay),
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 7,
-          tension: 48,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 420,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
-  }, [delay, scaleAnim, fadeAnim]);
-
-  const sortedLoot = useMemo(
-    () => sortDungeonLootByRarity(dungeon.lootTable),
-    [dungeon.lootTable],
-  );
-
-  return (
-    <Animated.View
-      style={[
-        styles.dragonCardWrap,
-        { width: cardWidth },
-        {
-          opacity: fadeAnim,
-          transform: [{ scale: scaleAnim }],
-        },
-      ]}
-    >
-      <View
-        style={[
-          styles.cardInnerCompact,
-          styles.dungeonCardInner,
-          { borderColor: dungeon.accentColor + "55" },
-        ]}
-      >
-        <View style={styles.dragonIconAreaCompact}>
-          <LinearGradient
-            colors={[...dungeon.colors]}
-            style={[
-              styles.dragonIconCircle,
-              {
-                width: iconSize,
-                height: iconSize,
-                borderRadius: iconRadius,
-              },
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            {React.cloneElement(dungeon.icon as React.ReactElement<{ size?: number }>, {
-              size: 28,
-            })}
+              >
+                <LinearGradient
+                  colors={
+                    isActive
+                      ? [Colors.dark.gold + "44", Colors.dark.gold + "22"]
+                      : canPressSet
+                        ? [...Colors.gradients.purple]
+                        : ["#333", "#222"]
+                  }
+                  style={styles.setActiveGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Text style={[styles.setActiveLabel, isActive && { color: Colors.dark.gold }]}>
+                    {isActive ? "Active companion" : "Set as Active"}
+                  </Text>
+                </LinearGradient>
+              </Pressable>
+            ) : null}
           </LinearGradient>
-        </View>
-
-        <Text style={[styles.dragonNameCompact, styles.dungeonCardTitleText]} numberOfLines={2}>
-          {dungeon.name}
-        </Text>
-        <Text
-          style={[
-            styles.dragonSubtitleCompact,
-            styles.dungeonCardTitleText,
-            { color: dungeon.accentColor + "cc" },
-          ]}
-          numberOfLines={2}
-        >
-          {dungeon.subtitle}
-        </Text>
-
-        <View style={styles.dungeonLootBox}>
-          <Text style={[styles.dungeonLootHeading, { color: dungeon.accentColor + "dd" }]}>
-            Loot table
-          </Text>
-          <View
-            style={[
-              styles.dungeonLootScrollOuter,
-              {
-                height: DUNGEON_LOOT_SCROLL_MAX_HEIGHT,
-                minHeight: DUNGEON_LOOT_SCROLL_MAX_HEIGHT,
-                maxHeight: DUNGEON_LOOT_SCROLL_MAX_HEIGHT,
-              },
-            ]}
-          >
-            <ScrollView
-              style={styles.dungeonLootScroll}
-              contentContainerStyle={styles.dungeonLootScrollContent}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={sortedLoot.length > 3}
-              keyboardShouldPersistTaps="handled"
-            >
-              {sortedLoot.map((entry) => {
-                const r = entry.rarity;
-                const rCol = LOOT_RARITY_COLOR[r];
-                const glyph = entry.kind === "gold" ? "coins" : entry.icon;
-                return (
-                  <Pressable
-                    key={entry.id}
-                    onPress={() => onLootEntryPress(entry)}
-                    style={({ pressed }) => [styles.lootRow, pressed && styles.lootRowPressed]}
-                  >
-                    <View style={[styles.lootRowIconWrap, { borderColor: rCol + "44" }]}>
-                      <LootGlyph icon={glyph} size={19} color={entry.kind === "gold" ? Colors.dark.gold : rCol} />
-                    </View>
-                    <View style={styles.lootRowMid}>
-                      <Text style={styles.lootRowTitle} numberOfLines={2}>
-                        {formatLootRowPrimary(entry)}
-                      </Text>
-                      <View style={styles.lootRowMeta}>
-                        <Text style={[styles.lootRowRarity, { color: rCol }]}>
-                          {entry.kind === "gold" ? "Currency" : "Item"} · {LOOT_RARITY_LABEL[r]}
-                        </Text>
-                      </View>
-                    </View>
-                    <ChevronRight size={16} color={Colors.dark.textMuted} />
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-
-        <View style={styles.dungeonCardSpacer} />
-
-        <Pressable
-          onPress={() => onEnter(dungeon.id)}
-          disabled={!canEnter}
-          style={({ pressed }) => [
-            styles.dungeonEnterOuter,
-            !canEnter && styles.dungeonEnterOuterDisabled,
-            pressed && canEnter && styles.dungeonEnterPressed,
-          ]}
-        >
-          <LinearGradient
-            colors={canEnter ? [...Colors.gradients.gold] : ["#444", "#333"]}
-            style={styles.dungeonEnterGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          >
-            <DoorOpen size={17} color={canEnter ? "#1a1228" : "#666"} />
-            <Text style={[styles.dungeonEnterLabel, !canEnter && styles.enterBtnTextDisabled]}>
-              Enter (1 Key)
-            </Text>
-          </LinearGradient>
-        </Pressable>
+        </ImageBackground>
       </View>
     </Animated.View>
   );
@@ -495,40 +245,75 @@ function DungeonCard({
 export default function DragonLairScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
+  const [cooldownTick, setCooldownTick] = useState(0);
+
   const streak = useGameStore((s) => s.streak);
   const dungeonKeys = useGameStore((s) => s.dungeonKeys);
   const gold = useGameStore((s) => s.gold);
   const purchaseDungeonKeyWithGold = useGameStore((s) => s.purchaseDungeonKeyWithGold);
-  const consumeDungeonKeyForRun = useGameStore((s) => s.consumeDungeonKeyForRun);
   const addGold = useGameStore((s) => s.addGold);
-  const addDungeonChestGold = useGameStore((s) => s.addDungeonChestGold);
-  const addInventoryItemId = useGameStore((s) => s.addInventoryItemId);
   const addXP = useGameStore((s) => s.addXP);
+  const getPlayerLevel = useGameStore((s) => s.getPlayerLevel);
+  const activeDragonId = useGameStore((s) => s.activeDragonId);
+  const dragonSwitchCooldownUntil = useGameStore((s) => s.dragonSwitchCooldownUntil);
+  const consumables = useGameStore((s) => s.consumables);
+  const purchaseElixirOfTime = useGameStore((s) => s.purchaseElixirOfTime);
+  const setActiveDragon = useGameStore((s) => s.setActiveDragon);
+  const resolveDungeonBattle = useGameStore((s) => s.resolveDungeonBattle);
 
-  const [lootModal, setLootModal] = useState<{
-    payload: LootModalPayload;
-    accent: string;
-  } | null>(null);
+  const resolveBattleForModal = useCallback(
+    async (challengeId: string): Promise<BattleApiResult> => {
+      const r = await resolveDungeonBattle(challengeId);
+      if (!r.ok) return { ok: false, reason: r.reason };
+      if (r.won && r.reward?.type === "item") {
+        return { ok: true, won: true, chance: r.chance, reward: r.reward };
+      }
+      const gold =
+        r.reward?.type === "gold" ? r.reward : { type: "gold" as const, amount: 0 };
+      return { ok: true, won: false, chance: r.chance, reward: gold };
+    },
+    [resolveDungeonBattle],
+  );
 
-  /** Podsumowanie po przejściu lochu (ikona → ten sam LootDetailModal co w tabeli lootu). */
-  const [dungeonClearReward, setDungeonClearReward] = useState<{
+  const engineState = useGameStore(
+    useShallow((s) => ({
+      strengthXP: s.strengthXP,
+      agilityXP: s.agilityXP,
+      intelligenceXP: s.intelligenceXP,
+      activeDragonId: s.activeDragonId,
+      equippedOutfitId: s.equippedOutfitId,
+      equippedRelicId: s.equippedRelicId,
+    })),
+  );
+
+  const [battle, setBattle] = useState<{
+    open: boolean;
+    challengeId: DungeonChallengeId | null;
     dungeonName: string;
-    summary: string;
-    payload: LootModalPayload | null;
-    accent: string;
-    goldEarned?: number;
-  } | null>(null);
+    bossName: string;
+  }>({ open: false, challengeId: null, dungeonName: "", bossName: "" });
 
   const headerAnim = useRef(new Animated.Value(0)).current;
   const dragonsSectionAnim = useRef(new Animated.Value(0)).current;
   const dungeonsSectionAnim = useRef(new Animated.Value(0)).current;
   const orbAnim = useRef(new Animated.Value(0.2)).current;
 
-  const unlockedCount = DRAGONS.filter((d) => streak >= d.streakRequired).length;
-
-  const cardWidth = useMemo(() => Math.round(screenWidth * 0.78), [screenWidth]);
+  const cardWidth = useMemo(() => Math.min(Math.round(screenWidth * 0.72), 300), [screenWidth]);
+  const cardHeight = useMemo(() => Math.round(cardWidth * PORTRAIT_CARD_HEIGHT_RATIO), [cardWidth]);
   const cardGap = 14;
   const snapInterval = cardWidth + cardGap;
+
+  const unlockedCount = DRAGON_LIST.filter((d) => streak >= d.unlockStreak).length;
+
+  const switchCooldownLabel = useMemo(
+    () => formatSwitchCooldownRemaining(dragonSwitchCooldownUntil),
+    [dragonSwitchCooldownUntil, cooldownTick],
+  );
+
+  useEffect(() => {
+    const t = setInterval(() => setCooldownTick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     Animated.spring(headerAnim, {
@@ -596,60 +381,6 @@ export default function DragonLairScreen() {
     [addXP],
   );
 
-  const handleEnterDungeon = useCallback(
-    (dungeonId: string) => {
-      if (dungeonKeys <= 0) {
-        notificationAsync(NotificationFeedbackType.Warning);
-        return;
-      }
-      impactAsync(ImpactFeedbackStyle.Medium);
-      const ok = consumeDungeonKeyForRun();
-      if (!ok) {
-        notificationAsync(NotificationFeedbackType.Error);
-        return;
-      }
-      notificationAsync(NotificationFeedbackType.Success);
-      const dungeonMeta = DUNGEONS.find((d) => d.id === dungeonId);
-      const dungeonName = dungeonMeta?.name ?? "the dungeon";
-      const table = dungeonMeta?.lootTable ?? [];
-      try {
-        const rolled = rollWeightedDungeonEntry(table);
-        const accent = LOOT_RARITY_COLOR[rolled.rarity];
-        if (rolled.kind === "gold") {
-          const amt = rollGoldAmount(rolled);
-          addDungeonChestGold(amt);
-          setDungeonClearReward({
-            dungeonName,
-            summary: `You cleared ${dungeonName} and salvaged ${amt} gold!`,
-            payload: { type: "gold", entry: rolled },
-            accent,
-            goldEarned: amt,
-          });
-        } else {
-          const hadItem = (useGameStore.getState().ownedItemIds ?? []).includes(rolled.id);
-          addInventoryItemId(rolled.id);
-          const summary = hadItem
-            ? `You cleared ${dungeonName}. You already had ${rolled.name} — still a clean run!`
-            : `You cleared ${dungeonName}! ${rolled.name} is now in your backpack.`;
-          setDungeonClearReward({
-            dungeonName,
-            summary,
-            payload: { type: "item", entry: rolled },
-            accent,
-          });
-        }
-      } catch {
-        setDungeonClearReward({
-          dungeonName,
-          summary: `You cleared ${dungeonName}!`,
-          payload: null,
-          accent: "",
-        });
-      }
-    },
-    [dungeonKeys, consumeDungeonKeyForRun, addDungeonChestGold, addInventoryItemId],
-  );
-
   const handleBuyKey = useCallback(() => {
     if (gold < DUNGEON_KEY_GOLD_PRICE) {
       notificationAsync(NotificationFeedbackType.Warning);
@@ -663,8 +394,55 @@ export default function DragonLairScreen() {
     }
   }, [gold, purchaseDungeonKeyWithGold]);
 
-  const canEnter = dungeonKeys > 0;
+  const handleBuyElixir = useCallback(() => {
+    impactAsync(ImpactFeedbackStyle.Light);
+    const ok = purchaseElixirOfTime();
+    if (!ok) {
+      notificationAsync(NotificationFeedbackType.Warning);
+      Alert.alert("Not enough gold", `Elixir of Time costs ${ELIXIR_OF_TIME_GOLD_COST} 🪙.`);
+    } else {
+      notificationAsync(NotificationFeedbackType.Success);
+    }
+  }, [purchaseElixirOfTime]);
+
+  const handleSetActiveDragon = useCallback(
+    (id: DragonId) => {
+      const out = setActiveDragon(id);
+      if (!out.ok) {
+        if (out.reason === "cooldown") {
+          Alert.alert("Cooldown", "You can change your active dragon once every 24 hours.");
+        } else if (out.reason === "already_active") {
+          Alert.alert("Already active", "This dragon is already your companion.");
+        }
+      }
+    },
+    [setActiveDragon],
+  );
+
+  const openBattle = useCallback((c: DungeonChallengeConfig) => {
+    if (dungeonKeys <= 0) {
+      notificationAsync(NotificationFeedbackType.Warning);
+      Alert.alert("No keys", "You need a dungeon key to fight.");
+      return;
+    }
+    setBattle({
+      open: true,
+      challengeId: c.id,
+      dungeonName: c.dungeonName,
+      bossName: c.bossName,
+    });
+  }, [dungeonKeys]);
+
+  const closeBattle = useCallback(() => {
+    setBattle({ open: false, challengeId: null, dungeonName: "", bossName: "" });
+  }, []);
+
   const canBuy = gold >= DUNGEON_KEY_GOLD_PRICE;
+  const canBuyElixir = gold >= ELIXIR_OF_TIME_GOLD_COST;
+  const dungeonsTranslateY = dungeonsSectionAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [24, 0],
+  });
 
   return (
     <View style={styles.container}>
@@ -717,7 +495,35 @@ export default function DragonLairScreen() {
           <Text style={styles.subtitle}>Trophy hall & forbidden depths</Text>
         </Animated.View>
 
-        {/* —— Section: Dragons —— */}
+        <Pressable
+          onPress={handleBuyElixir}
+          disabled={!canBuyElixir}
+          style={({ pressed }) => [
+            styles.elixirCta,
+            !canBuyElixir && styles.elixirCtaDisabled,
+            pressed && canBuyElixir && styles.elixirCtaPressed,
+          ]}
+        >
+          <LinearGradient
+            colors={canBuyElixir ? ["#1a3a4a", "#0d2838"] : ["#2a2a2a", "#1a1a1a"]}
+            style={styles.elixirCtaGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Snowflake size={22} color={canBuyElixir ? Colors.dark.cyan : Colors.dark.textMuted} />
+            <View style={styles.elixirCtaMid}>
+              <Text style={styles.elixirCtaTitle}>Elixir of Time</Text>
+              <Text style={styles.elixirCtaSub}>Freeze a daily habit — streak safe next reset</Text>
+            </View>
+            <View style={styles.elixirCtaRight}>
+              <Text style={[styles.elixirPrice, !canBuyElixir && styles.elixirPriceDisabled]}>
+                {ELIXIR_OF_TIME_GOLD_COST} 🪙
+              </Text>
+              <Text style={styles.elixirOwned}>Owned: {consumables?.elixirOfTime ?? 0}</Text>
+            </View>
+          </LinearGradient>
+        </Pressable>
+
         <Animated.View
           style={{
             opacity: dragonsSectionAnim,
@@ -741,8 +547,12 @@ export default function DragonLairScreen() {
             <Text style={styles.sectionTitle}>Dragons</Text>
           </View>
 
+          {switchCooldownLabel ? (
+            <Text style={styles.cooldownBanner}>Next dragon switch in {switchCooldownLabel}</Text>
+          ) : null}
+
           <Text style={styles.sectionHint}>
-            {unlockedCount} / {DRAGONS.length} guardians unlocked
+            {unlockedCount} / {DRAGON_LIST.length} guardians unlocked
           </Text>
 
           <ScrollView
@@ -754,34 +564,29 @@ export default function DragonLairScreen() {
             contentContainerStyle={styles.dragonsCarouselContent}
             nestedScrollEnabled
           >
-            {DRAGONS.map((dragon, index) => (
+            {DRAGON_LIST.map((dragon, index) => (
               <View key={dragon.id} style={[styles.dragonCarouselItem, { width: cardWidth, marginRight: cardGap }]}>
-                <DragonCard
+                <PortraitDragonCard
                   dragon={dragon}
                   streak={streak}
-                  delay={180 + index * 100}
-                  compact
+                  activeDragonId={activeDragonId}
                   cardWidth={cardWidth}
+                  cardHeight={cardHeight}
+                  delay={180 + index * 100}
+                  switchCooldownLabel={switchCooldownLabel}
+                  onSetActive={handleSetActiveDragon}
                 />
               </View>
             ))}
           </ScrollView>
         </Animated.View>
 
-        {/* —— Section: Dungeons —— */}
         <Animated.View
           style={[
             styles.dungeonsBlock,
             {
               opacity: dungeonsSectionAnim,
-              transform: [
-                {
-                  translateY: dungeonsSectionAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [24, 0],
-                  }),
-                },
-              ],
+              transform: [{ translateY: dungeonsTranslateY }],
             },
           ]}
         >
@@ -810,46 +615,12 @@ export default function DragonLairScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Dungeons</Text>
-          </View>
-
-          <Text style={styles.sectionHint}>Swipe to browse — each run costs 1 key</Text>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            snapToInterval={snapInterval}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            contentContainerStyle={styles.dragonsCarouselContent}
-            nestedScrollEnabled
-          >
-            {DUNGEONS.map((dungeon, index) => (
-              <View
-                key={dungeon.id}
-                style={[styles.dragonCarouselItem, { width: cardWidth, marginRight: cardGap }]}
-              >
-                <DungeonCard
-                  dungeon={dungeon}
-                  cardWidth={cardWidth}
-                  delay={200 + index * 90}
-                  canEnter={canEnter}
-                  onEnter={handleEnterDungeon}
-                  onLootEntryPress={(entry) => {
-                    selectionAsync();
-                    setLootModal({
-                      payload:
-                        entry.kind === "item"
-                          ? { type: "item", entry }
-                          : { type: "gold", entry },
-                      accent: dungeon.accentColor,
-                    });
-                  }}
-                />
-              </View>
-            ))}
-          </ScrollView>
+          <DungeonsSection
+            engineState={engineState}
+            playerLevel={getPlayerLevel()}
+            dungeonKeys={dungeonKeys}
+            onFight={openBattle}
+          />
         </Animated.View>
 
         <View style={styles.debugSection}>
@@ -956,107 +727,13 @@ export default function DragonLairScreen() {
         </View>
       </ScrollView>
 
-      <Modal
-        visible={dungeonClearReward !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDungeonClearReward(null)}
-      >
-        <View style={styles.clearRewardRoot}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDungeonClearReward(null)}>
-            <View style={styles.clearRewardBackdrop} />
-          </Pressable>
-          <View style={styles.clearRewardSheet}>
-            <LinearGradient
-              colors={["#2a1f42", "#1a1228", "#120c1c"]}
-              style={styles.clearRewardGradient}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-            >
-              <Text style={styles.clearRewardTitle}>Dungeon Cleared</Text>
-              {dungeonClearReward ? (
-                <>
-                  <Text style={styles.clearRewardDungeonName}>{dungeonClearReward.dungeonName}</Text>
-                  <Text style={styles.clearRewardSummary}>{dungeonClearReward.summary}</Text>
-
-                  {dungeonClearReward.payload ? (
-                    <Pressable
-                      onPress={() => {
-                        impactAsync(ImpactFeedbackStyle.Light);
-                        setLootModal({
-                          payload: dungeonClearReward.payload!,
-                          accent: dungeonClearReward.accent,
-                        });
-                      }}
-                      style={({ pressed }) => [
-                        styles.clearRewardIconCard,
-                        pressed && styles.clearRewardIconCardPressed,
-                      ]}
-                    >
-                      <LinearGradient
-                        colors={[
-                          dungeonClearReward.accent + "44",
-                          Colors.dark.background + "ee",
-                        ]}
-                        style={[
-                          styles.clearRewardIconHalo,
-                          { borderColor: dungeonClearReward.accent + "66" },
-                        ]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                      >
-                        <LootGlyph
-                          icon={
-                            dungeonClearReward.payload.type === "gold"
-                              ? "coins"
-                              : dungeonClearReward.payload.entry.icon
-                          }
-                          size={52}
-                          color={
-                            dungeonClearReward.payload.type === "gold"
-                              ? Colors.dark.gold
-                              : dungeonClearReward.accent
-                          }
-                        />
-                      </LinearGradient>
-                      <Text style={styles.clearRewardTapHint}>Tap for details</Text>
-                      {dungeonClearReward.goldEarned != null ? (
-                        <Text style={styles.clearRewardGoldLine}>
-                          +{dungeonClearReward.goldEarned}{" "}
-                          <Text style={styles.clearRewardGoldEmoji}>🪙</Text>
-                        </Text>
-                      ) : null}
-                    </Pressable>
-                  ) : null}
-
-                  <Pressable
-                    onPress={() => {
-                      impactAsync(ImpactFeedbackStyle.Medium);
-                      setDungeonClearReward(null);
-                    }}
-                    style={styles.clearRewardClaimBtn}
-                  >
-                    <LinearGradient
-                      colors={[...Colors.gradients.gold]}
-                      style={styles.clearRewardClaimGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                    >
-                      <Text style={styles.clearRewardClaimText}>Claim</Text>
-                    </LinearGradient>
-                  </Pressable>
-                </>
-              ) : null}
-            </LinearGradient>
-          </View>
-        </View>
-      </Modal>
-
-      <LootDetailModal
-        visible={lootModal !== null}
-        payload={lootModal?.payload ?? null}
-        accentHint={lootModal?.accent}
-        onClose={() => setLootModal(null)}
+      <BattleSimulationModal
+        visible={battle.open}
+        challengeId={battle.challengeId}
+        dungeonName={battle.dungeonName}
+        bossName={battle.bossName}
+        resolveDungeonBattle={resolveBattleForModal}
+        onClose={closeBattle}
       />
     </View>
   );
@@ -1093,7 +770,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center" as const,
-    marginBottom: 22,
+    marginBottom: 16,
   },
   headerEmblem: {
     marginBottom: 10,
@@ -1129,6 +806,58 @@ const styles = StyleSheet.create({
     color: Colors.dark.textSecondary,
     marginTop: 4,
   },
+  elixirCta: {
+    marginBottom: 18,
+    borderRadius: 18,
+    overflow: "hidden" as const,
+    borderWidth: 1,
+    borderColor: Colors.dark.cyan + "44",
+  },
+  elixirCtaDisabled: {
+    opacity: 0.5,
+  },
+  elixirCtaPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  elixirCtaGradient: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    gap: 12,
+  },
+  elixirCtaMid: {
+    flex: 1,
+    minWidth: 0,
+  },
+  elixirCtaTitle: {
+    fontSize: 16,
+    fontWeight: "800" as const,
+    color: Colors.dark.text,
+  },
+  elixirCtaSub: {
+    fontSize: 11,
+    color: Colors.dark.textMuted,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  elixirCtaRight: {
+    alignItems: "flex-end" as const,
+  },
+  elixirPrice: {
+    fontSize: 14,
+    fontWeight: "800" as const,
+    color: Colors.dark.gold,
+  },
+  elixirPriceDisabled: {
+    color: Colors.dark.textMuted,
+  },
+  elixirOwned: {
+    fontSize: 10,
+    color: Colors.dark.textMuted,
+    marginTop: 2,
+  },
   sectionHeaderRow: {
     marginBottom: 10,
   },
@@ -1137,6 +866,13 @@ const styles = StyleSheet.create({
     fontWeight: "800" as const,
     color: Colors.dark.text,
     letterSpacing: 0.5,
+  },
+  cooldownBanner: {
+    fontSize: 12,
+    fontWeight: "700" as const,
+    color: Colors.dark.gold,
+    marginBottom: 8,
+    textAlign: "center" as const,
   },
   streakPill: {
     flexDirection: "row" as const,
@@ -1174,198 +910,123 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   dragonCarouselItem: {},
-  dragonCardWrap: {
+  portraitCardWrap: {
     position: "relative" as const,
   },
-  cardGlow: {
+  activeEpicRing: {
     position: "absolute" as const,
-    top: -2,
-    left: -2,
-    right: -2,
-    bottom: -2,
-    borderRadius: 22,
-    borderWidth: 1,
-  },
-  cardInner: {
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: "center" as const,
-    borderWidth: 1.5,
-  },
-  cardInnerCompact: {
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    alignItems: "center" as const,
-    borderWidth: 1.5,
-  },
-  dragonCardCompactBoost: {
-    minHeight: 308,
-    paddingVertical: 18,
-    paddingHorizontal: 14,
-  },
-  dragonNameCompactLarge: {
-    fontSize: 17,
-    letterSpacing: 0.2,
-  },
-  dragonIconArea: {
-    marginBottom: 16,
-  },
-  dragonIconAreaCompact: {
-    marginBottom: 10,
-    width: "100%" as const,
-    alignItems: "center" as const,
-  },
-  dragonIconCircle: {
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35,
-        shadowRadius: 8,
-      },
-      android: { elevation: 6 },
-      default: {},
-    }),
-  },
-  dragonIconCircleLocked: {
-    backgroundColor: Colors.dark.background,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: 24,
     borderWidth: 2,
-    borderColor: Colors.dark.border,
+    zIndex: 3,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 14,
+    ...Platform.select({ android: { elevation: 8 }, default: {} }),
   },
-  lockOverlay: {
-    position: "absolute" as const,
-    bottom: -2,
-    right: -2,
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 12,
-    width: 26,
-    height: 26,
+  portraitCardShell: {
+    borderRadius: 20,
+    overflow: "hidden" as const,
+    backgroundColor: Colors.dark.background,
+  },
+  portraitImage: {
+    width: "100%" as const,
+    height: "100%" as const,
+  },
+  portraitImageInner: {
+    resizeMode: "cover" as const,
+  },
+  dragonLockVeil: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.88)",
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
+    zIndex: 2,
   },
-  dragonName: {
+  dragonLockReq: {
+    marginTop: 14,
+    fontSize: 14,
+    fontWeight: "800" as const,
+    color: "#fff",
+    textAlign: "center" as const,
+    paddingHorizontal: 12,
+  },
+  dragonLockProg: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.75)",
+  },
+  portraitGradient: {
+    flex: 1,
+    justifyContent: "flex-end" as const,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    paddingTop: 40,
+  },
+  portraitDragonName: {
     fontSize: 20,
     fontWeight: "800" as const,
-    color: Colors.dark.text,
-    letterSpacing: 0.3,
+    color: "#fff",
+    textShadowColor: "rgba(0,0,0,0.75)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
-  dragonNameCompact: {
-    fontSize: 16,
-    fontWeight: "800" as const,
-    color: Colors.dark.text,
-    letterSpacing: 0.2,
-    maxWidth: "100%",
-    width: "100%" as const,
-    textAlign: "center" as const,
-  },
-  dragonSubtitle: {
-    fontSize: 13,
-    color: Colors.dark.textMuted,
-    marginTop: 4,
-    fontWeight: "500" as const,
-  },
-  dragonSubtitleCompact: {
-    fontSize: 11,
-    color: Colors.dark.textMuted,
-    marginTop: 2,
-    fontWeight: "500" as const,
-    width: "100%" as const,
-    textAlign: "center" as const,
-  },
-  activeBadge: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    marginTop: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 6,
-  },
-  activeBadgeCompact: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    alignSelf: "center" as const,
-    marginTop: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 4,
-  },
-  activeBadgeText: {
+  portraitDragonSub: {
     fontSize: 12,
-    fontWeight: "700" as const,
-    letterSpacing: 0.5,
-    textTransform: "uppercase" as const,
-  },
-  activeBadgeTextCompact: {
-    fontSize: 10,
-    fontWeight: "700" as const,
-    letterSpacing: 0.4,
-    textTransform: "uppercase" as const,
-  },
-  lockedSection: {
-    alignItems: "center" as const,
-    marginTop: 14,
-    width: "100%" as const,
-  },
-  lockedSectionCompact: {
-    marginTop: 10,
-    alignItems: "center" as const,
-    width: "100%" as const,
-  },
-  progressBarBg: {
-    width: "70%" as const,
-    height: 6,
-    backgroundColor: Colors.dark.background,
-    borderRadius: 3,
-    overflow: "hidden" as const,
+    fontWeight: "600" as const,
     marginBottom: 10,
   },
-  progressBarBgCompact: {
-    alignSelf: "center" as const,
-    width: "85%" as const,
-    height: 5,
-    marginBottom: 6,
+  buffRow: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 6,
+    marginBottom: 10,
   },
-  progressBarFill: {
-    height: "100%" as const,
-    borderRadius: 3,
+  buffChip: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
   },
-  requirementText: {
+  buffEmoji: {
+    fontSize: 12,
+  },
+  buffText: {
+    fontSize: 11,
+    fontWeight: "700" as const,
+    color: "#fff",
+  },
+  setActiveBtn: {
+    borderRadius: 12,
+    overflow: "hidden" as const,
+    alignSelf: "stretch" as const,
+  },
+  setActiveBtnMuted: {
+    opacity: 0.85,
+  },
+  setActiveBtnPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.98 }],
+  },
+  setActiveGradient: {
+    paddingVertical: 12,
+    alignItems: "center" as const,
+  },
+  setActiveLabel: {
     fontSize: 13,
-    fontWeight: "600" as const,
-    color: Colors.dark.textMuted,
-  },
-  requirementTextCompact: {
-    fontSize: 11,
-    fontWeight: "600" as const,
-    color: Colors.dark.textMuted,
-  },
-  progressText: {
-    fontSize: 11,
-    color: Colors.dark.textMuted,
-    marginTop: 4,
-    fontWeight: "500" as const,
-  },
-  progressTextCompact: {
-    fontSize: 10,
-    color: Colors.dark.textMuted,
-    marginTop: 2,
-    fontWeight: "500" as const,
+    fontWeight: "800" as const,
+    color: Colors.dark.text,
   },
   dungeonsBlock: {
-    marginTop: 28,
+    marginTop: 8,
   },
   dungeonsTopRow: {
     flexDirection: "row" as const,
@@ -1429,138 +1090,6 @@ const styles = StyleSheet.create({
   },
   buyKeyTextInlineDisabled: {
     color: Colors.dark.textMuted,
-  },
-  dungeonCardInner: {
-    height: 438,
-    width: "100%" as const,
-    justifyContent: "space-between" as const,
-    flexShrink: 0,
-  },
-  dungeonLootBox: {
-    alignSelf: "stretch" as const,
-    marginTop: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRadius: 14,
-    backgroundColor: Colors.dark.background + "ee",
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-    gap: 8,
-    flexGrow: 0,
-    flexShrink: 0,
-  },
-  dungeonLootScrollOuter: {
-    alignSelf: "stretch" as const,
-    width: "100%" as const,
-    flexGrow: 0,
-    flexShrink: 0,
-    overflow: "hidden" as const,
-  },
-  dungeonLootScroll: {
-    flex: 1,
-  },
-  dungeonLootScrollContent: {
-    gap: 6,
-    paddingBottom: 2,
-  },
-  dungeonLootHeading: {
-    fontSize: 10,
-    fontWeight: "800" as const,
-    letterSpacing: 0.8,
-    textTransform: "uppercase" as const,
-    marginBottom: 0,
-    textAlign: "center" as const,
-  },
-  lootRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    backgroundColor: Colors.dark.surface + "80",
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  lootRowPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.99 }],
-  },
-  lootRowIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    backgroundColor: Colors.dark.background,
-    borderWidth: 1,
-  },
-  lootRowMid: {
-    flex: 1,
-    minWidth: 0,
-  },
-  lootRowTitle: {
-    fontSize: 12,
-    fontWeight: "700" as const,
-    color: Colors.dark.text,
-    lineHeight: 16,
-  },
-  lootRowMeta: {
-    marginTop: 2,
-  },
-  lootRowRarity: {
-    fontSize: 10,
-    fontWeight: "700" as const,
-    letterSpacing: 0.3,
-    textTransform: "uppercase" as const,
-  },
-  dungeonCardTitleText: {
-    textAlign: "center" as const,
-    alignSelf: "stretch" as const,
-  },
-  dungeonCardSpacer: {
-    flexGrow: 1,
-    minHeight: 4,
-  },
-  dungeonEnterOuter: {
-    width: "100%" as const,
-    borderRadius: 12,
-    overflow: "hidden" as const,
-    marginTop: 4,
-    ...Platform.select({
-      ios: {
-        shadowColor: Colors.dark.gold,
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
-      },
-      android: { elevation: 3 },
-      default: {},
-    }),
-  },
-  dungeonEnterOuterDisabled: {
-    opacity: 0.48,
-  },
-  dungeonEnterPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.98 }],
-  },
-  dungeonEnterGradient: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-  },
-  dungeonEnterLabel: {
-    fontSize: 14,
-    fontWeight: "800" as const,
-    color: "#1a1228",
-    letterSpacing: 0.2,
-  },
-  enterBtnTextDisabled: {
-    color: "#888",
   },
   debugSection: {
     marginTop: 28,
@@ -1657,105 +1186,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800" as const,
     color: Colors.dark.text,
-  },
-  clearRewardRoot: {
-    flex: 1,
-    justifyContent: "center" as const,
-    alignItems: "center" as const,
-    paddingHorizontal: 24,
-  },
-  clearRewardBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.78)",
-  },
-  clearRewardSheet: {
-    width: "100%" as const,
-    maxWidth: 360,
-  },
-  clearRewardGradient: {
-    borderRadius: 22,
-    paddingHorizontal: 22,
-    paddingVertical: 22,
-    borderWidth: 1,
-    borderColor: Colors.dark.borderGlow + "55",
-    alignItems: "center" as const,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 14 },
-        shadowOpacity: 0.4,
-        shadowRadius: 20,
-      },
-      android: { elevation: 14 },
-      default: {},
-    }),
-  },
-  clearRewardTitle: {
-    fontSize: 11,
-    fontWeight: "800" as const,
-    letterSpacing: 1.2,
-    textTransform: "uppercase" as const,
-    color: Colors.dark.gold,
-    marginBottom: 6,
-  },
-  clearRewardDungeonName: {
-    fontSize: 17,
-    fontWeight: "800" as const,
-    color: Colors.dark.text,
-    textAlign: "center" as const,
-    marginBottom: 10,
-  },
-  clearRewardSummary: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: Colors.dark.textSecondary,
-    textAlign: "center" as const,
-    marginBottom: 18,
-  },
-  clearRewardIconCard: {
-    alignItems: "center" as const,
-    marginBottom: 20,
-  },
-  clearRewardIconCardPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.98 }],
-  },
-  clearRewardIconHalo: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    borderWidth: 2,
-    marginBottom: 10,
-  },
-  clearRewardTapHint: {
-    fontSize: 12,
-    fontWeight: "700" as const,
-    color: Colors.dark.textMuted,
-  },
-  clearRewardGoldLine: {
-    marginTop: 6,
-    fontSize: 18,
-    fontWeight: "800" as const,
-    color: Colors.dark.gold,
-  },
-  clearRewardGoldEmoji: {
-    fontSize: 16,
-  },
-  clearRewardClaimBtn: {
-    alignSelf: "stretch" as const,
-    borderRadius: 14,
-    overflow: "hidden" as const,
-  },
-  clearRewardClaimGradient: {
-    paddingVertical: 14,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  clearRewardClaimText: {
-    fontSize: 16,
-    fontWeight: "800" as const,
-    color: "#1a1228",
   },
 });

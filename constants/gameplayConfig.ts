@@ -1,3 +1,4 @@
+import type { ImageSourcePropType } from 'react-native';
 import type { StatType } from '@/types/game';
 import type { LootIconId, LootRarity } from '@/types/dungeonLoot';
 
@@ -17,8 +18,10 @@ export type DungeonChallengeId =
 export interface DragonConfig {
   id: DragonId;
   name: string;
-  imageAsset?: unknown;
-  lockedImageAsset?: unknown;
+  subtitle: string;
+  accentColor: string;
+  /** Portrait art (tall card). */
+  imageAsset: ImageSourcePropType;
   unlockStreak: number;
   buffs: {
     goldMultiplier: number;
@@ -44,7 +47,8 @@ export interface DungeonChallengeConfig {
   dungeonName: string;
   bossId: string;
   bossName: string;
-  bossImageAsset?: unknown;
+  accentColor: string;
+  bossImageAsset: ImageSourcePropType;
   requiredPlayerLevel: number;
   bossLevel: number;
   baseWinChance: number;
@@ -62,18 +66,27 @@ export const DRAGON_CONFIGS: Record<DragonId, DragonConfig> = {
   red: {
     id: 'red',
     name: 'Red Dragon',
+    subtitle: 'Guardian of Embers',
+    accentColor: '#ff6b35',
+    imageAsset: require('@/assets/images/dragon_1.png'),
     unlockStreak: 10,
     buffs: { goldMultiplier: 1.08, keyDropChanceBonus: 0.01, bossWinChanceBonus: 0.04 },
   },
   ice: {
     id: 'ice',
     name: 'Ice Wyvern',
+    subtitle: 'Frost Sentinel',
+    accentColor: '#45d4e8',
+    imageAsset: require('@/assets/images/dragon_2.png'),
     unlockStreak: 20,
     buffs: { goldMultiplier: 1.04, keyDropChanceBonus: 0.015, bossWinChanceBonus: 0.06 },
   },
   golden: {
     id: 'golden',
     name: 'Golden Dragon',
+    subtitle: 'The Eternal Sovereign',
+    accentColor: '#ffc845',
+    imageAsset: require('@/assets/images/dragon_3.png'),
     unlockStreak: 30,
     buffs: { goldMultiplier: 1.15, keyDropChanceBonus: 0.02, bossWinChanceBonus: 0.08 },
   },
@@ -138,6 +151,8 @@ export const DUNGEON_CHALLENGES: Record<DungeonChallengeId, DungeonChallengeConf
     dungeonName: 'Frozen Catacombs',
     bossId: 'ice_golem',
     bossName: 'Ice Golem',
+    accentColor: '#45d4e8',
+    bossImageAsset: require('@/assets/images/boss_1.png'),
     requiredPlayerLevel: 3,
     bossLevel: 4,
     baseWinChance: 0.45,
@@ -151,6 +166,8 @@ export const DUNGEON_CHALLENGES: Record<DungeonChallengeId, DungeonChallengeConf
     dungeonName: 'Ruby Vault',
     bossId: 'crimson_wyrm',
     bossName: 'Crimson Wyrm',
+    accentColor: '#ff6b8a',
+    bossImageAsset: require('@/assets/images/boss_2.png'),
     requiredPlayerLevel: 6,
     bossLevel: 7,
     baseWinChance: 0.4,
@@ -164,6 +181,8 @@ export const DUNGEON_CHALLENGES: Record<DungeonChallengeId, DungeonChallengeConf
     dungeonName: 'Sunken Sanctum',
     bossId: 'abyss_guardian',
     bossName: 'Abyss Guardian',
+    accentColor: '#5dd4e8',
+    bossImageAsset: require('@/assets/images/boss_3.png'),
     requiredPlayerLevel: 8,
     bossLevel: 9,
     baseWinChance: 0.38,
@@ -177,6 +196,8 @@ export const DUNGEON_CHALLENGES: Record<DungeonChallengeId, DungeonChallengeConf
     dungeonName: 'Shadow Citadel',
     bossId: 'dread_knight',
     bossName: 'Dread Knight',
+    accentColor: '#c49bff',
+    bossImageAsset: require('@/assets/images/boss_4.png'),
     requiredPlayerLevel: 10,
     bossLevel: 12,
     baseWinChance: 0.35,
