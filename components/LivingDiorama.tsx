@@ -2,21 +2,32 @@ import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet, Dimensions } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { useGameStore } from '@/store/gameStore';
+import { DRAGON_CONFIGS, GEAR_ITEMS } from '@/constants/gameplayConfig';
 
 const { width } = Dimensions.get('window');
 
 // Fallback images if required
 const ASSETS = {
-    sky: require('@/assets/images/bg_sky.png'),
-    camp: require('@/assets/images/camp_lvl1.png'),
-    dragon: require('@/assets/images/dragon_red.png'),
-    mage: require('@/assets/images/char_mage.png'),
+    envSky: require('@/assets/images/bg_sky.png'),
+    envGround: require('@/assets/images/camp_lvl1.png'),
+    baseCamp: require('@/assets/images/camp_lvl1.png'),
+    playerBase: require('@/assets/images/char_mage.png'),
+    dragonDefault: require('@/assets/images/dragon_red.png'),
 };
 
 export default function LivingDiorama() {
     const playerBreathAnim = useRef(new Animated.Value(0)).current;
     const dragonBreathAnim = useRef(new Animated.Value(0)).current;
     const streak = useGameStore(state => state.streak);
+    const activeDragonId = useGameStore((s) => s.activeDragonId);
+    const equippedOutfitId = useGameStore((s) => s.equippedOutfitId);
+    const equippedRelicId = useGameStore((s) => s.equippedRelicId);
+    const dragonKey = activeDragonId as keyof typeof DRAGON_CONFIGS | null;
+    const dragonAsset: any = (dragonKey && DRAGON_CONFIGS[dragonKey]?.imageAsset) || ASSETS.dragonDefault;
+    const outfitAsset =
+      (equippedOutfitId && GEAR_ITEMS[equippedOutfitId as keyof typeof GEAR_ITEMS]?.imageAsset) || null;
+    const relicAsset =
+      (equippedRelicId && GEAR_ITEMS[equippedRelicId as keyof typeof GEAR_ITEMS]?.imageAsset) || null;
 
     useEffect(() => {
         // Player Breathing (Slow and steady)
@@ -56,15 +67,22 @@ export default function LivingDiorama() {
         <View style={styles.container}>
             {/* Layer 0: Sky/Far Background */}
             <Animated.Image
-                source={ASSETS.sky}
-                style={styles.layerSky}
+                source={ASSETS.envSky}
+                style={styles.layerEnvironmentSky}
                 resizeMode="cover"
             />
 
-            {/* Layer 1: Camp/Environment */}
+            {/* Layer 1: Ground */}
             <Animated.Image
-                source={ASSETS.camp}
-                style={styles.layerCamp}
+                source={ASSETS.envGround}
+                style={styles.layerEnvironmentGround}
+                resizeMode="contain"
+            />
+
+            {/* Layer 2: Player base */}
+            <Animated.Image
+                source={ASSETS.baseCamp}
+                style={styles.layerBase}
                 resizeMode="contain"
             />
 
@@ -90,9 +108,9 @@ export default function LivingDiorama() {
                 />
             </View>
 
-            {/* Layer 2: Dragon (Pet) */}
+            {/* Layer 3: Active dragon (foreground rock/ledge area) */}
             <Animated.Image
-                source={ASSETS.dragon}
+                source={dragonAsset}
                 style={[
                     styles.layerDragon,
                     { transform: [{ translateY: dragonBreathAnim }] },
@@ -100,15 +118,17 @@ export default function LivingDiorama() {
                 resizeMode="contain"
             />
 
-            {/* Layer 3: Player (Mage) */}
+            {/* Layer 4: Player base + equipment overlays */}
             <Animated.Image
-                source={ASSETS.mage}
+                source={ASSETS.playerBase}
                 style={[
                     styles.layerMage,
                     { transform: [{ translateY: playerBreathAnim }] },
                 ]}
                 resizeMode="contain"
             />
+            {outfitAsset ? <Animated.Image source={outfitAsset} style={styles.layerOutfit} resizeMode="contain" /> : null}
+            {relicAsset ? <Animated.Image source={relicAsset} style={styles.layerRelic} resizeMode="contain" /> : null}
         </View>
     );
 }
@@ -123,18 +143,25 @@ const styles = StyleSheet.create({
         borderBottomColor: '#3d2e5c',
         marginBottom: 24,
     },
-    layerSky: {
+    layerEnvironmentSky: {
         ...StyleSheet.absoluteFillObject,
         width: '100%',
         height: '100%',
         opacity: 0.9,
     },
-    layerCamp: {
+    layerEnvironmentGround: {
         position: 'absolute',
         bottom: -120, // moved even lower per user request
         width: '100%',
         height: '140%', // slightly increase height to compensate for dropping it so low
         opacity: 1,
+    },
+    layerBase: {
+        position: 'absolute',
+        bottom: -120,
+        width: '100%',
+        height: '140%',
+        opacity: 0.75,
     },
     layerCampfire: {
         position: 'absolute',
@@ -166,6 +193,22 @@ const styles = StyleSheet.create({
         width: 180,
         height: 240,
         zIndex: 4,
+    },
+    layerOutfit: {
+        position: 'absolute',
+        bottom: -10,
+        right: width * 0.05,
+        width: 180,
+        height: 240,
+        zIndex: 5,
+    },
+    layerRelic: {
+        position: 'absolute',
+        bottom: 60,
+        right: width * 0.2,
+        width: 80,
+        height: 80,
+        zIndex: 6,
     },
     noPointerEvents: {
         pointerEvents: 'none',

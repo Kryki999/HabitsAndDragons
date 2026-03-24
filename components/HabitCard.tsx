@@ -55,6 +55,7 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
   }, [pressAnim]);
 
   const handlePress = useCallback(() => {
+    if (habit.isFrozen) return;
     impactAsync(ImpactFeedbackStyle.Heavy);
     if (habit.completedToday) {
       onUncomplete(habit.id);
@@ -81,7 +82,7 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
         }),
       ]).start();
     }
-  }, [habit.completedToday, habit.id, onComplete, onUncomplete, checkAnim]);
+  }, [habit.completedToday, habit.id, habit.isFrozen, onComplete, onUncomplete, checkAnim]);
 
   const handleDelete = useCallback(() => {
     impactAsync(ImpactFeedbackStyle.Light);
@@ -103,6 +104,7 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       onPress={handlePress}
+      disabled={habit.isFrozen}
       testID={`habit-card-${habit.id}`}
     >
       <Animated.View
@@ -110,13 +112,14 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
           styles.cardOuter,
           {
             transform: [{ translateY }],
-            borderColor: habit.completedToday ? statCfg.color + '50' : Colors.dark.border,
+            borderColor: habit.isFrozen ? Colors.dark.cyan + '60' : habit.completedToday ? statCfg.color + '50' : Colors.dark.border,
           },
         ]}
       >
         <View style={[
           styles.cardInner,
           habit.completedToday && { backgroundColor: statCfg.color + '10' },
+          habit.isFrozen && { backgroundColor: Colors.dark.cyan + '10' },
         ]}>
           <View style={styles.cardLeft}>
             <Text style={styles.habitIcon}>{habit.icon}</Text>
@@ -152,6 +155,7 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
                   </View>
                 )}
                 <Text style={styles.diffBadge}>{DIFF_SHORT[diffKey]}</Text>
+                {habit.isFrozen ? <Text style={styles.frozenBadge}>FROZEN</Text> : null}
               </View>
             </View>
           </View>
@@ -207,6 +211,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden' as const,
     marginBottom: 10,
     backgroundColor: Colors.dark.surface,
+  },
+  frozenBadge: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: Colors.dark.cyan,
   },
   cardInner: {
     flexDirection: 'row' as const,

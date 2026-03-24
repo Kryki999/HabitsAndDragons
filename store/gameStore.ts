@@ -25,6 +25,15 @@ import { pickRandomEpicQuestId, pickThreeDistinctEpicQuestIds } from '@/constant
 import { TITLE_DEFINITIONS } from '@/constants/titles';
 import { resolveLootItemById } from '@/lib/itemCatalog';
 import { sellPriceForRarity } from '@/lib/inventoryEconomy';
+import {
+  BATTLE_SIMULATION_MS,
+  DRAGON_CONFIGS,
+  DRAGON_SWITCH_COOLDOWN_HOURS,
+  ELIXIR_OF_TIME_GOLD_COST,
+  type DragonId,
+  type DungeonChallengeId,
+} from '@/constants/gameplayConfig';
+import { getActiveDragonBuffs, rollDungeonBattleResult } from '@/lib/gameEngine';
 
 type GameStore = GameState & GameActions;
 
@@ -111,6 +120,8 @@ function ensureHabitDefaults(habit: Habit): Habit {
     longestStreak: taskType === 'daily' ? (habit.longestStreak ?? 0) : undefined,
     totalCompletions: taskType === 'daily' ? (habit.totalCompletions ?? 0) : undefined,
     completionDates: taskType === 'daily' ? (habit.completionDates ?? []) : undefined,
+    isFrozen: habit.isFrozen ?? false,
+    frozenAtDate: habit.frozenAtDate ?? null,
   };
 }
 
@@ -190,6 +201,9 @@ export const useGameStore = create<GameStore>()(
       ownedItemIds: [],
       equippedOutfitId: null,
       equippedRelicId: null,
+      activeDragonId: null,
+      dragonSwitchCooldownUntil: null,
+      consumables: { elixirOfTime: 0 },
       activityByDate: {},
       hapticsEnabled: true,
       sageFocus: 'body',
@@ -225,18 +239,20 @@ export const useGameStore = create<GameStore>()(
           const econ = getEconomyPatchIfNewDay(state) ?? {};
           const base = { ...state, ...econ };
           const habit = base.habits.find(h => h.id === habitId && h.isActive);
-          if (!habit || habit.completedToday) return base;
+          if (!habit || habit.completedToday || habit.isFrozen) return base;
 
           const rewards = DIFFICULTY_BASE_REWARDS[resolveDifficulty(habit)];
+          const dragonBuffs = getActiveDragonBuffs(base);
           const newTaskIndex = base.tasksCompletedToday + 1;
           const fatigueMul = fatigueMultiplierForTaskIndex(newTaskIndex);
           const xpGranted = Math.floor(rewards.xp * fatigueMul);
 
           const capLeft = Math.max(0, GOLD_CAP_STANDARD_TASKS_DAILY - base.goldFromStandardTasksToday);
-          const goldGranted = Math.min(rewards.gold, capLeft);
+          const boostedGold = Math.floor(rewards.gold * dragonBuffs.goldMultiplier);
+          const goldGranted = Math.min(boostedGold, capLeft);
 
           let keyDropped = false;
-          if (rollDungeonKeyDrop(base.firstDungeonKeyDroppedToday)) {
+          if (rollDungeonKeyDrop(base.firstDungeonKeyDroppedToday) || Math.random() < dragonBuffs.keyDropChanceBonus) {
             keyDropped = true;
           }
 
@@ -496,6 +512,68 @@ export const useGameStore = create<GameStore>()(
         return true;
       },
 
+      purchaseElixirOfTime: () => {
+        const state = get();
+        if (state.gold < ELIXIR_OF_TIME_GOLD_COST) return false;
+        set({
+          gold: state.gold - ELIXIR_OF_TIME_GOLD_COST,
+          consumables: {
+            ...state.consumables,
+            elixirOfTime: (state.consumables?.elixirOfTime ?? 0) + 1,
+          },
+        });
+        return true;
+      },
+
+      useElixirOfTimeOnHabit: (habitId: string) => {
+        const state = get();
+        const count = state.consumables?.elixirOfTime ?? 0;
+        if (count <= 0) return false;
+        const habit = state.habits.find((h) => h.id === habitId && h.taskType === 'daily' && h.isActive);
+        if (!habit || habit.completedToday || habit.isFrozen) return false;
+        const today = getTodayString();
+        set({
+          habits: state.habits.map((h) =>
+            h.id === habitId ? { ...h, isFrozen: true, frozenAtDate: today } : h,
+          ),
+          consumables: {
+            ...state.consumables,
+            elixirOfTime: count - 1,
+          },
+        });
+        return true;
+      },
+
+      setActiveDragon: (dragonId: string) => {
+        const state = get();
+        const cfg = DRAGON_CONFIGS[dragonId as DragonId];
+        if (!cfg) return { ok: false, reason: 'unknown_dragon' };
+        if (state.streak < cfg.unlockStreak) return { ok: false, reason: 'locked' };
+        if (state.activeDragonId === dragonId) return { ok: false, reason: 'already_active' };
+        const now = Date.now();
+        const lockUntil = state.dragonSwitchCooldownUntil ? Date.parse(state.dragonSwitchCooldownUntil) : 0;
+        if (lockUntil && now < lockUntil) return { ok: false, reason: 'cooldown' };
+        const next = new Date(now + DRAGON_SWITCH_COOLDOWN_HOURS * 60 * 60 * 1000).toISOString();
+        set({ activeDragonId: dragonId as DragonId, dragonSwitchCooldownUntil: next });
+        return { ok: true };
+      },
+
+      resolveDungeonBattle: async (challengeId: string) => {
+        const before = get();
+        if (before.dungeonKeys <= 0) return { ok: false, reason: 'no_keys' };
+        const consumed = get().consumeDungeonKeyForRun();
+        if (!consumed) return { ok: false, reason: 'no_keys' };
+        await new Promise((r) => setTimeout(r, BATTLE_SIMULATION_MS));
+        const result = rollDungeonBattleResult(get(), challengeId as DungeonChallengeId);
+        if (result.won) {
+          get().addInventoryItemId(result.reward.itemId);
+          return { ok: true, won: true, chance: result.chance, reward: { type: 'item', itemId: result.reward.itemId } };
+        }
+        get().addDungeonChestGold(result.reward.amount);
+        get().addXP('strength', result.reward.xp);
+        return { ok: true, won: false, chance: result.chance, reward: { type: 'gold', amount: result.reward.amount } };
+      },
+
       consumeDungeonKeyForRun: () => {
         const state = get();
         if (state.dungeonKeys <= 0) return false;
@@ -690,6 +768,10 @@ export const useGameStore = create<GameStore>()(
                 if (h.completedToday) return { ...h, completedToday: false, isActive: false };
                 return { ...h, completedToday: false };
               }
+              if (h.isFrozen) {
+                // Preserve streak line for one day and thaw on reset.
+                return { ...h, completedToday: false, isFrozen: false, frozenAtDate: null };
+              }
               if (!h.completedToday) {
                 return { ...h, completedToday: false, currentStreak: 0 };
               }
@@ -733,6 +815,9 @@ export const useGameStore = create<GameStore>()(
         ownedItemIds: state.ownedItemIds,
         equippedOutfitId: state.equippedOutfitId,
         equippedRelicId: state.equippedRelicId,
+        activeDragonId: state.activeDragonId,
+        dragonSwitchCooldownUntil: state.dragonSwitchCooldownUntil,
+        consumables: state.consumables,
         activityByDate: state.activityByDate,
         completedHabitNamesByDate: state.completedHabitNamesByDate,
         hapticsEnabled: state.hapticsEnabled,
@@ -751,6 +836,9 @@ export const useGameStore = create<GameStore>()(
               ? p.sageChatMessages
               : current.sageChatMessages,
           completedHabitNamesByDate: p?.completedHabitNamesByDate ?? current.completedHabitNamesByDate,
+          activeDragonId: p?.activeDragonId ?? current.activeDragonId,
+          dragonSwitchCooldownUntil: p?.dragonSwitchCooldownUntil ?? current.dragonSwitchCooldownUntil,
+          consumables: p?.consumables ?? current.consumables,
         };
       },
     },

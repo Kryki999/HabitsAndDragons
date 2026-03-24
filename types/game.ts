@@ -1,6 +1,7 @@
 export type StatType = 'strength' | 'agility' | 'intelligence';
 
 export type TaskType = 'daily' | 'one-off';
+export type ConsumableType = 'elixir_of_time';
 
 export type PlayerClass = 'warrior' | 'hunter' | 'mage' | 'paladin';
 
@@ -35,6 +36,20 @@ export interface Habit {
   icon: string;
   /** Older saves may omit; treated as `medium`. */
   difficulty?: HabitDifficulty;
+  /** One-day protection: if true, streak is not lost on reset. */
+  isFrozen?: boolean;
+  /** Date key (`YYYY-MM-DD`) when freeze was applied. */
+  frozenAtDate?: string | null;
+}
+
+export interface DragonBuffs {
+  goldMultiplier: number;
+  keyDropChanceBonus: number;
+  bossWinChanceBonus: number;
+}
+
+export interface PlayerConsumables {
+  elixirOfTime: number;
 }
 
 /** Snapshot of rewards granted for one habit completion today (for reversal on uncomplete). */
@@ -93,6 +108,12 @@ export interface GameState {
   equippedOutfitId: string | null;
   /** Aktywna relikwia / broń / artefakt (kosmetyk). */
   equippedRelicId: string | null;
+  /** Global companion selected by player. */
+  activeDragonId: string | null;
+  /** Next date-time when dragon switch is unlocked (ISO). */
+  dragonSwitchCooldownUntil: string | null;
+  /** Owned consumables inventory. */
+  consumables: PlayerConsumables;
   /**
    * Dzienna aktywność (nawyki) dla heatmapy — klucz `YYYY-MM-DD`.
    * `completions` = liczba odhaczonych nawyków; `xpFromHabits` = XP z nawyków tego dnia.
@@ -153,6 +174,16 @@ export interface GameActions {
   equipItemById: (itemId: string) => void;
   /** Zdejmuje aktywny przedmiot ze slotu. */
   unequipLoadoutSlot: (slot: "outfit" | "relic") => void;
+  setActiveDragon: (dragonId: string) => { ok: boolean; reason?: string };
+  purchaseElixirOfTime: () => boolean;
+  useElixirOfTimeOnHabit: (habitId: string) => boolean;
+  resolveDungeonBattle: (challengeId: string) => Promise<{
+    ok: boolean;
+    reason?: string;
+    won?: boolean;
+    chance?: number;
+    reward?: { type: 'item'; itemId: string } | { type: 'gold'; amount: number };
+  }>;
   /**
    * Złoto ze skrzyń / lochów — bez limitu dziennego z nawyków.
    * Wewnętrznie to zwykły przyrost salda (jak `addGold`).

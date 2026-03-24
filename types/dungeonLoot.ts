@@ -29,6 +29,9 @@ export interface LootItemEntry {
   description: string;
   icon: LootIconId;
   itemSlot: ItemLoadoutSlot;
+  /** Hidden combat relation used by auto-battler chance engine. */
+  synergyBossId?: string | null;
+  synergyWinChanceBonus?: number;
 }
 
 export interface LootGoldEntry {

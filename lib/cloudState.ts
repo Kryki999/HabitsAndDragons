@@ -29,6 +29,9 @@ export type CloudGameState = Pick<
   | "ownedItemIds"
   | "equippedOutfitId"
   | "equippedRelicId"
+  | "activeDragonId"
+  | "dragonSwitchCooldownUntil"
+  | "consumables"
   | "activityByDate"
   | "completedHabitNamesByDate"
   | "hapticsEnabled"
@@ -65,6 +68,9 @@ export function pickCloudGameState(state: GameState): CloudGameState {
     ownedItemIds: state.ownedItemIds,
     equippedOutfitId: state.equippedOutfitId,
     equippedRelicId: state.equippedRelicId,
+    activeDragonId: state.activeDragonId,
+    dragonSwitchCooldownUntil: state.dragonSwitchCooldownUntil,
+    consumables: state.consumables,
     activityByDate: state.activityByDate,
     completedHabitNamesByDate: state.completedHabitNamesByDate,
     hapticsEnabled: state.hapticsEnabled,
