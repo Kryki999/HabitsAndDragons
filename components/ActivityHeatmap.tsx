@@ -31,12 +31,20 @@ type Props = {
   activityByDate: Record<string, { completions: number; xpFromHabits: number }>;
   /** W modalu — mniejszy margines zewnętrzny. */
   embedded?: boolean;
+  /** Override default "Activity" heading (e.g. Chronicles on Hero tab). */
+  title?: string;
   selectedDate?: string | null;
   onSelectDate?: (dateKey: string) => void;
 };
 
 /** GitHub-style contribution grid — oldest left→right, newest bottom-right corner. */
-export default function ActivityHeatmap({ activityByDate, embedded, selectedDate, onSelectDate }: Props) {
+export default function ActivityHeatmap({
+  activityByDate,
+  embedded,
+  title = "Activity",
+  selectedDate,
+  onSelectDate,
+}: Props) {
   const cells = useMemo(() => {
     const out: { key: string; level: number }[] = [];
     const end = new Date();
@@ -61,7 +69,7 @@ export default function ActivityHeatmap({ activityByDate, embedded, selectedDate
   return (
     <View style={[styles.wrap, embedded && styles.wrapEmbedded]}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Activity</Text>
+        <Text style={styles.title}>{title}</Text>
         <Text style={styles.sub}>Last {NUM_DAYS} days</Text>
       </View>
       <View style={styles.grid}>

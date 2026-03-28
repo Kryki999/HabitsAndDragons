@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,21 +11,18 @@ import {
   Dimensions,
   Platform,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
-import { X, Swords, Zap, BookOpen, ChevronRight, Scroll, PenTool } from 'lucide-react-native';
+import { X, ChevronRight, Scroll, PenTool } from 'lucide-react-native';
 import { impactAsync, selectionAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '@/constants/colors';
 import { StatType, SuggestedHabit, HabitDifficulty, TaskType } from '@/types/game';
+import type { OracleTaskStatWeights } from '@/types/oracle';
 import { suggestedHabits } from '@/mocks/suggestedHabits';
+import { AIStatService } from '@/services/aiStatService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-const STAT_OPTIONS: { value: StatType; label: string; color: string; icon: typeof Swords }[] = [
-  { value: 'strength', label: 'Strength', color: Colors.dark.ruby, icon: Swords },
-  { value: 'agility', label: 'Agility', color: Colors.dark.emerald, icon: Zap },
-  { value: 'intelligence', label: 'Intelligence', color: Colors.dark.cyan, icon: BookOpen },
-];
 
 const DIFFICULTY_OPTIONS: { value: HabitDifficulty; label: string; hint: string }[] = [
   { value: 'easy', label: 'Easy', hint: '15 XP · 5 gold' },
@@ -36,6 +33,7 @@ const DIFFICULTY_OPTIONS: { value: HabitDifficulty; label: string; hint: string 
 interface AddHabitModalProps {
   visible: boolean;
   onClose: () => void;
+  initialScheduledDateKey?: string | null;
   onAddHabit: (habit: {
     name: string;
     description: string;
@@ -43,14 +41,25 @@ interface AddHabitModalProps {
     taskType: TaskType;
     icon: string;
     difficulty: HabitDifficulty;
+    scheduledDate?: string | null;
+    oracleStatWeights?: OracleTaskStatWeights;
   }) => void;
+}
+
+function getTodayKey(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+function dateKeyFromOffsetDays(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().split('T')[0];
 }
 
 type ModalView = 'choose' | 'suggested' | 'custom';
 
 function SuggestedHabitItem({ habit, onSelect }: { habit: SuggestedHabit; onSelect: (h: SuggestedHabit) => void }) {
   const pressAnim = useRef(new Animated.Value(0)).current;
-  const statOpt = STAT_OPTIONS.find(s => s.value === habit.stat)!;
 
   return (
     <Pressable
@@ -74,10 +83,6 @@ function SuggestedHabitItem({ habit, onSelect }: { habit: SuggestedHabit; onSele
             <Text style={styles.suggestedName}>{habit.name}</Text>
             <Text style={styles.suggestedDesc} numberOfLines={2}>{habit.rpgDescription}</Text>
             <View style={styles.suggestedMetaRow}>
-              <View style={[styles.suggestedStatBadge, { backgroundColor: statOpt.color + '18' }]}>
-                <statOpt.icon size={10} color={statOpt.color} />
-                <Text style={[styles.suggestedStatText, { color: statOpt.color }]}>+{statOpt.label.substring(0, 3).toUpperCase()}</Text>
-              </View>
               <Text style={styles.suggestedDiff}>
                 {habit.difficulty === 'easy' ? 'Easy' : habit.difficulty === 'hard' ? 'Hard' : 'Med'}
               </Text>
@@ -85,33 +90,79 @@ function SuggestedHabitItem({ habit, onSelect }: { habit: SuggestedHabit; onSele
           </View>
           <ChevronRight size={18} color={Colors.dark.textMuted} />
         </View>
-        <View style={[styles.suggestedBottom, { backgroundColor: statOpt.color + '30' }]} />
+        <View style={[styles.suggestedBottom, { backgroundColor: Colors.dark.gold + '30' }]} />
       </Animated.View>
     </Pressable>
   );
 }
 
-export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabitModalProps) {
+export default function AddHabitModal({ visible, onClose, onAddHabit, initialScheduledDateKey }: AddHabitModalProps) {
   const [view, setView] = useState<ModalView>('choose');
   const [customName, setCustomName] = useState('');
   const [customDesc, setCustomDesc] = useState('');
-  const [selectedStat, setSelectedStat] = useState<StatType>('strength');
   const [selectedTaskType, setSelectedTaskType] = useState<TaskType>('daily');
   const [selectedIcon, setSelectedIcon] = useState('⚔️');
   const [selectedDifficulty, setSelectedDifficulty] = useState<HabitDifficulty>('medium');
+  const [selectedScheduledDateKey, setSelectedScheduledDateKey] = useState<string | null>(initialScheduledDateKey ?? null);
+  const [oracleBusy, setOracleBusy] = useState(false);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   const ICON_OPTIONS = ['⚔️', '🛡️', '🏃', '📖', '🧠', '💪', '🎯', '🔥', '⭐', '🌟', '💎', '🏆'];
+
+  const todayKey = useMemo(() => getTodayKey(), []);
+  const scheduleChips = useMemo(() => {
+    // scheduledDate is optional; `null` => due today (including overdue).
+    const maxDays = 60;
+    return [
+      { key: null as string | null, label: 'No date', sub: 'Due today' },
+      ...Array.from({ length: maxDays }, (_, i) => {
+        const offsetDays = i + 1;
+        const key = dateKeyFromOffsetDays(offsetDays);
+        const d = new Date();
+        d.setDate(d.getDate() + offsetDays);
+        const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return { key, label };
+      }),
+    ];
+  }, [todayKey]);
+
+  const renderSchedulePicker = () => (
+    <View style={styles.scheduleWrap}>
+      <Text style={styles.scheduleLabel}>Scheduled date</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={styles.scheduleRow}>
+          {scheduleChips.map((c) => {
+            const isActive = c.key === selectedScheduledDateKey;
+            return (
+              <Pressable
+                key={c.key ?? 'no_date'}
+                onPress={() => setSelectedScheduledDateKey(c.key)}
+                style={[styles.scheduleChip, isActive && styles.scheduleChipActive]}
+              >
+                <Text style={[styles.scheduleChipText, isActive && styles.scheduleChipTextActive]}>
+                  {c.label}
+                </Text>
+                {'sub' in c && c.sub ? <Text style={styles.scheduleChipSub}>{c.sub}</Text> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </View>
+  );
 
   useEffect(() => {
     if (visible) {
       setView('choose');
       setCustomName('');
       setCustomDesc('');
-      setSelectedStat('strength');
       setSelectedTaskType('daily');
       setSelectedIcon('⚔️');
       setSelectedDifficulty('medium');
+      const todayKey = getTodayKey();
+      setSelectedScheduledDateKey(
+        initialScheduledDateKey && initialScheduledDateKey === todayKey ? null : (initialScheduledDateKey ?? null),
+      );
       Animated.spring(slideAnim, {
         toValue: 0,
         friction: 8,
@@ -125,7 +176,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
         useNativeDriver: true,
       }).start();
     }
-  }, [visible]);
+  }, [visible, initialScheduledDateKey]);
 
   const handleClose = useCallback(() => {
     Animated.timing(slideAnim, {
@@ -144,23 +195,42 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
       taskType: habit.taskType,
       icon: habit.icon,
       difficulty: habit.difficulty,
+      scheduledDate: selectedScheduledDateKey ?? null,
     });
     handleClose();
-  }, [onAddHabit, handleClose]);
+  }, [onAddHabit, handleClose, selectedScheduledDateKey]);
 
-  const handleCreateCustom = useCallback(() => {
-    if (!customName.trim()) return;
+  const handleCreateCustom = useCallback(async () => {
+    if (!customName.trim() || oracleBusy) return;
     impactAsync(ImpactFeedbackStyle.Heavy);
-    onAddHabit({
-      name: customName.trim(),
-      description: customDesc.trim() || customName.trim(),
-      stat: selectedStat,
-      taskType: selectedTaskType,
-      icon: selectedIcon,
-      difficulty: selectedDifficulty,
-    });
-    handleClose();
-  }, [customName, customDesc, selectedStat, selectedTaskType, selectedIcon, selectedDifficulty, onAddHabit, handleClose]);
+    setOracleBusy(true);
+    try {
+      const oracle = await AIStatService.analyzeTask(customName.trim(), customDesc.trim() || customName.trim());
+      onAddHabit({
+        name: customName.trim(),
+        description: customDesc.trim() || customName.trim(),
+        stat: oracle.gameStat,
+        taskType: selectedTaskType,
+        icon: selectedIcon,
+        difficulty: selectedDifficulty,
+        scheduledDate: selectedScheduledDateKey ?? null,
+        oracleStatWeights: oracle.weights,
+      });
+      handleClose();
+    } finally {
+      setOracleBusy(false);
+    }
+  }, [
+    customName,
+    customDesc,
+    selectedTaskType,
+    selectedIcon,
+    selectedDifficulty,
+    onAddHabit,
+    handleClose,
+    selectedScheduledDateKey,
+    oracleBusy,
+  ]);
 
   const renderChooseView = () => (
     <View style={styles.chooseContainer}>
@@ -213,7 +283,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
             </View>
             <View style={styles.pathInfo}>
               <Text style={styles.pathTitle}>Custom Habit</Text>
-              <Text style={styles.pathDesc}>Craft your own quest and choose its power</Text>
+              <Text style={styles.pathDesc}>Craft your own quest</Text>
             </View>
             <ChevronRight size={20} color={Colors.dark.textMuted} />
           </LinearGradient>
@@ -234,6 +304,8 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
         </Pressable>
         <Text style={styles.sectionTitle}>Suggested Quests</Text>
 
+        {renderSchedulePicker()}
+
         <Text style={styles.timeGroupLabel}>🔁 Daily Habits</Text>
         {dailyHabits.map(h => (
           <SuggestedHabitItem key={h.name} habit={h} onSelect={handleSelectSuggested} />
@@ -249,8 +321,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
   };
 
   const renderCustomView = () => {
-    const activeStat = STAT_OPTIONS.find(s => s.value === selectedStat)!;
-
     return (
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -306,36 +376,10 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
                 onPress={() => setSelectedIcon(icon)}
                 style={[
                   styles.iconOption,
-                  selectedIcon === icon && { borderColor: activeStat.color, backgroundColor: activeStat.color + '15' },
+                  selectedIcon === icon && { borderColor: Colors.dark.gold, backgroundColor: Colors.dark.gold + '15' },
                 ]}
               >
                 <Text style={styles.iconOptionText}>{icon}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={styles.fieldLabel}>Stat Boost</Text>
-          <View style={styles.statRow}>
-            {STAT_OPTIONS.map(stat => (
-              <Pressable
-                key={stat.value}
-                onPress={() => {
-                  selectionAsync();
-                  setSelectedStat(stat.value);
-                }}
-                style={[
-                  styles.statOption,
-                  selectedStat === stat.value && { borderColor: stat.color, backgroundColor: stat.color + '15' },
-                ]}
-                testID={`stat-option-${stat.value}`}
-              >
-                <stat.icon size={18} color={selectedStat === stat.value ? stat.color : Colors.dark.textMuted} />
-                <Text style={[
-                  styles.statOptionText,
-                  { color: selectedStat === stat.value ? stat.color : Colors.dark.textMuted },
-                ]}>
-                  {stat.label}
-                </Text>
               </Pressable>
             ))}
           </View>
@@ -366,23 +410,49 @@ export default function AddHabitModal({ visible, onClose, onAddHabit }: AddHabit
             ))}
           </View>
 
+          {renderSchedulePicker()}
+
           <Pressable
-            onPress={handleCreateCustom}
-            style={[styles.createBtn, !customName.trim() && styles.createBtnDisabled]}
-            disabled={!customName.trim()}
+            onPress={() => void handleCreateCustom()}
+            style={[
+              styles.createBtn,
+              (!customName.trim() || oracleBusy) && styles.createBtnDisabled,
+            ]}
+            disabled={!customName.trim() || oracleBusy}
             testID="create-custom-habit"
           >
             <LinearGradient
-              colors={customName.trim() ? [...Colors.gradients.gold] : ['#333', '#333']}
+              colors={
+                customName.trim() && !oracleBusy ? [...Colors.gradients.gold] : ['#333', '#333']
+              }
               style={styles.createBtnGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={[styles.createBtnText, !customName.trim() && { color: Colors.dark.textMuted }]}>
-                Forge Quest
-              </Text>
+              {oracleBusy ? (
+                <View style={styles.oracleRow}>
+                  <ActivityIndicator color={Colors.dark.gold} size="small" />
+                  <Text style={[styles.createBtnText, { color: Colors.dark.text }]}>
+                    Consulting the Oracle…
+                  </Text>
+                </View>
+              ) : (
+                <Text
+                  style={[
+                    styles.createBtnText,
+                    !customName.trim() && { color: Colors.dark.textMuted },
+                  ]}
+                >
+                  Forge Quest
+                </Text>
+              )}
             </LinearGradient>
-            <View style={[styles.createBtnBottom, { backgroundColor: customName.trim() ? Colors.dark.goldDark : '#222' }]} />
+            <View
+              style={[
+                styles.createBtnBottom,
+                { backgroundColor: customName.trim() && !oracleBusy ? Colors.dark.goldDark : '#222' },
+              ]}
+            />
           </Pressable>
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -606,24 +676,10 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     gap: 8,
   },
-  suggestedStatBadge: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    alignSelf: 'flex-start' as const,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    gap: 4,
-  },
   suggestedDiff: {
     fontSize: 10,
     fontWeight: '700' as const,
     color: Colors.dark.textMuted,
-  },
-  suggestedStatText: {
-    fontSize: 10,
-    fontWeight: '800' as const,
-    letterSpacing: 0.5,
   },
   suggestedBottom: {
     height: 3,
@@ -679,22 +735,6 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 16,
   },
-  statOption: {
-    flex: 1,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: Colors.dark.border,
-    backgroundColor: Colors.dark.surface,
-  },
-  statOptionText: {
-    fontSize: 13,
-    fontWeight: '700' as const,
-  },
   timeOption: {
     flex: 1,
     alignItems: 'center' as const,
@@ -719,6 +759,53 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'center' as const,
   },
+  scheduleWrap: {
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  scheduleLabel: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: Colors.dark.textSecondary,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+    marginBottom: 8,
+  },
+  scheduleRow: {
+    flexDirection: 'row' as const,
+    gap: 10,
+    paddingBottom: 6,
+  },
+  scheduleChip: {
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.dark.border,
+    backgroundColor: Colors.dark.surface,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    minWidth: 92,
+  },
+  scheduleChipActive: {
+    borderColor: Colors.dark.gold,
+    backgroundColor: Colors.dark.gold + '12',
+  },
+  scheduleChipText: {
+    fontSize: 12,
+    fontWeight: '800' as const,
+    color: Colors.dark.text,
+  },
+  scheduleChipTextActive: {
+    color: Colors.dark.gold,
+  },
+  scheduleChipSub: {
+    marginTop: 2,
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: Colors.dark.textSecondary,
+    textAlign: 'center' as const,
+  },
   createBtn: {
     borderRadius: 14,
     overflow: 'hidden' as const,
@@ -730,6 +817,11 @@ const styles = StyleSheet.create({
   createBtnGradient: {
     paddingVertical: 16,
     alignItems: 'center' as const,
+  },
+  oracleRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
   },
   createBtnText: {
     fontSize: 17,

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,9 +9,17 @@ import {
   GestureResponderEvent,
 } from "react-native";
 import { Tabs } from "expo-router";
-import { Home, Trophy, Castle, Sparkles } from "lucide-react-native";
+import { Home, Trophy, Castle, Sparkles, Coins, KeyRound, Mail, Settings as SettingsIcon, User } from "lucide-react-native";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import Colors from "@/constants/colors";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useGameStore } from "@/store/gameStore";
+import { useAuth } from "@/providers/AuthProvider";
+import CircularProgress from "@/components/CircularProgress";
+import MailboxModal from "@/components/MailboxModal";
+import SettingsModal from "@/components/SettingsModal";
+import PlayerProfileModal from "@/components/PlayerProfileModal";
+import CelebrationOverlayHost from "@/components/CelebrationOverlayHost";
 
 type TabIconProps = {
   color: string;
@@ -72,102 +80,325 @@ function TabIcon({ color, focused, icon: Icon, label }: TabIconProps) {
   );
 }
 
+function TabsWithTopBar() {
+  const insets = useSafeAreaInsets();
+  const gold = useGameStore((s) => s.gold);
+  const dungeonKeys = useGameStore((s) => s.dungeonKeys);
+  const streak = useGameStore((s) => s.streak);
+  const getPlayerLevel = useGameStore((s) => s.getPlayerLevel);
+  const getCurrentLevelXP = useGameStore((s) => s.getCurrentLevelXP);
+  const getXPForNextLevel = useGameStore((s) => s.getXPForNextLevel);
+  const { user, playerId, signOut } = useAuth();
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [mailboxOpen, setMailboxOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const playerLevel = getPlayerLevel();
+  const currentLevelXP = getCurrentLevelXP();
+  const xpForNext = getXPForNextLevel();
+  const xpProgress = xpForNext > 0 ? currentLevelXP / xpForNext : 0;
+
+  return (
+    <View style={styles.shell}>
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 10) }]}>
+        <View style={styles.topBarRow}>
+          <Pressable
+            style={({ pressed }) => [styles.hudLeft, pressed && styles.hudLeftPressed]}
+            onPress={() => {
+              impactAsync(ImpactFeedbackStyle.Light);
+              setProfileOpen(true);
+            }}
+          >
+            <CircularProgress
+              progress={xpProgress}
+              size={40}
+              strokeWidth={3}
+              color={Colors.dark.gold}
+              backgroundColor={Colors.dark.border}
+            >
+              <View style={styles.avatarInner}>
+                <Text style={styles.avatarEmoji}>🧙‍♂️</Text>
+              </View>
+            </CircularProgress>
+            <View style={styles.playerInfo}>
+              <Text style={styles.playerName} numberOfLines={1}>
+                Player
+              </Text>
+              <Text style={styles.playerLevelText}>Lv.{playerLevel}</Text>
+            </View>
+          </Pressable>
+
+          <View style={styles.pillBadgesContainer}>
+            <View style={styles.pillBadge}>
+              <Coins color={Colors.dark.gold} size={14} />
+              <Text style={styles.pillValue}>{gold}</Text>
+            </View>
+            <View style={styles.pillBadge}>
+              <KeyRound color={Colors.dark.cyan} size={14} />
+              <Text style={[styles.pillValue, { color: Colors.dark.cyan }]}>{dungeonKeys}</Text>
+            </View>
+            <View style={styles.pillBadge}>
+              <Text style={styles.pillEmoji}>🔥</Text>
+              <Text style={[styles.pillValue, { color: Colors.dark.fire }]}>{streak}</Text>
+            </View>
+          </View>
+
+          <View style={styles.hudRight}>
+            <Pressable
+              style={styles.iconButton}
+              onPress={() => {
+                impactAsync(ImpactFeedbackStyle.Light);
+                setMailboxOpen(true);
+              }}
+            >
+              <Mail color={Colors.dark.text} size={20} />
+              <View style={styles.notificationDot} />
+            </Pressable>
+            <Pressable
+              style={styles.iconButton}
+              onPress={() => {
+                impactAsync(ImpactFeedbackStyle.Light);
+                setSettingsOpen(true);
+              }}
+            >
+              <SettingsIcon color={Colors.dark.text} size={20} />
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          headerStyle: {
+            backgroundColor: Colors.dark.background,
+            borderBottomWidth: 0,
+            ...Platform.select({
+              ios: {
+                shadowColor: "transparent",
+              },
+              android: {
+                elevation: 0,
+              },
+              default: {},
+            }),
+          },
+          headerTitleStyle: {
+            color: Colors.dark.text,
+            fontWeight: "800" as const,
+            fontSize: 18,
+          },
+          headerShadowVisible: false,
+          tabBarActiveTintColor: Colors.dark.tabActive,
+          tabBarInactiveTintColor: Colors.dark.tabInactive,
+          tabBarStyle: {
+            backgroundColor: Colors.dark.tabBar,
+            borderTopWidth: 1,
+            borderTopColor: Colors.dark.tabBarBorder,
+            height: Platform.OS === "ios" ? 88 : 68,
+            paddingTop: 6,
+            paddingBottom: Platform.OS === "ios" ? 28 : 8,
+          },
+          tabBarShowLabel: false,
+          tabBarButton: ({ style, children, onPress, ...rest }) => (
+            <Pressable
+              onPress={(e) => {
+                impactAsync(ImpactFeedbackStyle.Light);
+                if (onPress) {
+                  (onPress as (e: GestureResponderEvent) => void)(e);
+                }
+              }}
+              style={[style as any, { flex: 1 }]}
+            >
+              {children}
+            </Pressable>
+          ),
+        }}
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: "Castle",
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon icon={Home} color={color} focused={focused} label="Castle" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="dragon-lair"
+          options={{
+            title: "D&D",
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon icon={Trophy} color={color} focused={focused} label="D&D" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="hero"
+          options={{
+            title: "Hero",
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon icon={User} color={color} focused={focused} label="Hero" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="kingdom"
+          options={{
+            title: "Kingdom",
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon icon={Castle} color={color} focused={focused} label="Kingdom" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="sage"
+          options={{
+            title: "Mędrzec",
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon icon={Sparkles} color={color} focused={focused} label="Mędrzec" />
+            ),
+          }}
+        />
+      </Tabs>
+
+      <MailboxModal visible={mailboxOpen} onClose={() => setMailboxOpen(false)} />
+      <SettingsModal visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <PlayerProfileModal
+        visible={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        email={user?.email ?? null}
+        playerId={playerId}
+        level={playerLevel}
+        onSignOut={signOut}
+      />
+
+      <CelebrationOverlayHost />
+    </View>
+  );
+}
+
 export default function TabLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        headerStyle: {
-          backgroundColor: Colors.dark.background,
-          borderBottomWidth: 0,
-          ...Platform.select({
-            ios: {
-              shadowColor: "transparent",
-            },
-            android: {
-              elevation: 0,
-            },
-            default: {},
-          }),
-        },
-        headerTitleStyle: {
-          color: Colors.dark.text,
-          fontWeight: "800" as const,
-          fontSize: 18,
-        },
-        headerShadowVisible: false,
-        tabBarActiveTintColor: Colors.dark.tabActive,
-        tabBarInactiveTintColor: Colors.dark.tabInactive,
-        tabBarStyle: {
-          backgroundColor: Colors.dark.tabBar,
-          borderTopWidth: 1,
-          borderTopColor: Colors.dark.tabBarBorder,
-          height: Platform.OS === "ios" ? 88 : 68,
-          paddingTop: 6,
-          paddingBottom: Platform.OS === "ios" ? 28 : 8,
-        },
-        tabBarShowLabel: false,
-        tabBarButton: ({ style, children, onPress, ...rest }) => (
-          <Pressable
-            onPress={(e) => {
-              impactAsync(ImpactFeedbackStyle.Light);
-              if (onPress) {
-                (onPress as (e: GestureResponderEvent) => void)(e);
-              }
-            }}
-            style={[style as any, { flex: 1 }]}
-          >
-            {children}
-          </Pressable>
-        ),
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Castle",
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon={Home} color={color} focused={focused} label="Castle" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="dragon-lair"
-        options={{
-          title: "D&D",
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon={Trophy} color={color} focused={focused} label="D&D" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="kingdom"
-        options={{
-          title: "Kingdom",
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon={Castle} color={color} focused={focused} label="Kingdom" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="sage"
-        options={{
-          title: "Mędrzec",
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon icon={Sparkles} color={color} focused={focused} label="Mędrzec" />
-          ),
-        }}
-      />
-    </Tabs>
+    <SafeAreaProvider>
+      <TabsWithTopBar />
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  shell: {
+    flex: 1,
+    backgroundColor: Colors.dark.background,
+  },
+  topBar: {
+    width: "100%",
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    borderBottomWidth: 0,
+    backgroundColor: Colors.dark.surface + "e6",
+  },
+  topBarRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 48,
+  },
   tabIconContainer: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
     width: 60,
     height: 48,
+  },
+  hudLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  hudLeftPressed: {
+    opacity: 0.9,
+  },
+  avatarInner: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.dark.surfaceLight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarEmoji: {
+    fontSize: 18,
+  },
+  playerInfo: {
+    justifyContent: "center",
+    flexShrink: 1,
+  },
+  playerName: {
+    color: Colors.dark.text,
+    fontSize: 14,
+    fontWeight: "800" as const,
+    marginBottom: 0,
+  },
+  playerLevelText: {
+    color: Colors.dark.gold,
+    fontSize: 11,
+    fontWeight: "700" as const,
+  },
+  hudRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.dark.surfaceLight,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  notificationDot: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.dark.ruby,
+    borderWidth: 1,
+    borderColor: Colors.dark.surfaceLight,
+  },
+  pillBadgesContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  pillBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    justifyContent: "center",
+    gap: 4,
+  },
+  pillEmoji: {
+    fontSize: 12,
+  },
+  pillValue: {
+    fontSize: 13,
+    fontWeight: "800" as const,
+    color: Colors.dark.gold,
   },
   tabGlow: {
     position: "absolute" as const,

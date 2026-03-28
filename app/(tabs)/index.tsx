@@ -6,437 +6,401 @@ import {
   Animated,
   ScrollView,
   Pressable,
-  Platform,
-  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Swords, Zap, BookOpen, Plus, Mail, Settings, Coins, KeyRound, Backpack, ScrollText, Trophy } from 'lucide-react-native';
+import { TouchableOpacity } from 'react-native-gesture-handler';
+import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
+import { Plus, CalendarClock, ScrollText, SlidersHorizontal } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
-import { StatType, HabitDifficulty, TaskType } from '@/types/game';
-import { getXPProgressInCurrentLevel } from '@/lib/playerLevel';
+import { StatType, HabitDifficulty, TaskType, type Habit } from '@/types/game';
 import HabitCard from '@/components/HabitCard';
 import AddHabitModal from '@/components/AddHabitModal';
-import CircularProgress from '@/components/CircularProgress';
-import LivingDiorama from '@/components/LivingDiorama';
+import HomeScenePanel from '@/components/HomeScenePanel';
 import BackpackModal from '@/components/BackpackModal';
 import ActivityChroniclesModal from '@/components/ActivityChroniclesModal';
-import SettingsModal from '@/components/SettingsModal';
-import MailboxModal from '@/components/MailboxModal';
-import AchievementsModal from '@/components/AchievementsModal';
-import PlayerProfileModal from '@/components/PlayerProfileModal';
+import ExpeditionCalendarModal from '@/components/ExpeditionCalendarModal';
+import TaskSortBottomSheet from '@/components/TaskSortBottomSheet';
+import { getCastleTier } from '@/constants/kingdomTiers';
+import { orderDueHabitsForCastle } from '@/lib/castleQuestOrder';
+import { applyPlanningOrderForDate } from '@/lib/planningDayOrder';
 import { useAuth } from '@/providers/AuthProvider';
 
-const STAT_CONFIG: Record<StatType, { color: string; label: string; icon: typeof Swords }> = {
-  strength: { color: Colors.dark.ruby, label: 'STR', icon: Swords },
-  agility: { color: Colors.dark.emerald, label: 'AGI', icon: Zap },
-  intelligence: { color: Colors.dark.cyan, label: 'INT', icon: BookOpen },
-};
-
-const CASTLE_TIERS = [
-  { minLevel: 1, namePl: 'Humble Camp', emoji: '🏕️', desc: 'Your journey begins with simple discipline.' },
-  { minLevel: 3, namePl: 'Wooden Watchtower', emoji: '🪵', desc: 'Your first defenses rise.' },
-  { minLevel: 5, namePl: 'Fortified Bastion', emoji: '🏯', desc: 'The walls stand stronger each day.' },
-  { minLevel: 8, namePl: 'Grand Castle', emoji: '⚔️', desc: 'Your kingdom gains true momentum.' },
-  { minLevel: 12, namePl: 'Dragon Fortress', emoji: '🐉', desc: 'Legends are forged in your halls.' },
-];
-
-function getCastleTier(level: number) {
-  let tier = CASTLE_TIERS[0];
-  for (const t of CASTLE_TIERS) {
-    if (level >= t.minLevel) tier = t;
-  }
-  return tier;
-}
-
-function StatRing({
-  stat,
-  xp,
-  delay,
-  compact,
-  compactScale = 1,
-}: {
-  stat: StatType;
-  xp: number;
-  delay: number;
-  compact?: boolean;
-  compactScale?: number;
-}) {
-  const cfg = STAT_CONFIG[stat];
-  const getStatLevel = useGameStore(s => s.getStatLevel);
-  const level = getStatLevel(stat);
-  const entryAnim = useRef(new Animated.Value(0)).current;
-  const ringSize = compact ? Math.round(34 * compactScale) : 42;
-  const ringStroke = compact ? Math.max(1.6, 2 * compactScale) : 2.5;
-  const iconSize = compact ? Math.round(12 * compactScale) : 15;
-
-  const xpInLevel = useMemo(() => {
-    const { current, needed } = getXPProgressInCurrentLevel(xp);
-    return needed > 0 ? Math.min(current / needed, 1) : 0;
-  }, [xp]);
-
-  useEffect(() => {
-    Animated.sequence([
-      Animated.delay(delay),
-      Animated.spring(entryAnim, { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
-    ]).start();
-  }, [xpInLevel]);
-
-  return (
-    <Animated.View
-      style={[
-        styles.statRingContainer,
-        compact && styles.statRingContainerCompact,
-        compact && { width: Math.round(58 * compactScale) },
-        {
-          opacity: entryAnim,
-          transform: [{ scale: entryAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }],
-        },
-      ]}
-    >
-      <CircularProgress
-        progress={xpInLevel}
-        size={ringSize}
-        strokeWidth={ringStroke}
-        color={cfg.color}
-        backgroundColor={Colors.dark.surfaceLight}
-      >
-        <View style={styles.statRingIcon}>
-          <cfg.icon size={iconSize} color={cfg.color} />
-        </View>
-      </CircularProgress>
-      <View style={styles.statRingLabelContainer}>
-        <Text style={[styles.statRingLabel, { color: cfg.color }]}>{cfg.label}</Text>
-        <Text style={styles.statRingLevel}>Lv.{level}</Text>
-      </View>
-    </Animated.View>
-  );
-}
-
 export default function CastleScreen() {
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const isSmallScreen = width < 380;
-  const isVerySmallScreen = width < 350;
-  const compactStatScale = isVerySmallScreen ? 0.82 : isSmallScreen ? 0.92 : 1;
+  const { user, profileCreatedAtDateKey } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
   const [backpackOpen, setBackpackOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [mailboxOpen, setMailboxOpen] = useState(false);
   const [chroniclesOpen, setChroniclesOpen] = useState(false);
-  const [achievementsOpen, setAchievementsOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [hudFilter, setHudFilter] = useState<'all' | 'daily' | 'one-off'>('all');
-  const { user, playerId, signOut } = useAuth();
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [expeditionFocusDateKey, setExpeditionFocusDateKey] = useState<string | null>(null);
+
   const {
-    gold, streak, habits, strengthXP, agilityXP, intelligenceXP, dungeonKeys,
-    activityByDate, completedHabitNamesByDate, unlockedTitleIds,
-    completedStrengthQuests, completedAgilityQuests, completedIntelligenceQuests,
-    getPlayerLevel, getCurrentLevelXP, getXPForNextLevel,
-    completeHabit, uncompleteHabit, addHabit, removeHabit,
+    habits,
+    activityByDate,
+    completedHabitNamesByDate,
+    getPlayerLevel,
+    completeHabit,
+    uncompleteHabit,
+    addHabit,
+    removeHabit,
+    castleQuestSortMode,
+    castleQuestOrderIds,
+    setCastleQuestOrderIds,
+    planningDayOrderByDate,
   } = useGameStore();
 
   const playerLevel = getPlayerLevel();
-  const currentLevelXP = getCurrentLevelXP();
-  const xpForNext = getXPForNextLevel();
   const castleTier = getCastleTier(playerLevel);
-  const xpProgress = xpForNext > 0 ? currentLevelXP / xpForNext : 0;
 
   const castleScaleAnim = useRef(new Animated.Value(0.8)).current;
-  const headerAnim = useRef(new Animated.Value(0)).current;
+  const listHeaderAnim = useRef(new Animated.Value(0)).current;
   const fabPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.stagger(150, [
-      Animated.spring(headerAnim, { toValue: 1, friction: 7, tension: 50, useNativeDriver: true }),
+    Animated.parallel([
       Animated.spring(castleScaleAnim, { toValue: 1, friction: 6, tension: 60, useNativeDriver: true }),
+      Animated.timing(listHeaderAnim, { toValue: 1, duration: 420, delay: 100, useNativeDriver: true }),
     ]).start();
 
     Animated.loop(
       Animated.sequence([
         Animated.timing(fabPulse, { toValue: 1.08, duration: 1500, useNativeDriver: true }),
         Animated.timing(fabPulse, { toValue: 1, duration: 1500, useNativeDriver: true }),
-      ])
+      ]),
     ).start();
-  }, []);
+  }, [castleScaleAnim, listHeaderAnim, fabPulse]);
 
-  const handleAddHabit = useCallback((habit: {
-    name: string;
-    description: string;
-    stat: StatType;
-    taskType: TaskType;
-    icon: string;
-    difficulty: HabitDifficulty;
-  }) => {
-    addHabit(habit);
-  }, [addHabit]);
-
-  const handleComplete = useCallback((id: string) => {
-    completeHabit(id);
-  }, [completeHabit]);
-
-  const handleUncomplete = useCallback((id: string) => {
-    uncompleteHabit(id);
-  }, [uncompleteHabit]);
-
-  const handleRemove = useCallback((id: string) => {
-    removeHabit(id);
-  }, [removeHabit]);
-
-  const activeHabits = useMemo(() => habits.filter((h) => h.isActive), [habits]);
-  const visibleHabits = useMemo(
-    () => activeHabits.filter((h) => (hudFilter === 'all' ? true : h.taskType === hudFilter)),
-    [activeHabits, hudFilter],
+  const handleAddHabit = useCallback(
+    (habit: {
+      name: string;
+      description: string;
+      stat: StatType;
+      taskType: TaskType;
+      icon: string;
+      difficulty: HabitDifficulty;
+      scheduledDate?: string | null;
+    }) => {
+      addHabit(habit);
+    },
+    [addHabit],
   );
 
-  const completedCount = useMemo(() => visibleHabits.filter(h => h.completedToday).length, [visibleHabits]);
-  const totalCount = visibleHabits.length;
+  const handleComplete = useCallback(
+    (id: string) => {
+      completeHabit(id);
+    },
+    [completeHabit],
+  );
+
+  const handleUncomplete = useCallback(
+    (id: string) => {
+      uncompleteHabit(id);
+    },
+    [uncompleteHabit],
+  );
+
+  const handleRemove = useCallback(
+    (id: string) => {
+      removeHabit(id);
+    },
+    [removeHabit],
+  );
+
+  const activeHabits = useMemo(() => habits.filter((h) => h.isActive), [habits]);
+  const todayKey = useMemo(() => new Date().toISOString().split('T')[0], []);
+  // Fall back to todayKey while profile is still loading, so past days stay blocked.
+  const minAccountKey = profileCreatedAtDateKey ?? todayKey;
+  const effectiveKey = expeditionFocusDateKey ?? todayKey;
+  const isCalendarFocusDay = expeditionFocusDateKey !== null;
+  const isPastCastleView =
+    expeditionFocusDateKey !== null &&
+    expeditionFocusDateKey < todayKey &&
+    expeditionFocusDateKey >= minAccountKey;
+
+  const handleExpeditionFocusChange = useCallback(
+    (key: string) => {
+      setExpeditionFocusDateKey(key === todayKey ? null : key);
+    },
+    [todayKey],
+  );
+
+  const dueHabits = useMemo(() => {
+    if (!isCalendarFocusDay) {
+      return activeHabits.filter((h) => !h.scheduledDate || h.scheduledDate <= todayKey);
+    }
+    return activeHabits.filter((h) => (h.scheduledDate ?? todayKey) === effectiveKey);
+  }, [activeHabits, todayKey, isCalendarFocusDay, effectiveKey]);
+
+  const orderedDueHabits = useMemo(() => {
+    const base = orderDueHabitsForCastle(dueHabits, habits, castleQuestSortMode, castleQuestOrderIds);
+    if (!isCalendarFocusDay) return base;
+    return applyPlanningOrderForDate(effectiveKey, base, planningDayOrderByDate);
+  }, [
+    dueHabits,
+    habits,
+    castleQuestSortMode,
+    castleQuestOrderIds,
+    isCalendarFocusDay,
+    effectiveKey,
+    planningDayOrderByDate,
+  ]);
+
+  const completedNamesForFocusedDay = completedHabitNamesByDate?.[effectiveKey];
+
+  const habitsDaily = useMemo(
+    () => orderedDueHabits.filter((h) => h.taskType === 'daily'),
+    [orderedDueHabits],
+  );
+  const habitsSide = useMemo(
+    () => orderedDueHabits.filter((h) => h.taskType === 'one-off'),
+    [orderedDueHabits],
+  );
+
+  const [dragQuestData, setDragQuestData] = useState<Habit[]>(orderedDueHabits);
+  useEffect(() => {
+    setDragQuestData(orderedDueHabits);
+  }, [orderedDueHabits]);
+
+  const completedCount = useMemo(() => dueHabits.filter((h) => h.completedToday).length, [dueHabits]);
+  const totalCount = dueHabits.length;
+
+  const isCustomQuestOrder = castleQuestSortMode === 'custom' && totalCount > 0 && !isPastCastleView;
+
+  const progressLabel =
+    totalCount > 0
+      ? `${completedCount}/${totalCount} Quests completed`
+      : `${completedCount}/0 Quests completed`;
+
+  const onQuestDragEnd = useCallback(
+    ({ data }: { data: Habit[] }) => {
+      setDragQuestData(data);
+      setCastleQuestOrderIds(data.map((h) => h.id));
+      impactAsync(ImpactFeedbackStyle.Light);
+    },
+    [setCastleQuestOrderIds],
+  );
+
+  const renderDraggableQuest = useCallback(
+    ({ item, drag, isActive }: RenderItemParams<Habit>) => (
+      <ScaleDecorator>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          onLongPress={drag}
+          disabled={isActive}
+          delayLongPress={180}
+          style={isActive ? styles.dragRowActive : undefined}
+        >
+          <HabitCard
+            habit={item}
+            onComplete={handleComplete}
+            onUncomplete={handleUncomplete}
+            onDelete={handleRemove}
+            readOnly={isPastCastleView}
+            historicalCompleted={!!completedNamesForFocusedDay?.includes(item.name)}
+          />
+        </TouchableOpacity>
+      </ScaleDecorator>
+    ),
+    [handleComplete, handleUncomplete, handleRemove, isPastCastleView, completedNamesForFocusedDay],
+  );
 
   return (
     <View style={styles.container}>
-      {/* Absolute Top HUD */}
-      <Animated.View style={[styles.hudContainer, {
-        paddingTop: Math.max(insets.top, 10),
-        opacity: headerAnim,
-        transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
-      }]}>
-        <View style={styles.hudRow}>
-          {/* Left: Avatar & Name */}
-          <Pressable
-            style={({ pressed }) => [styles.hudLeft, pressed && styles.hudLeftPressed]}
-            onPress={() => {
-              impactAsync(ImpactFeedbackStyle.Light);
-              setProfileOpen(true);
-            }}
-          >
-            <CircularProgress
-              progress={xpProgress}
-              size={40}
-              strokeWidth={3}
-              color={Colors.dark.gold}
-              backgroundColor={Colors.dark.border}
-            >
-              <View style={styles.avatarInner}>
-                <Text style={styles.avatarEmoji}>🧙‍♂️</Text>
-              </View>
-            </CircularProgress>
-            <View style={styles.playerInfo}>
-              <Text style={styles.playerName} numberOfLines={1}>Player</Text>
-              <Text style={styles.playerLevelText}>Lv.{playerLevel}</Text>
-            </View>
-          </Pressable>
-
-          {/* Center: Pill Badges */}
-          <View style={styles.pillBadgesContainer}>
-            <View style={styles.pillBadge}>
-              <Coins color={Colors.dark.gold} size={14} />
-              <Text style={styles.pillValue}>{gold}</Text>
-            </View>
-            <View style={styles.pillBadge}>
-              <KeyRound color={Colors.dark.cyan} size={14} />
-              <Text style={[styles.pillValue, { color: Colors.dark.cyan }]}>{dungeonKeys}</Text>
-            </View>
-            <View style={styles.pillBadge}>
-              <Text style={styles.pillEmoji}>🔥</Text>
-              <Text style={[styles.pillValue, { color: Colors.dark.fire }]}>{streak}</Text>
-            </View>
-          </View>
-
-          {/* Right: Icons */}
-          <View style={styles.hudRight}>
-            <Pressable
-              style={styles.iconButton}
-              onPress={() => {
-                impactAsync(ImpactFeedbackStyle.Light);
-                setMailboxOpen(true);
-              }}
-            >
-              <Mail color={Colors.dark.text} size={20} />
-              <View style={styles.notificationDot} />
-            </Pressable>
-            <Pressable
-              style={styles.iconButton}
-              onPress={() => {
-                impactAsync(ImpactFeedbackStyle.Light);
-                setSettingsOpen(true);
-              }}
-            >
-              <Settings color={Colors.dark.text} size={20} />
-            </Pressable>
-          </View>
-        </View>
-      </Animated.View>
-
+      <View style={styles.mainColumn}>
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 70 }]}
+        style={isCustomQuestOrder ? styles.scrollViewShrink : styles.scrollView}
+        scrollEnabled={!isCustomQuestOrder}
+        nestedScrollEnabled
+        contentContainerStyle={[
+          styles.scrollContent,
+          isCustomQuestOrder && styles.scrollContentShrink,
+        ]}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        {/* Living Diorama Component */}
         <Animated.View style={{ transform: [{ scale: castleScaleAnim }] }}>
-          <LivingDiorama />
+          <HomeScenePanel
+            playerLevel={playerLevel}
+            baseName={{ emoji: castleTier.emoji, name: castleTier.name }}
+            onPressBackpack={() => setBackpackOpen(true)}
+          />
         </Animated.View>
 
-        <Animated.View style={[styles.castleCaptionBlock, { opacity: headerAnim }]}>
-          <LinearGradient
-            colors={['#1a1528', '#120e1a']}
-            style={styles.castleCaptionGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.castleCaptionLevel}>Level {playerLevel}</Text>
-            <Text style={styles.castleCaptionTitle}>
-              {castleTier.emoji} {castleTier.namePl}
-            </Text>
-            <Text style={styles.castleCaptionDesc}>{castleTier.desc}</Text>
-          </LinearGradient>
-        </Animated.View>
-
-        <Animated.View style={[styles.dashboardRow, { opacity: headerAnim }]}>
-          <Pressable
-            onPress={() => {
-              impactAsync(ImpactFeedbackStyle.Light);
-              setChroniclesOpen(true);
-            }}
-            style={({ pressed }) => [styles.dashboardCardOuter, pressed && styles.dashboardCardPressed]}
-          >
-            <LinearGradient
-              colors={['#152820', '#0f1a14']}
-              style={styles.dashboardCardGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={styles.dashboardIconCircle}>
-                <ScrollText color={Colors.dark.emerald} size={22} strokeWidth={2.2} />
-              </View>
-              <Text style={styles.dashboardCardTitle}>Chronicles</Text>
-              <Text style={styles.dashboardCardSub}>Activity history</Text>
-            </LinearGradient>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              impactAsync(ImpactFeedbackStyle.Light);
-              setBackpackOpen(true);
-            }}
-            style={({ pressed }) => [styles.dashboardCardOuter, pressed && styles.dashboardCardPressed]}
-          >
-            <LinearGradient
-              colors={[Colors.dark.surfaceLight, Colors.dark.surface]}
-              style={styles.dashboardCardGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={[styles.dashboardIconCircle, styles.dashboardIconCircleGold]}>
-                <Backpack color={Colors.dark.gold} size={22} strokeWidth={2.2} />
-              </View>
-              <Text style={styles.dashboardCardTitle}>Backpack</Text>
-              <Text style={styles.dashboardCardSub}>Dungeon loot</Text>
-            </LinearGradient>
-          </Pressable>
-        </Animated.View>
-
-        <Animated.View style={[styles.dashboardRow, styles.dashboardRowSecond, { opacity: headerAnim }]}>
-          <View style={styles.statsLooseHalf}>
-            <View style={styles.statsLooseInner}>
-              <StatRing stat="strength" xp={strengthXP} delay={220} compact compactScale={compactStatScale} />
-              <StatRing stat="agility" xp={agilityXP} delay={300} compact compactScale={compactStatScale} />
-              <StatRing stat="intelligence" xp={intelligenceXP} delay={380} compact compactScale={compactStatScale} />
-            </View>
-          </View>
-          <Pressable
-            onPress={() => {
-              impactAsync(ImpactFeedbackStyle.Light);
-              setAchievementsOpen(true);
-            }}
-            style={({ pressed }) => [styles.dashboardCardOuter, pressed && styles.dashboardCardPressed]}
-          >
-            <LinearGradient
-              colors={['#2b2436', '#1d1727']}
-              style={styles.dashboardCardGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={[styles.dashboardIconCircle, styles.dashboardIconCircleGold]}>
-                <Trophy color={Colors.dark.gold} size={22} strokeWidth={2.2} />
-              </View>
-              <Text style={styles.dashboardCardTitle}>Achievements</Text>
-              <Text style={styles.dashboardCardSub}>Trophy room</Text>
-            </LinearGradient>
-          </Pressable>
-        </Animated.View>
-
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <View style={styles.dividerBadge}>
-            <Text style={styles.dividerText}>
-              {totalCount > 0 ? `${completedCount}/${totalCount} QUESTS` : 'DAILY QUESTS'}
-            </Text>
-          </View>
-          <View style={styles.dividerLine} />
-        </View>
-        <View style={styles.filterTabs}>
-          {[
-            { key: 'all', label: 'All' },
-            { key: 'daily', label: 'Habits' },
-            { key: 'one-off', label: 'Side Quests' },
-          ].map((tab) => (
+        <Animated.View
+          style={[
+            styles.taskCommandHeader,
+            {
+              opacity: listHeaderAnim,
+              transform: [
+                {
+                  translateY: listHeaderAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [12, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.taskHeaderLead}>
             <Pressable
-              key={tab.key}
               onPress={() => {
                 impactAsync(ImpactFeedbackStyle.Light);
-                setHudFilter(tab.key as 'all' | 'daily' | 'one-off');
+                setCalendarOpen(true);
               }}
-              style={[styles.filterTab, hudFilter === tab.key && styles.filterTabActive]}
+              style={({ pressed }) => [styles.taskIconBtn, pressed && styles.taskIconBtnPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Expedition calendar"
             >
-              <Text style={[styles.filterTabText, hudFilter === tab.key && styles.filterTabTextActive]}>{tab.label}</Text>
+              <CalendarClock size={20} color={Colors.dark.gold} strokeWidth={2.2} />
             </Pressable>
-          ))}
-        </View>
+          </View>
+          <View style={styles.taskHeaderCenter}>
+            <Text style={styles.taskProgressText} numberOfLines={2}>
+              {progressLabel}
+            </Text>
+          </View>
+          <View style={styles.taskHeaderTail}>
+            <Pressable
+              onPress={() => {
+                impactAsync(ImpactFeedbackStyle.Light);
+                setChroniclesOpen(true);
+              }}
+              style={({ pressed }) => [styles.taskIconBtn, pressed && styles.taskIconBtnPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Chronicles"
+            >
+              <ScrollText size={20} color={Colors.dark.emerald} strokeWidth={2.2} />
+            </Pressable>
+            {!isPastCastleView ? (
+              <Pressable
+                onPress={() => {
+                  impactAsync(ImpactFeedbackStyle.Light);
+                  setSortMenuOpen(true);
+                }}
+                style={({ pressed }) => [styles.taskIconBtn, pressed && styles.taskIconBtnPressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Sort quests"
+              >
+                <SlidersHorizontal size={20} color={Colors.dark.textSecondary} strokeWidth={2.2} />
+              </Pressable>
+            ) : (
+              <View style={styles.taskIconBtn} />
+            )}
+          </View>
+        </Animated.View>
 
         <View style={styles.habitsSection}>
           {totalCount === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyEmoji}>⚔️</Text>
-              <Text style={styles.emptyTitle}>No Quests Yet</Text>
-              <Text style={styles.emptyDesc}>Tap the + button to forge your first daily habit</Text>
+              <Text style={styles.emptyTitle}>No quests yet</Text>
+              <Text style={styles.emptyDesc}>Tap + to create your first habit or side quest</Text>
+            </View>
+          ) : isCustomQuestOrder ? (
+            <View style={styles.customOrderHint}>
+              <Text style={styles.customOrderHintTitle}>Custom order</Text>
+              <Text style={styles.customOrderHintText}>
+                Long-press a quest card, then drag to reorder. Order is saved automatically.
+              </Text>
             </View>
           ) : (
-            visibleHabits.map(habit => (
-              <HabitCard
-                key={habit.id}
-                habit={habit}
-                onComplete={handleComplete}
-                onUncomplete={handleUncomplete}
-                onDelete={handleRemove}
-              />
-            ))
+            <>
+              <View style={styles.taskSection}>
+                <View style={styles.taskSectionHeaderRow}>
+                  <View style={styles.taskSectionAccent} />
+                  <Text style={styles.taskSectionTitle}>Habits</Text>
+                  <View style={styles.taskSectionLine} />
+                </View>
+                {habitsDaily.length === 0 ? (
+                  <Text style={styles.taskSectionEmpty}>No habits due today</Text>
+                ) : (
+                  habitsDaily.map((habit) => (
+                    <HabitCard
+                      key={habit.id}
+                      habit={habit}
+                      onComplete={handleComplete}
+                      onUncomplete={handleUncomplete}
+                      onDelete={handleRemove}
+                      readOnly={isPastCastleView}
+                      historicalCompleted={!!completedNamesForFocusedDay?.includes(habit.name)}
+                    />
+                  ))
+                )}
+              </View>
+
+              <View style={styles.taskSectionSpacer} />
+
+              <View style={styles.taskSection}>
+                <View style={styles.taskSectionHeaderRow}>
+                  <View style={styles.taskSectionAccent} />
+                  <Text style={styles.taskSectionTitle}>Side quests</Text>
+                  <View style={styles.taskSectionLine} />
+                </View>
+                {habitsSide.length === 0 ? (
+                  <Text style={styles.taskSectionEmpty}>No side quests due today</Text>
+                ) : (
+                  habitsSide.map((habit) => (
+                    <HabitCard
+                      key={habit.id}
+                      habit={habit}
+                      onComplete={handleComplete}
+                      onUncomplete={handleUncomplete}
+                      onDelete={handleRemove}
+                      readOnly={isPastCastleView}
+                      historicalCompleted={!!completedNamesForFocusedDay?.includes(habit.name)}
+                    />
+                  ))
+                )}
+              </View>
+            </>
           )}
-          <View style={{ height: 100 }} />
+          {!isCustomQuestOrder ? (
+            <View style={{ height: isPastCastleView ? 220 : 100 }} />
+          ) : (
+            <View style={{ height: 16 }} />
+          )}
         </View>
       </ScrollView>
 
-      <Animated.View style={[styles.fabContainer, { transform: [{ scale: fabPulse }] }]}>
-        <Pressable
-          onPress={() => {
-            impactAsync(ImpactFeedbackStyle.Heavy);
-            setModalVisible(true);
-          }}
-          testID="add-habit-fab"
-        >
-          <LinearGradient
-            colors={[...Colors.gradients.gold]}
-            style={styles.fab}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+      {isCustomQuestOrder ? (
+        <DraggableFlatList
+          style={styles.draggableQuestList}
+          data={dragQuestData}
+          keyExtractor={(item) => item.id}
+          renderItem={renderDraggableQuest}
+          onDragEnd={onQuestDragEnd}
+          activationDistance={10}
+          containerStyle={styles.draggableQuestListInner}
+          contentContainerStyle={styles.draggableQuestListContent}
+          ListFooterComponent={<View style={{ height: 100 }} />}
+        />
+      ) : null}
+      </View>
+
+      {!isPastCastleView ? (
+        <Animated.View style={[styles.fabContainer, { transform: [{ scale: fabPulse }] }]}>
+          <Pressable
+            onPress={() => {
+              impactAsync(ImpactFeedbackStyle.Heavy);
+              setModalVisible(true);
+            }}
+            testID="add-habit-fab"
           >
-            <Plus size={28} color="#1a1228" strokeWidth={3} />
-          </LinearGradient>
-          <View style={styles.fabShadow} />
-        </Pressable>
-      </Animated.View>
+            <LinearGradient
+              colors={[...Colors.gradients.gold]}
+              style={styles.fab}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Plus size={28} color="#1a1228" strokeWidth={3} />
+            </LinearGradient>
+            <View style={styles.fabShadow} />
+          </Pressable>
+        </Animated.View>
+      ) : null}
 
       <AddHabitModal
         visible={modalVisible}
@@ -453,24 +417,19 @@ export default function CastleScreen() {
         completedHabitNamesByDate={completedHabitNamesByDate ?? {}}
       />
 
-      <SettingsModal visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <MailboxModal visible={mailboxOpen} onClose={() => setMailboxOpen(false)} />
-      <AchievementsModal
-        visible={achievementsOpen}
-        onClose={() => setAchievementsOpen(false)}
-        unlockedTitleIds={unlockedTitleIds}
-        completedStrengthQuests={completedStrengthQuests}
-        completedAgilityQuests={completedAgilityQuests}
-        completedIntelligenceQuests={completedIntelligenceQuests}
+      <ExpeditionCalendarModal
+        visible={calendarOpen}
+        onClose={() => {
+          setCalendarOpen(false);
+          setExpeditionFocusDateKey(null);
+        }}
+        expeditionFocusDateKey={expeditionFocusDateKey}
+        onExpeditionFocusDateKeyChange={handleExpeditionFocusChange}
+        profileCreatedAtDateKey={profileCreatedAtDateKey}
+        userId={user?.id ?? null}
       />
-      <PlayerProfileModal
-        visible={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        email={user?.email ?? null}
-        playerId={playerId}
-        level={playerLevel}
-        onSignOut={signOut}
-      />
+
+      <TaskSortBottomSheet visible={sortMenuOpen} onClose={() => setSortMenuOpen(false)} />
     </View>
   );
 }
@@ -480,314 +439,151 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.dark.background,
   },
-
-  // --- HUD Styles ---
-  hudContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.dark.border + '50',
-    backgroundColor: Colors.dark.surface + 'e6',
-  },
-  hudRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  hudLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1, // allow truncation if needed
-  },
-  hudLeftPressed: {
-    opacity: 0.9,
-  },
-  avatarInner: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: Colors.dark.surfaceLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarEmoji: {
-    fontSize: 18,
-  },
-  playerInfo: {
-    justifyContent: 'center',
-    flexShrink: 1,
-  },
-  playerName: {
-    color: Colors.dark.text,
-    fontSize: 14,
-    fontWeight: '800',
-    marginBottom: 0,
-  },
-  playerLevelText: {
-    color: Colors.dark.gold,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  hudRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  mainColumn: {
     flex: 1,
-    justifyContent: 'flex-end',
   },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.dark.surfaceLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.dark.ruby,
-    borderWidth: 1,
-    borderColor: Colors.dark.surfaceLight,
-  },
-  pillBadgesContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  pillBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-    justifyContent: 'center',
-    gap: 4,
-  },
-  pillEmoji: {
-    fontSize: 12,
-  },
-  pillValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.dark.gold,
-  },
-
-  castleCaptionBlock: {
-    paddingHorizontal: 20,
-    marginTop: 6,
-    marginBottom: 10,
-  },
-  dashboardRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-    marginBottom: 14,
-  },
-  dashboardRowSecond: {
-    alignItems: 'stretch',
-  },
-  dashboardCardOuter: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.dark.border + 'aa',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
-      },
-      android: { elevation: 5 },
-      default: {},
-    }),
-  },
-  dashboardCardPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }],
-  },
-  dashboardCardGradient: {
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 108,
-  },
-  dashboardIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: Colors.dark.background + 'cc',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.dark.emerald + '35',
-  },
-  dashboardIconCircleGold: {
-    borderColor: Colors.dark.gold + '35',
-  },
-  dashboardCardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: Colors.dark.text,
-    textAlign: 'center',
-  },
-  dashboardCardSub: {
-    fontSize: 11,
-    color: Colors.dark.textMuted,
-    marginTop: 3,
-    textAlign: 'center',
-  },
-  castleCaptionGradient: {
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderWidth: 1,
-    borderColor: Colors.dark.border + '88',
-    alignItems: 'center',
-  },
-  castleCaptionLevel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.dark.gold,
-    letterSpacing: 1.4,
-    marginBottom: 4,
-  },
-  castleCaptionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.dark.text,
-    textAlign: 'center',
-  },
-  castleCaptionDesc: {
-    fontSize: 12,
-    color: Colors.dark.textSecondary,
-    textAlign: 'center',
-    marginTop: 6,
-    lineHeight: 18,
-  },
-
-  statsLooseHalf: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statsLooseInner: {
-    flexDirection: 'row',
-    width: '100%',
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
-  },
-  statRingContainer: {
-    alignItems: 'center',
-    width: 80,
-  },
-  statRingContainerCompact: {
-    width: 58,
-  },
-  statRingIcon: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statRingLabelContainer: {
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  statRingLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-  },
-  statRingLevel: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: Colors.dark.textSecondary,
-    marginTop: 1,
-  },
-
   scrollView: {
     flex: 1,
   },
+  scrollViewShrink: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   scrollContent: {
-    paddingTop: 12,
+    paddingTop: 0,
   },
-  divider: {
+  scrollContentShrink: {
+    flexGrow: 0,
+  },
+  draggableQuestList: {
+    flex: 1,
+    minHeight: 120,
+  },
+  draggableQuestListInner: {
+    flex: 1,
+  },
+  draggableQuestListContent: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
+  },
+  dragRowActive: {
+    opacity: 0.95,
+  },
+  customOrderHint: {
+    marginTop: 4,
+    marginBottom: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: Colors.dark.gold + '12',
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + '33',
+  },
+  customOrderHintTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.dark.gold,
+    marginBottom: 4,
+    letterSpacing: 0.3,
+  },
+  customOrderHintText: {
+    fontSize: 12,
+    color: Colors.dark.textSecondary,
+    lineHeight: 17,
+  },
+  taskCommandHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    marginVertical: 18,
-    gap: 10,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.dark.border,
-  },
-  dividerBadge: {
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  dividerText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Colors.dark.textMuted,
-    letterSpacing: 1.5,
-  },
-  filterTabs: {
-    flexDirection: 'row',
+    marginTop: 4,
+    marginBottom: 18,
     gap: 8,
-    paddingHorizontal: 20,
-    marginBottom: 10,
   },
-  filterTab: {
+  taskHeaderLead: {
+    width: 44,
+    flexShrink: 0,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  taskHeaderCenter: {
     flex: 1,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-    backgroundColor: Colors.dark.surface,
-    paddingVertical: 8,
+    minWidth: 0,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
-  filterTabActive: {
-    borderColor: Colors.dark.gold + '66',
-    backgroundColor: Colors.dark.gold + '14',
+  taskHeaderTail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+    flexShrink: 0,
+    width: 88,
   },
-  filterTabText: {
-    fontSize: 11,
+  taskProgressText: {
+    width: '100%',
+    fontSize: 13,
     fontWeight: '800',
-    color: Colors.dark.textMuted,
+    color: Colors.dark.text,
+    letterSpacing: 0.2,
     textAlign: 'center',
   },
-  filterTabTextActive: {
-    color: Colors.dark.gold,
+  taskIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.dark.surface,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + 'aa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskIconBtnPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.96 }],
   },
   habitsSection: {
     paddingHorizontal: 20,
   },
-  timeGroup: { marginBottom: 12 },
+  taskSection: {
+    marginTop: 4,
+  },
+  taskSectionSpacer: {
+    height: 22,
+  },
+  taskSectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 10,
+  },
+  taskSectionAccent: {
+    width: 4,
+    height: 18,
+    borderRadius: 2,
+    backgroundColor: Colors.dark.gold + 'cc',
+  },
+  taskSectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.dark.text,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  taskSectionLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.dark.border + 'aa',
+  },
+  taskSectionEmpty: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.dark.textMuted,
+    fontStyle: 'italic',
+    paddingVertical: 8,
+    paddingLeft: 2,
+  },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 40,

@@ -9,7 +9,7 @@ export default function AuthGate() {
   const router = useRouter();
   const segments = useSegments();
   const { session, isAuthLoading, isProfileReady } = useAuth();
-  const playerClass = useGameStore((s) => s.playerClass);
+  const onboardingComplete = useGameStore((s) => s.onboardingComplete);
 
   const topSegment = String(segments[0] ?? "");
   const inAuth = topSegment === "(auth)";
@@ -23,26 +23,26 @@ export default function AuthGate() {
       return;
     }
 
-    if (session && !playerClass && !inOnboarding) {
-      router.replace("/onboarding/class" as any);
+    if (session && !onboardingComplete && !inOnboarding && !inAuth) {
+      router.replace("/onboarding" as any);
       return;
     }
 
     if (session && inAuth) {
-      router.replace((playerClass ? "/(tabs)" : "/onboarding/class") as any);
+      router.replace((onboardingComplete ? "/(tabs)" : "/onboarding") as any);
       return;
     }
 
-    if (session && playerClass && inOnboarding) {
+    if (session && onboardingComplete && inOnboarding) {
       router.replace("/(tabs)" as any);
     }
-  }, [isAuthLoading, isProfileReady, session, playerClass, inAuth, inOnboarding, router]);
+  }, [isAuthLoading, isProfileReady, session, onboardingComplete, inAuth, inOnboarding, router]);
 
   if (isAuthLoading || (session && !isProfileReady)) {
     return (
       <View style={styles.overlay}>
         <ActivityIndicator color={Colors.dark.gold} size="large" />
-        <Text style={styles.text}>Przywołuję kroniki bohatera...</Text>
+        <Text style={styles.text}>Opening the chronicles…</Text>
       </View>
     );
   }

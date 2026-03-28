@@ -37,6 +37,19 @@ export type CloudGameState = Pick<
   | "hapticsEnabled"
   | "sageFocus"
   | "sageChatMessages"
+  | "planningDayOrderByDate"
+  | "castleQuestSortMode"
+  | "castleQuestOrderIds"
+  | "heroDisplayName"
+  | "heroGender"
+  | "onboardingWeakness"
+  | "onboardingCommitment"
+  | "onboardingEnergyBaseline"
+  | "onboardingScreenDistraction"
+  | "onboardingStressResponse"
+  | "onboardingPhysicality"
+  | "onboardingPlanningStyle"
+  | "onboardingComplete"
 >;
 
 export function pickCloudGameState(state: GameState): CloudGameState {
@@ -76,6 +89,19 @@ export function pickCloudGameState(state: GameState): CloudGameState {
     hapticsEnabled: state.hapticsEnabled,
     sageFocus: state.sageFocus,
     sageChatMessages: state.sageChatMessages,
+    planningDayOrderByDate: state.planningDayOrderByDate,
+    castleQuestSortMode: state.castleQuestSortMode,
+    castleQuestOrderIds: state.castleQuestOrderIds,
+    heroDisplayName: state.heroDisplayName,
+    heroGender: state.heroGender,
+    onboardingWeakness: state.onboardingWeakness,
+    onboardingCommitment: state.onboardingCommitment,
+    onboardingEnergyBaseline: state.onboardingEnergyBaseline,
+    onboardingScreenDistraction: state.onboardingScreenDistraction,
+    onboardingStressResponse: state.onboardingStressResponse,
+    onboardingPhysicality: state.onboardingPhysicality,
+    onboardingPlanningStyle: state.onboardingPlanningStyle,
+    onboardingComplete: state.onboardingComplete,
   };
 }
 

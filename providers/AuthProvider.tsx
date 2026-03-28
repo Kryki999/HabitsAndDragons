@@ -13,22 +13,38 @@ type ProfileRow = {
   player_class: PlayerClass | null;
   sage_focus: SageLifeFocus | null;
   game_state: CloudGameState | null;
+  created_at?: string | null;
 };
 
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
   playerId: string | null;
+  /** UTC calendar day (`YYYY-MM-DD`) when the profile row was created — timeline lower bound. */
+  profileCreatedAtDateKey: string | null;
   isAuthLoading: boolean;
   isProfileReady: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: string; status?: number; code?: string }>;
   signUp: (email: string, password: string) => Promise<{ error?: string; status?: number; code?: string }>;
   signInWithGoogle: () => Promise<{ error?: string; status?: number; code?: string }>;
   signInWithApple: () => Promise<{ error?: string; status?: number; code?: string }>;
+  /** Passwordless: sends a one-time code to the email (check Supabase templates / length). */
+  signInWithEmailOtp: (email: string) => Promise<{ error?: string; status?: number; code?: string }>;
+  verifyEmailOtp: (
+    email: string,
+    token: string,
+  ) => Promise<{ error?: string; status?: number; code?: string }>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function profileCreatedAtDateKeyFromRow(createdAt: string | null | undefined): string | null {
+  if (!createdAt) return null;
+  const t = new Date(createdAt).getTime();
+  if (Number.isNaN(t)) return null;
+  return new Date(t).toISOString().slice(0, 10);
+}
 
 function createCandidatePlayerId(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -48,33 +64,43 @@ async function generateUniquePlayerId(): Promise<string> {
   return `${createCandidatePlayerId().slice(0, 6)}${Date.now().toString().slice(-2)}`;
 }
 
-async function bootstrapProfile(userId: string, userEmail?: string | null): Promise<{ playerId: string | null }> {
+async function bootstrapProfile(
+  userId: string,
+  userEmail?: string | null,
+): Promise<{ playerId: string | null; profileCreatedAtDateKey: string | null }> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("user_id, email, player_id, player_class, sage_focus, game_state")
+    .select("user_id, email, player_id, player_class, sage_focus, game_state, created_at")
     .eq("user_id", userId)
     .maybeSingle<ProfileRow>();
 
   if (error) {
     console.warn("[auth] profile bootstrap failed", error.message);
-    return { playerId: null };
+    return { playerId: null, profileCreatedAtDateKey: null };
   }
 
   if (!data) {
     const local = useGameStore.getState();
     const nextPlayerId = await generateUniquePlayerId();
-    const { error: insertErr } = await supabase.from("profiles").insert({
-      user_id: userId,
-      player_class: null,
-      sage_focus: local.sageFocus,
-      email: userEmail ?? null,
-      player_id: nextPlayerId,
-      game_state: pickCloudGameState(local),
-    });
+    const { data: inserted, error: insertErr } = await supabase
+      .from("profiles")
+      .insert({
+        user_id: userId,
+        player_class: null,
+        sage_focus: local.sageFocus,
+        email: userEmail ?? null,
+        player_id: nextPlayerId,
+        game_state: pickCloudGameState(local),
+      })
+      .select("created_at")
+      .maybeSingle();
     if (insertErr) {
       console.warn("[auth] profile init insert failed", insertErr.message);
     }
-    return { playerId: nextPlayerId };
+    return {
+      playerId: nextPlayerId,
+      profileCreatedAtDateKey: profileCreatedAtDateKeyFromRow(inserted?.created_at),
+    };
   }
 
   let resolvedPlayerId = data.player_id ?? null;
@@ -91,12 +117,16 @@ async function bootstrapProfile(userId: string, userEmail?: string | null): Prom
     playerClass: data.player_class ?? null,
     sageFocus: data.sage_focus ?? "body",
   });
-  return { playerId: resolvedPlayerId };
+  return {
+    playerId: resolvedPlayerId,
+    profileCreatedAtDateKey: profileCreatedAtDateKeyFromRow(data.created_at),
+  };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [playerId, setPlayerId] = useState<string | null>(null);
+  const [profileCreatedAtDateKey, setProfileCreatedAtDateKey] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isProfileReady, setIsProfileReady] = useState(false);
 
@@ -124,12 +154,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const run = async () => {
       if (!session?.user?.id) {
         setPlayerId(null);
+        setProfileCreatedAtDateKey(null);
         setIsProfileReady(true);
         return;
       }
       setIsProfileReady(false);
       const result = await bootstrapProfile(session.user.id, session.user.email);
       if (!cancelled) setPlayerId(result.playerId);
+      if (!cancelled) setProfileCreatedAtDateKey(result.profileCreatedAtDateKey);
       if (!cancelled) setIsProfileReady(true);
     };
     run();
@@ -143,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       user: session?.user ?? null,
       playerId,
+      profileCreatedAtDateKey,
       isAuthLoading,
       isProfileReady,
       signIn: async (email, password) => {
@@ -171,13 +204,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
         return {};
       },
+      signInWithEmailOtp: async (email) => {
+        const { error } = await supabase.auth.signInWithOtp({
+          email: email.trim(),
+          options: { shouldCreateUser: true },
+        });
+        if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
+        return {};
+      },
+      verifyEmailOtp: async (email, token) => {
+        const { error } = await supabase.auth.verifyOtp({
+          email: email.trim(),
+          token: token.replace(/\s/g, ""),
+          type: "email",
+        });
+        if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
+        return {};
+      },
       signOut: async () => {
         await supabase.auth.signOut();
         useGameStore.setState(useGameStore.getInitialState());
         await useGameStore.persist.clearStorage();
       },
     }),
-    [session, playerId, isAuthLoading, isProfileReady],
+    [session, playerId, profileCreatedAtDateKey, isAuthLoading, isProfileReady],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

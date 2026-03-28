@@ -1,41 +1,52 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Animated,
   Pressable,
-  Platform,
 } from 'react-native';
-import { Check, Swords, Zap, BookOpen, Trash2, Flame, Target } from 'lucide-react-native';
+import { Check, Trash2, Flame, Target } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import Colors from '@/constants/colors';
-import { Habit, StatType, HabitDifficulty } from '@/types/game';
+import { Habit, HabitDifficulty } from '@/types/game';
+import { DIFFICULTY_BASE_REWARDS } from '@/lib/economy';
 
-const DIFF_SHORT: Record<HabitDifficulty, string> = {
-  easy: 'E',
-  medium: 'M',
-  hard: 'H',
-};
-
-const STAT_CONFIG: Record<StatType, { color: string; label: string; icon: typeof Swords }> = {
-  strength: { color: Colors.dark.ruby, label: 'STR', icon: Swords },
-  agility: { color: Colors.dark.emerald, label: 'AGI', icon: Zap },
-  intelligence: { color: Colors.dark.cyan, label: 'INT', icon: BookOpen },
-};
+const ACCENT = Colors.dark.gold;
 
 interface HabitCardProps {
   habit: Habit;
   onComplete: (id: string) => void;
   onUncomplete: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Past-day castle view: no edit, delete, or toggle. */
+  readOnly?: boolean;
+  /** When read-only, show whether this habit was completed on the viewed day (chronicles). */
+  historicalCompleted?: boolean;
 }
 
-function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps) {
+function HabitCard({
+  habit,
+  onComplete,
+  onUncomplete,
+  onDelete,
+  readOnly,
+  historicalCompleted,
+}: HabitCardProps) {
   const pressAnim = useRef(new Animated.Value(0)).current;
-  const checkAnim = useRef(new Animated.Value(habit.completedToday ? 1 : 0)).current;
-  const statCfg = STAT_CONFIG[habit.stat];
+  const displayCompleted = readOnly ? !!historicalCompleted : habit.completedToday;
+  const checkAnim = useRef(new Animated.Value(displayCompleted ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.spring(checkAnim, {
+      toValue: displayCompleted ? 1 : 0,
+      friction: 6,
+      tension: 80,
+      useNativeDriver: true,
+    }).start();
+  }, [displayCompleted, checkAnim]);
   const diffKey = (habit.difficulty ?? 'medium') as HabitDifficulty;
+  const baseReward = DIFFICULTY_BASE_REWARDS[diffKey];
+  const rewardLabel = `+${baseReward.xp} XP · +${baseReward.gold} gold`;
 
   const handlePressIn = useCallback(() => {
     Animated.timing(pressAnim, {
@@ -55,7 +66,7 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
   }, [pressAnim]);
 
   const handlePress = useCallback(() => {
-    if (habit.isFrozen) return;
+    if (readOnly || habit.isFrozen) return;
     impactAsync(ImpactFeedbackStyle.Heavy);
     if (habit.completedToday) {
       onUncomplete(habit.id);
@@ -82,7 +93,7 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
         }),
       ]).start();
     }
-  }, [habit.completedToday, habit.id, habit.isFrozen, onComplete, onUncomplete, checkAnim]);
+  }, [readOnly, habit.completedToday, habit.id, habit.isFrozen, onComplete, onUncomplete, checkAnim]);
 
   const handleDelete = useCallback(() => {
     impactAsync(ImpactFeedbackStyle.Light);
@@ -101,10 +112,10 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
 
   return (
     <Pressable
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
+      onPressIn={readOnly ? undefined : handlePressIn}
+      onPressOut={readOnly ? undefined : handlePressOut}
       onPress={handlePress}
-      disabled={habit.isFrozen}
+      disabled={readOnly || habit.isFrozen}
       testID={`habit-card-${habit.id}`}
     >
       <Animated.View
@@ -112,13 +123,17 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
           styles.cardOuter,
           {
             transform: [{ translateY }],
-            borderColor: habit.isFrozen ? Colors.dark.cyan + '60' : habit.completedToday ? statCfg.color + '50' : Colors.dark.border,
+            borderColor: habit.isFrozen
+              ? Colors.dark.cyan + '60'
+              : displayCompleted
+                ? ACCENT + '50'
+                : Colors.dark.border,
           },
         ]}
       >
         <View style={[
           styles.cardInner,
-          habit.completedToday && { backgroundColor: statCfg.color + '10' },
+          displayCompleted && { backgroundColor: ACCENT + '10' },
           habit.isFrozen && { backgroundColor: Colors.dark.cyan + '10' },
         ]}>
           <View style={styles.cardLeft}>
@@ -126,17 +141,14 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
             <View style={styles.habitInfo}>
               <Text style={[
                 styles.habitName,
-                habit.completedToday && styles.habitNameCompleted,
+                displayCompleted && styles.habitNameCompleted,
               ]}>
                 {habit.name}
               </Text>
               <View style={styles.metaRow}>
-                <View style={styles.statBadge}>
-                  <statCfg.icon size={10} color={statCfg.color} />
-                  <Text style={[styles.statBadgeText, { color: statCfg.color }]}>
-                    +{statCfg.label}
-                  </Text>
-                </View>
+                <Text style={styles.rewardText} numberOfLines={1}>
+                  {rewardLabel}
+                </Text>
                 {habit.taskType === 'daily' ? (
                   <View style={styles.typeBadge}>
                     <Flame size={10} color={(habit.currentStreak ?? 0) > 0 ? Colors.dark.fire : Colors.dark.textMuted} />
@@ -154,26 +166,27 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
                     <Target size={10} color={Colors.dark.textMuted} />
                   </View>
                 )}
-                <Text style={styles.diffBadge}>{DIFF_SHORT[diffKey]}</Text>
                 {habit.isFrozen ? <Text style={styles.frozenBadge}>FROZEN</Text> : null}
               </View>
             </View>
           </View>
           <View style={styles.cardRight}>
-            <Pressable
-              onPress={handleDelete}
-              hitSlop={10}
-              style={styles.deleteBtn}
-              testID={`habit-delete-${habit.id}`}
-            >
-              <Trash2 size={14} color={Colors.dark.textMuted} />
-            </Pressable>
+            {!readOnly ? (
+              <Pressable
+                onPress={handleDelete}
+                hitSlop={10}
+                style={styles.deleteBtn}
+                testID={`habit-delete-${habit.id}`}
+              >
+                <Trash2 size={14} color={Colors.dark.textMuted} />
+              </Pressable>
+            ) : null}
             <Animated.View
               style={[
                 styles.checkCircle,
                 {
-                  backgroundColor: habit.completedToday ? statCfg.color : 'transparent',
-                  borderColor: habit.completedToday ? statCfg.color : Colors.dark.border,
+                  backgroundColor: displayCompleted ? ACCENT : 'transparent',
+                  borderColor: displayCompleted ? ACCENT : Colors.dark.border,
                   transform: [{ scale: checkAnim.interpolate({
                     inputRange: [0, 1, 1.2],
                     outputRange: [1, 1, 1.15],
@@ -181,7 +194,7 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
                 },
               ]}
             >
-              {habit.completedToday && (
+              {displayCompleted && (
                 <Check size={14} color="#fff" strokeWidth={3} />
               )}
             </Animated.View>
@@ -192,7 +205,7 @@ function HabitCard({ habit, onComplete, onUncomplete, onDelete }: HabitCardProps
             styles.cardBottom,
             {
               height: bottomBorderHeight,
-              backgroundColor: habit.completedToday ? statCfg.color + '60' : Colors.dark.border,
+              backgroundColor: displayCompleted ? ACCENT + '60' : Colors.dark.border,
             },
           ]}
         />
@@ -250,16 +263,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 8,
+    flexWrap: 'wrap' as const,
   },
-  statBadge: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 4,
-  },
-  diffBadge: {
-    fontSize: 10,
-    fontWeight: '800' as const,
+  rewardText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
     color: Colors.dark.textMuted,
+    flexShrink: 1,
   },
   typeBadge: {
     flexDirection: 'row' as const,
@@ -269,11 +279,6 @@ const styles = StyleSheet.create({
   typeBadgeText: {
     fontSize: 10,
     fontWeight: '800' as const,
-  },
-  statBadgeText: {
-    fontSize: 11,
-    fontWeight: '800' as const,
-    letterSpacing: 0.5,
   },
   cardRight: {
     flexDirection: 'row' as const,

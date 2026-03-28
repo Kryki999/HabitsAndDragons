@@ -13,13 +13,17 @@ import {
   ImageBackground,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import {
   Plus,
   RotateCcw,
   Sparkles,
   Coins,
+  Key,
   Lock,
   Snowflake,
+  Info,
+  AlertTriangle,
 } from "lucide-react-native";
 import {
   impactAsync,
@@ -44,8 +48,18 @@ import DungeonsSection, { PORTRAIT_CARD_HEIGHT_RATIO } from "@/components/dungeo
 import BattleSimulationModal, {
   type BattleApiResult,
 } from "@/components/BattleSimulationModal";
+import GuideInfoModal from "@/components/GuideInfoModal";
+import { useAuth } from "@/providers/AuthProvider";
+import { supabase } from "@/lib/supabase";
+import { pickCloudGameState } from "@/lib/cloudState";
 
 const DRAGON_LIST = Object.values(DRAGON_CONFIGS);
+
+const DUNGEONS_GUIDE_BODY =
+  "Keys are required to fight bosses. Defeat them to earn epic loot and Relics. Pay attention to boss weaknesses to increase your win chance.";
+
+const DRAGONS_GUIDE_BODY =
+  "Maintain your daily habit streak to unlock powerful dragons. Only one dragon can be active at a time, providing global buffs. Use Freeze Potions to protect your streak on bad days.";
 
 function formatSwitchCooldownRemaining(iso: string | null): string | null {
   if (!iso) return null;
@@ -129,6 +143,39 @@ function PortraitDragonCard({
 
   const canPressSet = unlocked && !isActive && !switchCooldownLabel;
 
+  const shellBorder = {
+    height: cardHeight,
+    borderColor: isActive ? Colors.dark.gold + "aa" : dragon.accentColor + "55",
+    borderWidth: isActive ? 3 : 2,
+  };
+
+  if (!unlocked) {
+    return (
+      <Animated.View
+        style={[
+          styles.portraitCardWrap,
+          { width: cardWidth },
+          { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+        ]}
+      >
+        <View style={[styles.portraitCardShell, shellBorder]}>
+          <ImageBackground
+            source={dragon.imageAsset}
+            style={styles.portraitImage}
+            imageStyle={[styles.portraitImageInner, styles.portraitImageLockedSilhouette]}
+          >
+            <View style={styles.dragonLockVeil}>
+              <Lock size={56} color="#ffffffcc" strokeWidth={2.6} />
+              <Text style={styles.dragonLockReq}>
+                Requires {dragon.unlockStreak} 🔥 Streak
+              </Text>
+            </View>
+          </ImageBackground>
+        </View>
+      </Animated.View>
+    );
+  }
+
   return (
     <Animated.View
       style={[
@@ -137,7 +184,7 @@ function PortraitDragonCard({
         { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
       ]}
     >
-      {isActive && unlocked ? (
+      {isActive ? (
         <Animated.View
           pointerEvents="none"
           style={[
@@ -150,40 +197,30 @@ function PortraitDragonCard({
           ]}
         />
       ) : null}
-      <View
-        style={[
-          styles.portraitCardShell,
-          {
-            height: cardHeight,
-            borderColor: isActive ? Colors.dark.gold + "aa" : dragon.accentColor + "55",
-            borderWidth: isActive ? 3 : 2,
-          },
-        ]}
-      >
+      <View style={[styles.portraitCardShell, shellBorder]}>
         <ImageBackground
           source={dragon.imageAsset}
           style={styles.portraitImage}
           imageStyle={styles.portraitImageInner}
         >
-          {!unlocked ? (
-            <View style={styles.dragonLockVeil}>
-              <Lock size={56} color="#ffffffcc" strokeWidth={2.6} />
-              <Text style={styles.dragonLockReq}>Requires {dragon.unlockStreak} 🔥 streak</Text>
-              <Text style={styles.dragonLockProg}>
-                {streak} / {dragon.unlockStreak}
+          <View style={styles.dragonUnlockedRoot}>
+            <LinearGradient
+              colors={["rgba(0,0,0,0.88)", "rgba(0,0,0,0.35)", "transparent"]}
+              locations={[0, 0.55, 1]}
+              style={styles.dragonTopGradient}
+            />
+            <View style={styles.dragonTopTitles}>
+              <Text style={styles.portraitDragonName}>{dragon.name}</Text>
+              <Text style={[styles.portraitDragonSub, { color: dragon.accentColor + "ee" }]}>
+                {dragon.subtitle}
               </Text>
             </View>
-          ) : null}
-          <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.45)", "rgba(0,0,0,0.92)"]}
-            locations={[0.38, 0.62, 1]}
-            style={styles.portraitGradient}
-          >
-            <Text style={styles.portraitDragonName}>{dragon.name}</Text>
-            <Text style={[styles.portraitDragonSub, { color: dragon.accentColor + "ee" }]}>
-              {dragon.subtitle}
-            </Text>
-            {unlocked ? (
+            <View style={styles.dragonUnlockedSpacer} />
+            <LinearGradient
+              colors={["transparent", "rgba(0,0,0,0.45)", "rgba(0,0,0,0.92)"]}
+              locations={[0.25, 0.55, 1]}
+              style={styles.portraitGradientBottom}
+            >
               <View style={styles.buffRow}>
                 <View style={styles.buffChip}>
                   <Text style={styles.buffEmoji}>🪙</Text>
@@ -198,8 +235,6 @@ function PortraitDragonCard({
                   <Text style={styles.buffText}>+{winPct}% win</Text>
                 </View>
               </View>
-            ) : null}
-            {unlocked ? (
               <Pressable
                 onPress={() => {
                   if (!canPressSet) {
@@ -234,8 +269,8 @@ function PortraitDragonCard({
                   </Text>
                 </LinearGradient>
               </Pressable>
-            ) : null}
-          </LinearGradient>
+            </LinearGradient>
+          </View>
         </ImageBackground>
       </View>
     </Animated.View>
@@ -244,6 +279,8 @@ function PortraitDragonCard({
 
 export default function DragonLairScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { user } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
   const [cooldownTick, setCooldownTick] = useState(0);
 
@@ -260,6 +297,7 @@ export default function DragonLairScreen() {
   const purchaseElixirOfTime = useGameStore((s) => s.purchaseElixirOfTime);
   const setActiveDragon = useGameStore((s) => s.setActiveDragon);
   const resolveDungeonBattle = useGameStore((s) => s.resolveDungeonBattle);
+  const devResetOnboarding = useGameStore((s) => s.devResetOnboarding);
 
   const resolveBattleForModal = useCallback(
     async (challengeId: string): Promise<BattleApiResult> => {
@@ -292,6 +330,8 @@ export default function DragonLairScreen() {
     dungeonName: string;
     bossName: string;
   }>({ open: false, challengeId: null, dungeonName: "", bossName: "" });
+  const [dungeonsGuideOpen, setDungeonsGuideOpen] = useState(false);
+  const [dragonsGuideOpen, setDragonsGuideOpen] = useState(false);
 
   const headerAnim = useRef(new Animated.Value(0)).current;
   const dragonsSectionAnim = useRef(new Animated.Value(0)).current;
@@ -381,6 +421,38 @@ export default function DragonLairScreen() {
     [addXP],
   );
 
+  const handleDevResetOnboarding = useCallback(() => {
+    Alert.alert(
+      "Reset onboarding?",
+      "Clears class, nickname, goals, and Sage choices locally and in your profile. You will return to the Sage wizard (step 1).",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: async () => {
+            impactAsync(ImpactFeedbackStyle.Heavy);
+            devResetOnboarding();
+            if (user?.id) {
+              const snapshot = pickCloudGameState(useGameStore.getState());
+              const { error } = await supabase
+                .from("profiles")
+                .update({
+                  player_class: null,
+                  sage_focus: "body",
+                  game_state: snapshot,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("user_id", user.id);
+              if (error) console.warn("[dev] profile onboarding reset failed", error.message);
+            }
+            router.replace("/onboarding" as any);
+          },
+        },
+      ],
+    );
+  }, [devResetOnboarding, user?.id, router]);
+
   const handleBuyKey = useCallback(() => {
     if (gold < DUNGEON_KEY_GOLD_PRICE) {
       notificationAsync(NotificationFeedbackType.Warning);
@@ -460,7 +532,7 @@ export default function DragonLairScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: Math.max(insets.top, 12) + 8, paddingBottom: 40 },
+          { paddingTop: 20, paddingBottom: 40 },
         ]}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
@@ -495,35 +567,6 @@ export default function DragonLairScreen() {
           <Text style={styles.subtitle}>Trophy hall & forbidden depths</Text>
         </Animated.View>
 
-        <Pressable
-          onPress={handleBuyElixir}
-          disabled={!canBuyElixir}
-          style={({ pressed }) => [
-            styles.elixirCta,
-            !canBuyElixir && styles.elixirCtaDisabled,
-            pressed && canBuyElixir && styles.elixirCtaPressed,
-          ]}
-        >
-          <LinearGradient
-            colors={canBuyElixir ? ["#1a3a4a", "#0d2838"] : ["#2a2a2a", "#1a1a1a"]}
-            style={styles.elixirCtaGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Snowflake size={22} color={canBuyElixir ? Colors.dark.cyan : Colors.dark.textMuted} />
-            <View style={styles.elixirCtaMid}>
-              <Text style={styles.elixirCtaTitle}>Elixir of Time</Text>
-              <Text style={styles.elixirCtaSub}>Freeze a daily habit — streak safe next reset</Text>
-            </View>
-            <View style={styles.elixirCtaRight}>
-              <Text style={[styles.elixirPrice, !canBuyElixir && styles.elixirPriceDisabled]}>
-                {ELIXIR_OF_TIME_GOLD_COST} 🪙
-              </Text>
-              <Text style={styles.elixirOwned}>Owned: {consumables?.elixirOfTime ?? 0}</Text>
-            </View>
-          </LinearGradient>
-        </Pressable>
-
         <Animated.View
           style={{
             opacity: dragonsSectionAnim,
@@ -537,15 +580,68 @@ export default function DragonLairScreen() {
             ],
           }}
         >
-          <View style={styles.streakPill}>
-            <Text style={styles.streakEmoji}>🔥</Text>
-            <Text style={styles.streakValue}>{streak}</Text>
-            <Text style={styles.streakLabel}>day streak</Text>
+          <View style={styles.sectionTitleWithInfo}>
+            <Text style={styles.sectionTitle}>Dragons</Text>
+            <Pressable
+              onPress={() => {
+                impactAsync(ImpactFeedbackStyle.Light);
+                setDragonsGuideOpen(true);
+              }}
+              style={({ pressed }) => [styles.guideInfoBtn, pressed && styles.guideInfoBtnPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Dragons guide"
+            >
+              <Info size={17} color={Colors.dark.gold} strokeWidth={2.4} />
+            </Pressable>
           </View>
 
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Dragons</Text>
+          <View style={styles.streakAndConsumablesRow}>
+            <View style={styles.streakPill}>
+              <Text style={styles.streakEmoji}>🔥</Text>
+              <Text style={styles.streakValue}>{streak}</Text>
+              <Text style={styles.streakLabel}>day streak</Text>
+            </View>
+            <View style={styles.elixirOwnedPill}>
+              <Snowflake size={16} color={Colors.dark.cyan} strokeWidth={2.2} />
+              <Text style={styles.elixirOwnedCount}>{consumables?.elixirOfTime ?? 0}</Text>
+              <Text style={styles.elixirOwnedLabel}>Freeze potions</Text>
+            </View>
           </View>
+
+          <Pressable
+            onPress={handleBuyElixir}
+            disabled={!canBuyElixir}
+            style={({ pressed }) => [
+              styles.elixirCta,
+              !canBuyElixir && styles.elixirCtaDisabled,
+              pressed && canBuyElixir && styles.elixirCtaPressed,
+            ]}
+          >
+            <LinearGradient
+              colors={canBuyElixir ? ["#1a3a4a", "#0d2838"] : ["#2a2a2a", "#1a1a1a"]}
+              style={styles.elixirCtaGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Snowflake size={22} color={canBuyElixir ? Colors.dark.cyan : Colors.dark.textMuted} />
+              <View style={styles.elixirCtaMid}>
+                <Text style={styles.elixirCtaTitle}>Buy Freeze Potion</Text>
+                <Text style={styles.elixirCtaSub}>
+                  Freeze a daily habit so your streak survives a missed day (use from a habit when needed).
+                </Text>
+              </View>
+              <View style={styles.ctaPriceRow}>
+                <Text style={[styles.elixirPrice, !canBuyElixir && styles.elixirPriceDisabled]}>
+                  {ELIXIR_OF_TIME_GOLD_COST}
+                </Text>
+                <Coins
+                  size={18}
+                  color={canBuyElixir ? Colors.dark.gold : Colors.dark.textMuted}
+                  strokeWidth={2.2}
+                />
+              </View>
+            </LinearGradient>
+          </Pressable>
 
           {switchCooldownLabel ? (
             <Text style={styles.cooldownBanner}>Next dragon switch in {switchCooldownLabel}</Text>
@@ -590,32 +686,66 @@ export default function DragonLairScreen() {
             },
           ]}
         >
-          <View style={styles.dungeonsTopRow}>
-            <View style={styles.keysPill}>
-              <Text style={styles.keysEmoji}>🗝️</Text>
-              <Text style={styles.keysValue}>{dungeonKeys}</Text>
-              <Text style={styles.keysLabel}>keys</Text>
-            </View>
+          <View style={styles.sectionTitleWithInfo}>
+            <Text style={styles.sectionTitle}>Dungeons</Text>
             <Pressable
-              onPress={handleBuyKey}
-              disabled={!canBuy}
-              style={({ pressed }) => [
-                styles.buyKeyBtnInline,
-                !canBuy && styles.buyKeyBtnInlineDisabled,
-                pressed && canBuy && styles.buyKeyBtnInlinePressed,
-              ]}
+              onPress={() => {
+                impactAsync(ImpactFeedbackStyle.Light);
+                setDungeonsGuideOpen(true);
+              }}
+              style={({ pressed }) => [styles.guideInfoBtn, pressed && styles.guideInfoBtnPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Dungeons guide"
             >
-              <Coins size={17} color={canBuy ? Colors.dark.gold : Colors.dark.textMuted} />
-              <Text
-                style={[styles.buyKeyTextInline, !canBuy && styles.buyKeyTextInlineDisabled]}
-                numberOfLines={1}
-              >
-                Buy Key ({DUNGEON_KEY_GOLD_PRICE})
-              </Text>
+              <Info size={17} color={Colors.dark.gold} strokeWidth={2.4} />
             </Pressable>
           </View>
 
+          <View style={styles.keysSummaryRow}>
+            <View style={styles.keysOwnedPill}>
+              <Key size={16} color={Colors.dark.cyan} strokeWidth={2.2} />
+              <Text style={styles.keysStockCount}>{dungeonKeys}</Text>
+              <Text style={styles.keysStockLabel}>Dungeon keys</Text>
+            </View>
+          </View>
+
+          <Pressable
+            onPress={handleBuyKey}
+            disabled={!canBuy}
+            style={({ pressed }) => [
+              styles.keyCta,
+              !canBuy && styles.keyCtaDisabled,
+              pressed && canBuy && styles.keyCtaPressed,
+            ]}
+          >
+            <LinearGradient
+              colors={canBuy ? ["#3a2e1a", "#1f1810"] : ["#2a2a2a", "#1a1a1a"]}
+              style={styles.keyCtaGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Key size={22} color={canBuy ? Colors.dark.cyan : Colors.dark.textMuted} strokeWidth={2.2} />
+              <View style={styles.keyCtaMid}>
+                <Text style={styles.keyCtaTitle}>Buy dungeon key</Text>
+                <Text style={styles.keyCtaSub}>One key — one boss fight. Your balance is shown above.</Text>
+              </View>
+              <View style={styles.ctaPriceRow}>
+                <Text style={[styles.keyPrice, !canBuy && styles.keyPriceDisabled]}>
+                  {DUNGEON_KEY_GOLD_PRICE}
+                </Text>
+                <Coins
+                  size={18}
+                  color={canBuy ? Colors.dark.gold : Colors.dark.textMuted}
+                  strokeWidth={2.2}
+                />
+              </View>
+            </LinearGradient>
+          </Pressable>
+
+          <Text style={styles.sectionHint}>Boss raids — portrait challenges · 1 key per fight</Text>
+
           <DungeonsSection
+            hideTitle
             engineState={engineState}
             playerLevel={getPlayerLevel()}
             dungeonKeys={dungeonKeys}
@@ -689,7 +819,7 @@ export default function DragonLairScreen() {
               <Text style={styles.debugButtonTextKeys}>+5 Keys</Text>
             </Pressable>
           </View>
-          <View style={[styles.debugRow, styles.debugRowLast]}>
+          <View style={styles.debugRow}>
             <Pressable
               onPress={() => handleDebugXP("strength", 100)}
               style={({ pressed }) => [
@@ -724,6 +854,20 @@ export default function DragonLairScreen() {
               <Text style={[styles.debugButtonTextXp, { color: Colors.dark.cyan }]}>+100 INT</Text>
             </Pressable>
           </View>
+          <View style={[styles.debugRow, styles.debugRowLast]}>
+            <Pressable
+              onPress={handleDevResetOnboarding}
+              style={({ pressed }) => [
+                styles.debugButton,
+                styles.debugButtonOnboardingReset,
+                pressed && styles.debugButtonPressed,
+              ]}
+              testID="debug-reset-onboarding"
+            >
+              <AlertTriangle size={18} color="#ff6b7a" strokeWidth={2.4} />
+              <Text style={styles.debugButtonTextOnboardingReset}>Reset Onboarding</Text>
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
 
@@ -734,6 +878,19 @@ export default function DragonLairScreen() {
         bossName={battle.bossName}
         resolveDungeonBattle={resolveBattleForModal}
         onClose={closeBattle}
+      />
+
+      <GuideInfoModal
+        visible={dragonsGuideOpen}
+        onClose={() => setDragonsGuideOpen(false)}
+        title="Dragons Guide"
+        body={DRAGONS_GUIDE_BODY}
+      />
+      <GuideInfoModal
+        visible={dungeonsGuideOpen}
+        onClose={() => setDungeonsGuideOpen(false)}
+        title="Dungeons Guide"
+        body={DUNGEONS_GUIDE_BODY}
       />
     </View>
   );
@@ -806,8 +963,31 @@ const styles = StyleSheet.create({
     color: Colors.dark.textSecondary,
     marginTop: 4,
   },
+  sectionTitleWithInfo: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 8,
+    marginBottom: 12,
+    flexWrap: "wrap" as const,
+  },
+  guideInfoBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + "55",
+    backgroundColor: Colors.dark.surface + "dd",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  guideInfoBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.95 }],
+  },
   elixirCta: {
-    marginBottom: 18,
+    marginTop: 4,
+    marginBottom: 14,
     borderRadius: 18,
     overflow: "hidden" as const,
     borderWidth: 1,
@@ -842,8 +1022,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 15,
   },
-  elixirCtaRight: {
-    alignItems: "flex-end" as const,
+  ctaPriceRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "flex-end" as const,
+    gap: 6,
   },
   elixirPrice: {
     fontSize: 14,
@@ -852,14 +1035,6 @@ const styles = StyleSheet.create({
   },
   elixirPriceDisabled: {
     color: Colors.dark.textMuted,
-  },
-  elixirOwned: {
-    fontSize: 10,
-    color: Colors.dark.textMuted,
-    marginTop: 2,
-  },
-  sectionHeaderRow: {
-    marginBottom: 10,
   },
   sectionTitle: {
     fontSize: 18,
@@ -874,11 +1049,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: "center" as const,
   },
+  streakAndConsumablesRow: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 10,
+    marginBottom: 10,
+  },
   streakPill: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    alignSelf: "flex-start" as const,
-    marginBottom: 8,
     backgroundColor: Colors.dark.surface,
     paddingHorizontal: 14,
     paddingVertical: 7,
@@ -886,6 +1067,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.dark.fire + "35",
     gap: 8,
+  },
+  elixirOwnedPill: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    backgroundColor: Colors.dark.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: Colors.dark.cyan + "35",
+  },
+  elixirOwnedCount: {
+    fontSize: 17,
+    fontWeight: "800" as const,
+    color: Colors.dark.cyan,
+  },
+  elixirOwnedLabel: {
+    fontSize: 12,
+    fontWeight: "600" as const,
+    color: Colors.dark.textSecondary,
   },
   streakEmoji: {
     fontSize: 17,
@@ -954,22 +1156,39 @@ const styles = StyleSheet.create({
     textAlign: "center" as const,
     paddingHorizontal: 12,
   },
-  dragonLockProg: {
-    marginTop: 6,
-    fontSize: 12,
-    color: "rgba(255,255,255,0.75)",
+  portraitImageLockedSilhouette: {
+    opacity: 0.38,
   },
-  portraitGradient: {
+  dragonUnlockedRoot: {
     flex: 1,
-    justifyContent: "flex-end" as const,
+  },
+  dragonTopGradient: {
+    position: "absolute" as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: "44%" as const,
+    zIndex: 1,
+  },
+  dragonTopTitles: {
+    paddingTop: 12,
+    paddingHorizontal: 12,
+    zIndex: 2,
+  },
+  dragonUnlockedSpacer: {
+    flex: 1,
+  },
+  portraitGradientBottom: {
     paddingHorizontal: 12,
     paddingBottom: 12,
-    paddingTop: 40,
+    paddingTop: 28,
+    justifyContent: "flex-end" as const,
   },
   portraitDragonName: {
     fontSize: 20,
     fontWeight: "800" as const,
     color: "#fff",
+    marginBottom: 4,
     textShadowColor: "rgba(0,0,0,0.75)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
@@ -977,7 +1196,10 @@ const styles = StyleSheet.create({
   portraitDragonSub: {
     fontSize: 12,
     fontWeight: "600" as const,
-    marginBottom: 10,
+    marginBottom: 0,
+    textShadowColor: "rgba(0,0,0,0.75)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   buffRow: {
     flexDirection: "row" as const,
@@ -1026,69 +1248,80 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
   },
   dungeonsBlock: {
-    marginTop: 8,
+    marginTop: 20,
   },
-  dungeonsTopRow: {
+  keysSummaryRow: {
     flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
     alignItems: "center" as const,
-    justifyContent: "space-between" as const,
+    justifyContent: "center" as const,
     gap: 10,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  keysPill: {
+  keysOwnedPill: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    flexShrink: 0,
+    gap: 6,
     backgroundColor: Colors.dark.surface,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: Colors.dark.cyan + "35",
-    gap: 8,
   },
-  keysEmoji: {
+  keysStockCount: {
     fontSize: 17,
-  },
-  keysValue: {
-    fontSize: 18,
     fontWeight: "800" as const,
     color: Colors.dark.cyan,
   },
-  keysLabel: {
-    fontSize: 13,
+  keysStockLabel: {
+    fontSize: 12,
     fontWeight: "600" as const,
     color: Colors.dark.textSecondary,
   },
-  buyKeyBtnInline: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 44,
+  keyCta: {
+    marginTop: 4,
+    marginBottom: 14,
+    borderRadius: 18,
+    overflow: "hidden" as const,
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + "44",
+  },
+  keyCtaDisabled: {
+    opacity: 0.5,
+  },
+  keyCtaPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  keyCtaGradient: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    justifyContent: "center" as const,
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 22,
-    backgroundColor: Colors.dark.surfaceLight,
-    borderWidth: 1,
-    borderColor: Colors.dark.gold + "45",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    gap: 12,
   },
-  buyKeyBtnInlineDisabled: {
-    opacity: 0.42,
+  keyCtaMid: {
+    flex: 1,
+    minWidth: 0,
   },
-  buyKeyBtnInlinePressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.98 }],
+  keyCtaTitle: {
+    fontSize: 16,
+    fontWeight: "800" as const,
+    color: Colors.dark.text,
   },
-  buyKeyTextInline: {
-    fontSize: 12,
+  keyCtaSub: {
+    fontSize: 11,
+    color: Colors.dark.textMuted,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  keyPrice: {
+    fontSize: 14,
     fontWeight: "800" as const,
     color: Colors.dark.gold,
-    textAlign: "center" as const,
   },
-  buyKeyTextInlineDisabled: {
+  keyPriceDisabled: {
     color: Colors.dark.textMuted,
   },
   debugSection: {
@@ -1148,6 +1381,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700" as const,
     color: "#ff4d6a",
+  },
+  debugButtonOnboardingReset: {
+    backgroundColor: "#ff4d6a18",
+    borderColor: "#ff4d6a66",
+    borderWidth: 2,
+  },
+  debugButtonTextOnboardingReset: {
+    fontSize: 14,
+    fontWeight: "800" as const,
+    color: "#ff6b7a",
   },
   debugEmoji: {
     fontSize: 14,

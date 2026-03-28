@@ -49,6 +49,47 @@ export function computeDungeonWinChance(state: GameState, challengeId: DungeonCh
   return clamp01(c.baseWinChance + levelBonus + statBonus + dragonBonus + synergyBonus);
 }
 
+/** Rozbicie do UI (tooltip) — te same składniki co `computeDungeonWinChance`. */
+export function computeDungeonWinChanceBreakdown(
+  state: GameState,
+  challengeId: DungeonChallengeId,
+): { finalPct: number; alertMessage: string } {
+  const c = DUNGEON_CHALLENGES[challengeId];
+  const playerLevel = getLevelFromXP(state.strengthXP + state.agilityXP + state.intelligenceXP);
+  const levelDelta = playerLevel - c.bossLevel;
+  const levelBonus = levelDelta * 0.02;
+  const statBonus = bestStat(state) === c.weaknessStat ? 0.08 : 0;
+  const dragonBonus = getActiveDragonBuffs(state).bossWinChanceBonus;
+  const synergyLines: string[] = [];
+  let synergyBonus = 0;
+  for (const id of equippedGearIds(state)) {
+    const g = GEAR_ITEMS[id];
+    if (g.synergyBossId === c.bossId) {
+      synergyBonus += g.synergyWinChanceBonus;
+      synergyLines.push(`  • ${g.name}: +${Math.round(g.synergyWinChanceBonus * 100)}%`);
+    }
+  }
+  const sumBeforeClamp = c.baseWinChance + levelBonus + statBonus + dragonBonus + synergyBonus;
+  const final = clamp01(sumBeforeClamp);
+  const pct = (x: number) => `${x >= 0 ? "+" : ""}${Math.round(x * 100)}%`;
+  const lines = [
+    `Base Chance: ${Math.round(c.baseWinChance * 100)}%`,
+    `Level Difference (${levelDelta >= 0 ? "+" : ""}${levelDelta}): ${pct(levelBonus)}`,
+    `Stat Weakness Match: ${statBonus > 0 ? "+8%" : "+0%"}`,
+    `Dragon Buff: ${pct(dragonBonus)}`,
+    synergyBonus > 0
+      ? `Gear Synergy (total ${pct(synergyBonus)}):\n${synergyLines.join("\n")}`
+      : `Gear Synergy: +0%`,
+  ];
+  if (Math.abs(sumBeforeClamp - final) > 1e-6) {
+    lines.push(`Capped total: ${Math.round(sumBeforeClamp * 100)}% → ${Math.round(final * 100)}%`);
+  }
+  return {
+    finalPct: Math.round(final * 100),
+    alertMessage: lines.join("\n"),
+  };
+}
+
 export function rollDungeonBattleResult(state: GameState, challengeId: DungeonChallengeId) {
   const c = DUNGEON_CHALLENGES[challengeId];
   const chance = computeDungeonWinChance(state, challengeId);

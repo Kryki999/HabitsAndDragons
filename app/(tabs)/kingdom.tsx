@@ -411,7 +411,7 @@ export default function KingdomScreen() {
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[0]}
       >
-        <View style={[styles.stickyWrap, { paddingTop: insets.top + 10, backgroundColor: Colors.dark.background }]}>
+        <View style={[styles.stickyWrap, { paddingTop: 10, backgroundColor: Colors.dark.background }]}>
           <RealmPlayerSticky
             rank={playerRank}
             streak={streak}

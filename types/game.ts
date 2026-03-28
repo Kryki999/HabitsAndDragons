@@ -1,3 +1,5 @@
+import type { OracleTaskStatWeights } from '@/types/oracle';
+
 export type StatType = 'strength' | 'agility' | 'intelligence';
 
 export type TaskType = 'daily' | 'one-off';
@@ -7,6 +9,28 @@ export type PlayerClass = 'warrior' | 'hunter' | 'mage' | 'paladin';
 
 /** Cel życiowy / fokus Mędrca — wpływa na rady AI. */
 export type SageLifeFocus = 'body' | 'mind' | 'work';
+
+/** Cosmetic — chosen in Sage onboarding. */
+export type HeroGender = 'male' | 'female';
+
+export type OnboardingWeakness = 'procrastination' | 'bad_diet' | 'lack_of_sleep';
+
+export type OnboardingCommitment = '15min' | '1hour' | 'limitless';
+
+/** Deep profiling path (Sage "Ask More") — persisted for personalization / future AI. */
+export type OnboardingEnergyBaseline = 'high_energy' | 'coffee_dependent' | 'low_energy';
+export type OnboardingScreenDistraction = 'low_screen' | 'average_screen' | 'doomscroll';
+export type OnboardingStressResponse = 'organized' | 'anxious' | 'overwhelmed';
+export type OnboardingPhysicality = 'active' | 'lightly_active' | 'sedentary';
+export type OnboardingPlanningStyle = 'todo_lists' | 'mental_notes' | 'no_planning';
+
+export interface OnboardingDeepProfile {
+  energy: OnboardingEnergyBaseline;
+  screen: OnboardingScreenDistraction;
+  stress: OnboardingStressResponse;
+  physicality: OnboardingPhysicality;
+  planning: OnboardingPlanningStyle;
+}
 
 export type SageChatRole = 'user' | 'sage';
 
@@ -27,6 +51,12 @@ export interface Habit {
   description: string;
   stat: StatType;
   taskType: TaskType;
+  /**
+   * Planned due date (`YYYY-MM-DD`).
+   * - `null` / `undefined` => treat as unscheduled (visible on "today" by default)
+   * - future date => hidden from the default list until opened via "Kalendarz Wypraw"
+   */
+  scheduledDate?: string | null;
   isActive: boolean;
   currentStreak?: number;
   longestStreak?: number;
@@ -40,6 +70,8 @@ export interface Habit {
   isFrozen?: boolean;
   /** Date key (`YYYY-MM-DD`) when freeze was applied. */
   frozenAtDate?: string | null;
+  /** Optional six-axis blend from Oracle (Groq); gameplay still uses `stat`. */
+  oracleStatWeights?: OracleTaskStatWeights;
 }
 
 export interface DragonBuffs {
@@ -70,6 +102,18 @@ export interface GameState {
   lastCompletionDate: string | null;
   allCompletedToday: boolean;
   playerClass: PlayerClass | null;
+  /** Display name from Sage onboarding (Hero tab / future use). */
+  heroDisplayName: string | null;
+  heroGender: HeroGender | null;
+  onboardingWeakness: OnboardingWeakness | null;
+  onboardingCommitment: OnboardingCommitment | null;
+  onboardingEnergyBaseline: OnboardingEnergyBaseline | null;
+  onboardingScreenDistraction: OnboardingScreenDistraction | null;
+  onboardingStressResponse: OnboardingStressResponse | null;
+  onboardingPhysicality: OnboardingPhysicality | null;
+  onboardingPlanningStyle: OnboardingPlanningStyle | null;
+  /** When false, AuthGate sends the player through the Sage onboarding flow. */
+  onboardingComplete: boolean;
   /** Persistent currency — dungeon keys (casino / lochów). */
   dungeonKeys: number;
   /** Completions today (for fatigue XP scaling). */
@@ -127,6 +171,22 @@ export interface GameState {
   sageFocus: SageLifeFocus;
   /** Historia czatu z Mędrcem (persystowana). */
   sageChatMessages: SageChatMessage[];
+  /**
+   * Custom ordering of habit ids per calendar day (`YYYY-MM-DD`) in Planning Center (drag & drop).
+   */
+  planningDayOrderByDate: Record<string, string[]>;
+  /** Castle home quest list: default follows `habits` array order; custom uses `castleQuestOrderIds`. */
+  castleQuestSortMode: 'default' | 'custom';
+  /** Habit ids for custom ordering on the Castle screen (due quests only at render time). */
+  castleQuestOrderIds: string[];
+  /** Consecutive calendar days the app was opened (for daily welcome timeline). */
+  appLoginStreak: number;
+  /** Last calendar day (`YYYY-MM-DD`) the app open was recorded for streak. */
+  lastAppOpenDate: string | null;
+  /** Last day the daily welcome overlay was dismissed; show again when calendar day changes. */
+  lastDailyWelcomeDate: string | null;
+  /** Hero level last confirmed via level-up overlay; when `getPlayerLevel()` exceeds this, show celebration. */
+  lastAcknowledgedPlayerLevel: number;
 }
 
 export interface GameActions {
@@ -139,8 +199,12 @@ export interface GameActions {
     taskType: TaskType;
     icon: string;
     difficulty?: HabitDifficulty;
+    scheduledDate?: string | null;
+    oracleStatWeights?: OracleTaskStatWeights;
   }) => void;
   removeHabit: (habitId: string) => void;
+  /** Allows editing only the planned date without affecting the rest of progress. */
+  setHabitScheduledDate: (habitId: string, scheduledDate: string | null) => void;
   getPlayerLevel: () => number;
   getTotalXP: () => number;
   getXPForNextLevel: () => number;
@@ -149,7 +213,24 @@ export interface GameActions {
   resetDailyHabits: () => void;
   /** Run after midnight / on first screen load: economy rollover + morning gold if eligible. */
   processDailyLogin: () => void;
+  /** Mark today's dragon welcome as seen (closes daily celebration overlay). */
+  dismissDailyWelcome: () => void;
+  /** Sync acknowledged hero level to current (closes level-up overlay). */
+  acknowledgePlayerLevelUp: () => void;
   setPlayerClass: (playerClass: PlayerClass) => void;
+  /** Persists all Sage onboarding choices and opens the realm (tabs). */
+  completeRealmOnboarding: (payload: {
+    playerClass: PlayerClass;
+    heroDisplayName: string;
+    heroGender: HeroGender;
+    sageFocus: SageLifeFocus;
+    weakness: OnboardingWeakness;
+    commitment: OnboardingCommitment;
+    /** Null = short path; full object = completed deep profiling. */
+    deepProfile: OnboardingDeepProfile | null;
+  }) => void;
+  /** Dev-only: clear onboarding flags and profile fields for re-testing the Sage wizard. */
+  devResetOnboarding: () => void;
   /** Unrestricted gold (avoid for gameplay; prefer specific reward actions). */
   addGold: (amount: number) => void;
   /** Raw XP grant (no fatigue); used for Sage epic bonus XP. */
@@ -195,6 +276,10 @@ export interface GameActions {
   appendSageChatMessage: (message: { role: SageChatRole; text: string }) => void;
   /** Nadpisuje lokalny postęp snapshotem z chmury po zalogowaniu. */
   hydrateFromCloud: (snapshot: Partial<GameState>) => void;
+  /** Persists manual task order for a day (Planning Center). */
+  setPlanningDayOrderForDate: (dateKey: string, orderedHabitIds: string[]) => void;
+  setCastleQuestSortMode: (mode: 'default' | 'custom') => void;
+  setCastleQuestOrderIds: (orderedHabitIds: string[]) => void;
 }
 
 export interface SuggestedHabit {

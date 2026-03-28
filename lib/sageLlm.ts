@@ -1,7 +1,5 @@
 import type { PlayerClass, SageChatMessage, SageLifeFocus } from '@/types/game';
-
-const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const DEFAULT_MODEL = 'llama-3.1-8b-instant';
+import { DEFAULT_GROQ_MODEL, postGroqChatCompletion } from '@/lib/groqClient';
 
 /** Odpowiedź przy błędzie sieci / API — spójna z lore gry. */
 export const SAGE_ERROR_ORACLE =
@@ -18,7 +16,8 @@ function classLabel(pl: PlayerClass | null): string {
   if (!pl) return 'nie wybrana (wędrowiec bez herbu)';
   if (pl === 'warrior') return 'Wojownik';
   if (pl === 'hunter') return 'Łowca';
-  return 'Mag';
+  if (pl === 'mage') return 'Mag';
+  return 'Paladyn';
 }
 
 function focusLabel(f: SageLifeFocus): string {
@@ -45,29 +44,13 @@ export function buildSageSystemPrompt(ctx: SageLlmContext): string {
   ].join('\n');
 }
 
-function getGroqApiKey(): string | undefined {
-  const a = process.env.EXPO_PUBLIC_GROQ_API_KEY?.trim();
-  const b = process.env.GROQ_API_KEY?.trim();
-  return a || b || undefined;
-}
-
-type GroqChatResponse = {
-  choices?: { message?: { content?: string } }[];
-  error?: { message?: string };
-};
-
 export async function fetchSageReply(
   history: SageChatMessage[],
   ctx: SageLlmContext,
   options?: { model?: string },
 ): Promise<{ text: string; fromError: boolean }> {
-  const apiKey = getGroqApiKey();
-  if (!apiKey) {
-    return { text: SAGE_ERROR_ORACLE, fromError: true };
-  }
-
   const system = buildSageSystemPrompt(ctx);
-  const apiMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+  const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
     { role: 'system', content: system },
     ...history.map((m) => ({
       role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
@@ -75,35 +58,15 @@ export async function fetchSageReply(
     })),
   ];
 
-  try {
-    const res = await fetch(GROQ_CHAT_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: options?.model ?? DEFAULT_MODEL,
-        messages: apiMessages,
-        temperature: 0.75,
-        max_tokens: 180,
-      }),
-    });
+  const res = await postGroqChatCompletion({
+    model: options?.model ?? DEFAULT_GROQ_MODEL,
+    messages,
+    temperature: 0.75,
+    max_tokens: 180,
+  });
 
-    const data = (await res.json()) as GroqChatResponse;
-
-    if (!res.ok) {
-      console.warn('[sageLlm] Groq error', res.status, data?.error?.message);
-      return { text: SAGE_ERROR_ORACLE, fromError: true };
-    }
-
-    const text = data.choices?.[0]?.message?.content?.trim();
-    if (!text) {
-      return { text: SAGE_ERROR_ORACLE, fromError: true };
-    }
-    return { text, fromError: false };
-  } catch (e) {
-    console.warn('[sageLlm] fetch failed', e);
+  if (!res.ok) {
     return { text: SAGE_ERROR_ORACLE, fromError: true };
   }
+  return { text: res.content, fromError: false };
 }

@@ -9,6 +9,11 @@ import {
   GameActions,
   HabitDifficulty,
   SageChatMessage,
+  type HeroGender,
+  type OnboardingWeakness,
+  type OnboardingCommitment,
+  type OnboardingDeepProfile,
+  type SageLifeFocus,
 } from '@/types/game';
 import { getLevelFromXP, getXPProgressInCurrentLevel } from '@/lib/playerLevel';
 import {
@@ -115,6 +120,7 @@ function ensureHabitDefaults(habit: Habit): Habit {
   return {
     ...habit,
     taskType,
+    scheduledDate: habit.scheduledDate ?? null,
     isActive: habit.isActive ?? true,
     currentStreak: taskType === 'daily' ? (habit.currentStreak ?? 0) : undefined,
     longestStreak: taskType === 'daily' ? (habit.longestStreak ?? 0) : undefined,
@@ -181,6 +187,16 @@ export const useGameStore = create<GameStore>()(
       lastCompletionDate: null,
       allCompletedToday: false,
       playerClass: null,
+      heroDisplayName: null,
+      heroGender: null,
+      onboardingWeakness: null,
+      onboardingCommitment: null,
+      onboardingEnergyBaseline: null,
+      onboardingScreenDistraction: null,
+      onboardingStressResponse: null,
+      onboardingPhysicality: null,
+      onboardingPlanningStyle: null,
+      onboardingComplete: false,
       dungeonKeys: 0,
       tasksCompletedToday: 0,
       goldFromStandardTasksToday: 0,
@@ -208,6 +224,42 @@ export const useGameStore = create<GameStore>()(
       hapticsEnabled: true,
       sageFocus: 'body',
       sageChatMessages: [SAGE_CHAT_WELCOME],
+      planningDayOrderByDate: {},
+      castleQuestSortMode: 'default',
+      castleQuestOrderIds: [],
+      appLoginStreak: 1,
+      lastAppOpenDate: null,
+      lastDailyWelcomeDate: null,
+      lastAcknowledgedPlayerLevel: 1,
+
+      dismissDailyWelcome: () =>
+        set({ lastDailyWelcomeDate: getTodayString() }),
+
+      acknowledgePlayerLevelUp: () =>
+        set({ lastAcknowledgedPlayerLevel: get().getPlayerLevel() }),
+
+      setPlanningDayOrderForDate: (dateKey, orderedHabitIds) => {
+        set((s) => ({
+          planningDayOrderByDate: { ...s.planningDayOrderByDate, [dateKey]: orderedHabitIds },
+        }));
+      },
+
+      setCastleQuestSortMode: (mode) => {
+        set((s) => {
+          if (mode === 'custom') {
+            const activeIds = s.habits.filter((h) => h.isActive).map((h) => h.id);
+            const prev = s.castleQuestOrderIds.filter((id) => activeIds.includes(id));
+            const missing = activeIds.filter((id) => !prev.includes(id));
+            return {
+              castleQuestSortMode: mode,
+              castleQuestOrderIds: [...prev, ...missing],
+            };
+          }
+          return { castleQuestSortMode: mode };
+        });
+      },
+
+      setCastleQuestOrderIds: (orderedHabitIds) => set({ castleQuestOrderIds: orderedHabitIds }),
 
       appendSageChatMessage: ({ role, text }) => {
         const msg: SageChatMessage = {
@@ -220,6 +272,44 @@ export const useGameStore = create<GameStore>()(
       },
 
       setSageFocus: (sageFocus) => set({ sageFocus }),
+      completeRealmOnboarding: (payload: {
+        playerClass: PlayerClass;
+        heroDisplayName: string;
+        heroGender: HeroGender;
+        sageFocus: SageLifeFocus;
+        weakness: OnboardingWeakness;
+        commitment: OnboardingCommitment;
+        deepProfile: OnboardingDeepProfile | null;
+      }) =>
+        set({
+          playerClass: payload.playerClass,
+          heroDisplayName: payload.heroDisplayName.trim().slice(0, 32) || null,
+          heroGender: payload.heroGender,
+          sageFocus: payload.sageFocus,
+          onboardingWeakness: payload.weakness,
+          onboardingCommitment: payload.commitment,
+          onboardingEnergyBaseline: payload.deepProfile?.energy ?? null,
+          onboardingScreenDistraction: payload.deepProfile?.screen ?? null,
+          onboardingStressResponse: payload.deepProfile?.stress ?? null,
+          onboardingPhysicality: payload.deepProfile?.physicality ?? null,
+          onboardingPlanningStyle: payload.deepProfile?.planning ?? null,
+          onboardingComplete: true,
+        }),
+      devResetOnboarding: () =>
+        set({
+          onboardingComplete: false,
+          playerClass: null,
+          heroDisplayName: null,
+          heroGender: null,
+          onboardingWeakness: null,
+          onboardingCommitment: null,
+          onboardingEnergyBaseline: null,
+          onboardingScreenDistraction: null,
+          onboardingStressResponse: null,
+          onboardingPhysicality: null,
+          onboardingPlanningStyle: null,
+          sageFocus: 'body',
+        }),
       hydrateFromCloud: (snapshot) =>
         set((state) => {
           const merged = {
@@ -230,6 +320,18 @@ export const useGameStore = create<GameStore>()(
                 ? snapshot.sageChatMessages
                 : state.sageChatMessages,
             sageFocus: snapshot.sageFocus ?? state.sageFocus,
+            planningDayOrderByDate:
+              snapshot.planningDayOrderByDate && typeof snapshot.planningDayOrderByDate === "object"
+                ? { ...state.planningDayOrderByDate, ...snapshot.planningDayOrderByDate }
+                : state.planningDayOrderByDate,
+            castleQuestSortMode: snapshot.castleQuestSortMode ?? state.castleQuestSortMode,
+            castleQuestOrderIds: Array.isArray(snapshot.castleQuestOrderIds)
+              ? snapshot.castleQuestOrderIds
+              : state.castleQuestOrderIds,
+            onboardingComplete:
+              snapshot.playerClass != null
+                ? true
+                : snapshot.onboardingComplete ?? state.onboardingComplete,
           };
           return merged;
         }),
@@ -267,6 +369,8 @@ export const useGameStore = create<GameStore>()(
           const completedIntelligenceQuests = base.completedIntelligenceQuests + (habit.stat === 'intelligence' ? 1 : 0);
 
           const today = getTodayString();
+          // Planned tasks from the future shouldn't be completable "today".
+          if (habit.scheduledDate && habit.scheduledDate > today) return base;
           const updatedHabits = base.habits.map((h) => {
             if (h.id !== habitId) return h;
             const next = { ...h, completedToday: true };
@@ -407,17 +511,33 @@ export const useGameStore = create<GameStore>()(
         const newHabit: Habit = {
           ...habit,
           taskType: habit.taskType ?? 'daily',
+          scheduledDate: habit.scheduledDate ?? null,
           isActive: true,
           currentStreak: (habit.taskType ?? 'daily') === 'daily' ? 0 : undefined,
           longestStreak: (habit.taskType ?? 'daily') === 'daily' ? 0 : undefined,
           totalCompletions: (habit.taskType ?? 'daily') === 'daily' ? 0 : undefined,
           completionDates: (habit.taskType ?? 'daily') === 'daily' ? [] : undefined,
           difficulty: habit.difficulty ?? 'medium',
+          ...(habit.oracleStatWeights ? { oracleStatWeights: habit.oracleStatWeights } : {}),
           id: `habit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           completedToday: false,
         };
         console.log(`[GameStore] Adding habit: ${newHabit.name} (${newHabit.stat}, ${newHabit.difficulty})`);
-        set((s) => ({ habits: [...s.habits, newHabit] }));
+        set((s) => ({
+          habits: [...s.habits, newHabit],
+          castleQuestOrderIds: [...s.castleQuestOrderIds, newHabit.id],
+        }));
+      },
+
+      setHabitScheduledDate: (habitId: string, scheduledDate: string | null) => {
+        set((state) => {
+          const econ = getEconomyPatchIfNewDay(state) ?? {};
+          const base = { ...state, ...econ };
+          return {
+            ...base,
+            habits: base.habits.map((h) => (h.id === habitId ? { ...h, scheduledDate } : h)),
+          };
+        });
       },
 
       removeHabit: (habitId: string) => {
@@ -437,6 +557,7 @@ export const useGameStore = create<GameStore>()(
               remainingHabits.filter((h) => h.isActive).length > 0 &&
               remainingHabits.filter((h) => h.isActive).every((h) => h.completedToday),
             habitCompletionLog: nextLog,
+            castleQuestOrderIds: base.castleQuestOrderIds.filter((id) => id !== habitId),
           };
         });
       },
@@ -733,6 +854,20 @@ export const useGameStore = create<GameStore>()(
           const today = getTodayString();
           const yesterdayStr = getYesterdayString();
 
+          let appLoginStreak = next.appLoginStreak ?? 1;
+          let lastAppOpenDate = next.lastAppOpenDate;
+          if (lastAppOpenDate !== today) {
+            if (lastAppOpenDate === yesterdayStr) {
+              appLoginStreak = Math.max(1, (next.appLoginStreak ?? 1) + 1);
+            } else if (lastAppOpenDate == null) {
+              appLoginStreak = 1;
+            } else {
+              appLoginStreak = 1;
+            }
+            lastAppOpenDate = today;
+          }
+          next = { ...next, appLoginStreak, lastAppOpenDate };
+
           if (next.lastMorningGoldClaimDate !== today && next.lastCompletionDate === yesterdayStr) {
             next = {
               ...next,
@@ -823,6 +958,18 @@ export const useGameStore = create<GameStore>()(
         hapticsEnabled: state.hapticsEnabled,
         sageFocus: state.sageFocus,
         sageChatMessages: state.sageChatMessages,
+        planningDayOrderByDate: state.planningDayOrderByDate,
+        castleQuestSortMode: state.castleQuestSortMode,
+        castleQuestOrderIds: state.castleQuestOrderIds,
+        appLoginStreak: state.appLoginStreak,
+        lastAppOpenDate: state.lastAppOpenDate,
+        lastDailyWelcomeDate: state.lastDailyWelcomeDate,
+        lastAcknowledgedPlayerLevel: state.lastAcknowledgedPlayerLevel,
+        onboardingEnergyBaseline: state.onboardingEnergyBaseline,
+        onboardingScreenDistraction: state.onboardingScreenDistraction,
+        onboardingStressResponse: state.onboardingStressResponse,
+        onboardingPhysicality: state.onboardingPhysicality,
+        onboardingPlanningStyle: state.onboardingPlanningStyle,
       }),
       merge: (persisted, current) => {
         const p = persisted as Partial<GameState> | undefined;
@@ -839,6 +986,31 @@ export const useGameStore = create<GameStore>()(
           activeDragonId: p?.activeDragonId ?? current.activeDragonId,
           dragonSwitchCooldownUntil: p?.dragonSwitchCooldownUntil ?? current.dragonSwitchCooldownUntil,
           consumables: p?.consumables ?? current.consumables,
+          planningDayOrderByDate: p?.planningDayOrderByDate ?? current.planningDayOrderByDate,
+          castleQuestSortMode: p?.castleQuestSortMode ?? current.castleQuestSortMode,
+          castleQuestOrderIds: Array.isArray(p?.castleQuestOrderIds)
+            ? p.castleQuestOrderIds
+            : current.castleQuestOrderIds,
+          onboardingComplete:
+            p?.onboardingComplete ?? (p?.playerClass ? true : current.onboardingComplete),
+          heroDisplayName: p?.heroDisplayName ?? current.heroDisplayName,
+          heroGender: p?.heroGender ?? current.heroGender,
+          onboardingWeakness: p?.onboardingWeakness ?? current.onboardingWeakness,
+          onboardingCommitment: p?.onboardingCommitment ?? current.onboardingCommitment,
+          onboardingEnergyBaseline: p?.onboardingEnergyBaseline ?? current.onboardingEnergyBaseline,
+          onboardingScreenDistraction: p?.onboardingScreenDistraction ?? current.onboardingScreenDistraction,
+          onboardingStressResponse: p?.onboardingStressResponse ?? current.onboardingStressResponse,
+          onboardingPhysicality: p?.onboardingPhysicality ?? current.onboardingPhysicality,
+          onboardingPlanningStyle: p?.onboardingPlanningStyle ?? current.onboardingPlanningStyle,
+          appLoginStreak: p?.appLoginStreak ?? current.appLoginStreak,
+          lastAppOpenDate: p?.lastAppOpenDate ?? current.lastAppOpenDate,
+          lastDailyWelcomeDate: p?.lastDailyWelcomeDate ?? current.lastDailyWelcomeDate,
+          lastAcknowledgedPlayerLevel:
+            typeof p?.lastAcknowledgedPlayerLevel === 'number'
+              ? p.lastAcknowledgedPlayerLevel
+              : getLevelFromXP(
+                  (p?.strengthXP ?? 0) + (p?.agilityXP ?? 0) + (p?.intelligenceXP ?? 0),
+                ),
         };
       },
     },

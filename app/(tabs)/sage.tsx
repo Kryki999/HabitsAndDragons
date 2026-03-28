@@ -11,16 +11,15 @@ import {
   useWindowDimensions,
   TextInput,
   KeyboardAvoidingView,
+  Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   Flame,
   Scroll,
   Star,
-  MessageCircle,
   Send,
   Settings,
-  Wine,
   FlaskConical,
   Dices,
   ScrollText,
@@ -34,6 +33,10 @@ import { GOLD_SAGE_EPIC_REROLL } from "@/lib/economy";
 import LifeGoalModal from "@/components/LifeGoalModal";
 import { fetchSageReply } from "@/lib/sageLlm";
 import type { SageChatMessage } from "@/types/game";
+
+const HERO_HEIGHT = 268;
+/** Bufor nad klipsem — animacja translateY (±6) nie zostawia pustki przy suficie karty. */
+const HERO_FLOAT_OVERLAP = 8;
 
 function TypingOracle() {
   const dot = useRef(new Animated.Value(0)).current;
@@ -170,12 +173,11 @@ export default function SageScreen() {
       useNativeDriver: true,
     }).start();
 
-    const statLabel = currentQuest.stat.charAt(0).toUpperCase() + currentQuest.stat.slice(1);
     Alert.alert(
       "⚡ Epic Quest completed!",
-      `+50 gold 🪙\n+20 ${statLabel} XP\n\nThe Sage approves your resolve.`,
+      "+50 gold 🪙\n+20 XP\n\nThe Sage approves your resolve.",
     );
-  }, [questCompleted, sageEpicQuestClaimedToday, claimSageEpicQuestReward, currentQuest.stat]);
+  }, [questCompleted, sageEpicQuestClaimedToday, claimSageEpicQuestReward, currentQuest]);
 
   const handleReroll = useCallback(() => {
     if (sageEpicQuestClaimedToday) {
@@ -274,7 +276,12 @@ export default function SageScreen() {
         end={{ x: 0.5, y: 1 }}
       />
 
-      <Animated.View style={[styles.mysticalOrb1, { opacity: sparkleAnim }]} />
+      <Animated.View
+        style={[
+          styles.mysticalOrb1,
+          { opacity: sparkleAnim, top: HERO_HEIGHT + 48 },
+        ]}
+      />
       <Animated.View
         style={[
           styles.mysticalOrb2,
@@ -288,7 +295,7 @@ export default function SageScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: Math.max(insets.top, 12) + 8, paddingBottom: insets.bottom + 32 },
+          { paddingTop: 0, paddingBottom: insets.bottom + 32 },
         ]}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
@@ -296,103 +303,126 @@ export default function SageScreen() {
       >
         <Animated.View
           style={[
-            styles.headerRow,
-            {
-              opacity: headerAnim,
-              transform: [{ translateY: floatAnim }],
-            },
+            styles.sageConversationShell,
+            { width: winW, marginHorizontal: -20, opacity: headerAnim },
           ]}
         >
-          <View style={styles.headerLeft}>
-            <LinearGradient colors={["#3d2418", "#2a1810"]} style={styles.tavernEmblem}>
-              <Wine size={26} color="#e8a060" />
-            </LinearGradient>
-            <View style={styles.headerTitles}>
-              <Text style={styles.title}>Sage Tavern</Text>
-              <View style={styles.subtitleRow}>
+          <View style={styles.heroParallaxClip}>
+            <Animated.View
+              style={[styles.heroFloatLayer, { transform: [{ translateY: floatAnim }] }]}
+            >
+              <View style={styles.heroImageWrap}>
+                <Image
+                  source={require("@/assets/images/sage_tavern_bg.png")}
+                  style={styles.heroImage}
+                  resizeMode="cover"
+                  accessibilityIgnoresInvertColors
+                />
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={[
+                    "transparent",
+                    "rgba(13,10,20,0.35)",
+                    "rgba(13,10,20,0.75)",
+                    Colors.dark.surface + "ee",
+                  ]}
+                  locations={[0, 0.35, 0.72, 1]}
+                  style={styles.heroFade}
+                />
+              </View>
+            </Animated.View>
+          </View>
+
+          <View style={styles.heroChromeOverlay} pointerEvents="box-none">
+            <Pressable
+              onPress={() => {
+                selectionAsync();
+                setLifeGoalOpen(true);
+              }}
+              style={({ pressed }) => [
+                styles.heroSettingsBtn,
+                { top: 4 },
+                pressed && styles.settingsBtnPressed,
+              ]}
+              accessibilityLabel="Settings and personalization"
+              hitSlop={10}
+            >
+              <LinearGradient colors={["rgba(26,18,40,0.92)", "#1a1528"]} style={styles.settingsBtnInner}>
+                <Settings size={22} color={Colors.dark.gold} />
+              </LinearGradient>
+            </Pressable>
+            <View style={styles.heroCaption} pointerEvents="none">
+              <Text style={styles.heroTitle}>Sage Tavern</Text>
+              <View style={styles.heroSubtitleRow}>
                 <FlaskConical size={12} color={Colors.dark.textMuted} />
-                <Text style={styles.subtitle}>Elixirs, candles and ancient maps</Text>
+                <Text style={styles.heroSubtitle} numberOfLines={2}>
+                  Elixirs, candles and ancient maps
+                </Text>
               </View>
             </View>
           </View>
-          <Pressable
-            onPress={() => {
-              selectionAsync();
-              setLifeGoalOpen(true);
-            }}
-            style={({ pressed }) => [styles.settingsBtn, pressed && styles.settingsBtnPressed]}
-            accessibilityLabel="Settings and personalization"
-          >
-            <LinearGradient colors={["#2a2038", "#1a1528"]} style={styles.settingsBtnInner}>
-              <Settings size={22} color={Colors.dark.gold} />
-            </LinearGradient>
-          </Pressable>
-        </Animated.View>
 
-        <View style={[styles.sectionCard, styles.chatSection]}>
-          <View style={styles.chatHeader}>
-            <MessageCircle size={14} color={Colors.dark.purple} />
-            <Text style={styles.chatHeaderText}>SAGE CHAT</Text>
-          </View>
-          <ScrollView
-            style={styles.chatWindowScroll}
-            contentContainerStyle={styles.chatWindow}
-            nestedScrollEnabled
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {sageChatMessages.map((msg) => (
-              <ChatBubble key={msg.id} message={msg} />
-            ))}
-            {isSageReplying ? <TypingOracle /> : null}
-          </ScrollView>
+          <View style={styles.sageChatBody}>
+            <ScrollView
+              style={styles.chatWindowScroll}
+              contentContainerStyle={styles.chatWindow}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {sageChatMessages.map((msg) => (
+                <ChatBubble key={msg.id} message={msg} />
+              ))}
+              {isSageReplying ? <TypingOracle /> : null}
+            </ScrollView>
 
-          <View style={styles.chatInputOuter}>
-            <LinearGradient colors={["#2a1a10", "#1f1528"]} style={styles.chatInputGlow}>
-              <View style={styles.chatInputRow}>
-                <TextInput
-                  style={styles.chatTextInput}
-                  placeholder="Write a message to the Sage..."
-                  placeholderTextColor={Colors.dark.textMuted}
-                  value={chatInput}
-                  onChangeText={setChatInput}
-                  editable={!isSageReplying}
-                  multiline
-                  maxLength={2000}
-                  returnKeyType="default"
-                  blurOnSubmit={false}
-                />
-                <Pressable
-                  onPress={handleSendSageMessage}
-                  disabled={isSageReplying || !chatInput.trim()}
-                  style={({ pressed }) => [
-                    styles.sendBtn,
-                    (isSageReplying || !chatInput.trim()) && styles.sendBtnDisabled,
-                    pressed && !(isSageReplying || !chatInput.trim()) && styles.sendBtnPressed,
-                  ]}
-                  accessibilityLabel="Send message"
-                >
-                  <LinearGradient
-                    colors={
-                      isSageReplying || !chatInput.trim()
-                        ? ["#2a2535", "#1e1a28"]
-                        : [...Colors.gradients.gold]
-                    }
-                    style={styles.sendBtnInner}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
+            <View style={styles.chatInputOuter}>
+              <LinearGradient colors={["#2a1a10", "#1f1528"]} style={styles.chatInputGlow}>
+                <View style={styles.chatInputRow}>
+                  <TextInput
+                    style={styles.chatTextInput}
+                    placeholder="Write a message to the Sage..."
+                    placeholderTextColor={Colors.dark.textMuted}
+                    value={chatInput}
+                    onChangeText={setChatInput}
+                    editable={!isSageReplying}
+                    multiline
+                    maxLength={2000}
+                    returnKeyType="default"
+                    blurOnSubmit={false}
+                  />
+                  <Pressable
+                    onPress={handleSendSageMessage}
+                    disabled={isSageReplying || !chatInput.trim()}
+                    style={({ pressed }) => [
+                      styles.sendBtn,
+                      (isSageReplying || !chatInput.trim()) && styles.sendBtnDisabled,
+                      pressed && !(isSageReplying || !chatInput.trim()) && styles.sendBtnPressed,
+                    ]}
+                    accessibilityLabel="Send message"
                   >
-                    <Send
-                      size={20}
-                      color={isSageReplying || !chatInput.trim() ? Colors.dark.textMuted : "#1a1228"}
-                    />
-                  </LinearGradient>
-                </Pressable>
-              </View>
-              <Text style={styles.chatInputHint}>Send and receive a short guidance reply.</Text>
-            </LinearGradient>
+                    <LinearGradient
+                      colors={
+                        isSageReplying || !chatInput.trim()
+                          ? ["#2a2535", "#1e1a28"]
+                          : [...Colors.gradients.gold]
+                      }
+                      style={styles.sendBtnInner}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Send
+                        size={20}
+                        color={isSageReplying || !chatInput.trim() ? Colors.dark.textMuted : "#1a1228"}
+                      />
+                    </LinearGradient>
+                  </Pressable>
+                </View>
+                <Text style={styles.chatInputHint}>Send and receive a short guidance reply.</Text>
+              </LinearGradient>
+            </View>
           </View>
-        </View>
+        </Animated.View>
 
         <View style={[styles.sectionCard, styles.questSection]}>
           <View style={styles.questHeader}>
@@ -419,9 +449,7 @@ export default function SageScreen() {
                     <Text style={styles.pickEmoji}>{q.emoji}</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.pickText}>{q.text}</Text>
-                      <Text style={styles.pickStat}>
-                        +20 {q.stat.charAt(0).toUpperCase() + q.stat.slice(1)} XP
-                      </Text>
+                      <Text style={styles.pickStat}>+20 XP</Text>
                     </View>
                   </LinearGradient>
                 </Pressable>
@@ -453,10 +481,7 @@ export default function SageScreen() {
                       </View>
                       <View style={styles.questRewardChip}>
                         <Flame size={11} color={Colors.dark.fire} />
-                        <Text style={[styles.questRewardText, { color: Colors.dark.fire }]}>
-                          +20{" "}
-                          {currentQuest.stat.charAt(0).toUpperCase() + currentQuest.stat.slice(1)} XP
-                        </Text>
+                        <Text style={[styles.questRewardText, { color: Colors.dark.fire }]}>+20 XP</Text>
                       </View>
                     </View>
                   </View>
@@ -613,7 +638,6 @@ const styles = StyleSheet.create({
   },
   mysticalOrb1: {
     position: "absolute" as const,
-    top: 80,
     right: 20,
     width: 140,
     height: 140,
@@ -629,57 +653,99 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     backgroundColor: "#2d5a4a12",
   },
-  headerRow: {
-    flexDirection: "row" as const,
-    alignItems: "flex-start" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: 22,
+  heroParallaxClip: {
+    height: HERO_HEIGHT,
+    overflow: "hidden" as const,
+    backgroundColor: Colors.dark.surface,
   },
-  headerLeft: {
-    flexDirection: "row" as const,
-    flex: 1,
-    marginRight: 12,
-    gap: 12,
+  heroChromeOverlay: {
+    position: "absolute" as const,
+    left: 0,
+    right: 0,
+    top: 0,
+    height: HERO_HEIGHT,
+    zIndex: 10,
   },
-  tavernEmblem: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
+  heroFloatLayer: {
+    marginTop: -HERO_FLOAT_OVERLAP,
+    height: HERO_HEIGHT + HERO_FLOAT_OVERLAP,
+  },
+  sageConversationShell: {
+    position: "relative" as const,
+    marginBottom: 20,
+    borderRadius: 20,
+    overflow: "hidden" as const,
     borderWidth: 1,
-    borderColor: "#5c3d2818",
+    borderColor: Colors.dark.border + "77",
+    backgroundColor: Colors.dark.surface + "99",
     ...Platform.select({
       ios: {
-        shadowColor: "#e8a060",
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.35,
-        shadowRadius: 12,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 14 },
+        shadowOpacity: 0.42,
+        shadowRadius: 22,
       },
-      android: { elevation: 8 },
+      android: { elevation: 10 },
       default: {},
     }),
   },
-  headerTitles: {
-    flex: 1,
-    justifyContent: "center" as const,
+  sageChatBody: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
+    backgroundColor: Colors.dark.surface + "aa",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.06)",
   },
-  title: {
-    fontSize: 24,
+  heroImageWrap: {
+    width: "100%" as const,
+    height: HERO_HEIGHT + HERO_FLOAT_OVERLAP,
+    position: "relative" as const,
+    backgroundColor: Colors.dark.background,
+  },
+  heroImage: {
+    width: "100%" as const,
+    height: HERO_HEIGHT + HERO_FLOAT_OVERLAP,
+  },
+  heroFade: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroSettingsBtn: {
+    position: "absolute" as const,
+    right: 16,
+    zIndex: 4,
+    borderRadius: 16,
+    overflow: "hidden" as const,
+  },
+  heroCaption: {
+    position: "absolute" as const,
+    left: 16,
+    right: 72,
+    bottom: 14,
+    zIndex: 3,
+  },
+  heroTitle: {
+    fontSize: 26,
     fontWeight: "800" as const,
     color: Colors.dark.text,
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
+    textShadowColor: "rgba(0,0,0,0.85)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 12,
   },
-  subtitleRow: {
+  heroSubtitleRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 6,
-    marginTop: 4,
+    marginTop: 6,
   },
-  subtitle: {
+  heroSubtitle: {
     fontSize: 12,
-    color: Colors.dark.textMuted,
+    color: "rgba(240,230,211,0.88)",
     flex: 1,
+    textShadowColor: "rgba(0,0,0,0.75)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
   settingsBtn: {
     borderRadius: 16,
@@ -696,21 +762,6 @@ const styles = StyleSheet.create({
     justifyContent: "center" as const,
     borderWidth: 1,
     borderColor: Colors.dark.gold + "44",
-  },
-  chatSection: {
-    marginBottom: 20,
-  },
-  chatHeader: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 8,
-    marginBottom: 10,
-  },
-  chatHeaderText: {
-    fontSize: 11,
-    fontWeight: "800" as const,
-    color: Colors.dark.textMuted,
-    letterSpacing: 1.5,
   },
   chatWindowScroll: {
     maxHeight: 300,
