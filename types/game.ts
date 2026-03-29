@@ -187,6 +187,19 @@ export interface GameState {
   lastDailyWelcomeDate: string | null;
   /** Hero level last confirmed via level-up overlay; when `getPlayerLevel()` exceeds this, show celebration. */
   lastAcknowledgedPlayerLevel: number;
+  /**
+   * Calendar days (`YYYY-MM-DD`) on which the player saved a non-empty daily reflection (local flag after sync).
+   * Used by Hero daily rituals; optional cloud parity later.
+   */
+  reflectionSavedDateKeys: Record<string, true>;
+  /** True after first successful gold purchase in D&D (dungeon key or elixir). */
+  heroShopPurchaseEver: boolean;
+  /** Calendar day for which `heroDailyQuestClaimedIds` applies. */
+  heroDailyQuestClaimsDate: string | null;
+  /** Daily ritual quest ids claimed for `heroDailyQuestClaimsDate`. */
+  heroDailyQuestClaimedIds: string[];
+  /** One-time epic milestone quest ids already claimed. */
+  heroEpicMilestoneClaimedIds: string[];
 }
 
 export interface GameActions {
@@ -280,6 +293,20 @@ export interface GameActions {
   setPlanningDayOrderForDate: (dateKey: string, orderedHabitIds: string[]) => void;
   setCastleQuestSortMode: (mode: 'default' | 'custom') => void;
   setCastleQuestOrderIds: (orderedHabitIds: string[]) => void;
+  /** Mark a reflection as saved for a date (after successful cloud upsert). */
+  recordHeroReflectionSaved: (dateKey: string) => void;
+  /** Claim Hero tab daily ritual reward (rollover by calendar day). Returns false if already claimed or invalid. */
+  claimHeroDailyQuest: (
+    questId: string,
+    goldReward: number,
+    xpReward?: { stat: StatType; amount: number },
+  ) => boolean;
+  /** Claim one-time epic milestone. Returns false if already claimed. */
+  claimHeroEpicMilestone: (
+    questId: string,
+    goldReward: number,
+    xpReward?: { stat: StatType; amount: number },
+  ) => boolean;
 }
 
 export interface SuggestedHabit {

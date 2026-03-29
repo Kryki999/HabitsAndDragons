@@ -4,18 +4,18 @@ import {
   Text,
   StyleSheet,
   Animated,
-  Platform,
   ScrollView,
   TextInput,
   Pressable,
   Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Castle, Crown, Flame, Shirt, Sparkles, Trophy, UserPlus } from "lucide-react-native";
+import { Crown, Shirt, Sparkles, Trophy, UserPlus } from "lucide-react-native";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
-import { REALM_MOCK_HEROES, type RealmMockHero } from "@/constants/realmMockHeroes";
+import { REALM_MOCK_HEROES } from "@/constants/realmMockHeroes";
+import type { RealmMockHero } from "@/constants/realmMockHeroes";
 import { useGameStore } from "@/store/gameStore";
 import type { PlayerClass } from "@/types/game";
 import RarityItemSlot from "@/components/RarityItemSlot";
@@ -25,6 +25,16 @@ import { LOOT_RARITY_COLOR } from "@/constants/lootRarity";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { getLevelFromXP } from "@/lib/playerLevel";
+import SectionBanner from "@/components/SectionBanner";
+
+const KINGDOM_BANNER_BG = require("@/assets/images/kingdom_bg.png");
+import KingdomRankingSection, { KingdomRankedRow } from "@/components/KingdomRankingSection";
+import PlayerProfileModal from "@/components/PlayerProfileModal";
+import {
+  buildKingdomLeaderboard,
+  entryToProfileSubject,
+  type KingdomProfileSubject,
+} from "@/lib/kingdomLeaderboard";
 
 type FriendRow = {
   user_id: string;
@@ -37,6 +47,8 @@ type FriendRow = {
     intelligenceXP?: number;
   } | null;
 };
+
+type AllyHero = RealmMockHero & { totalXP: number };
 
 const CLASS_LABEL: Record<PlayerClass, string> = {
   warrior: "Warrior",
@@ -52,16 +64,7 @@ const CLASS_COLOR: Record<PlayerClass, string> = {
   paladin: Colors.dark.gold,
 };
 
-function computePlayerRank(playerStreak: number): number {
-  const combined = [
-    { streak: playerStreak, isPlayer: true },
-    ...REALM_MOCK_HEROES.map((h) => ({ streak: h.streak, isPlayer: false })),
-  ];
-  combined.sort((a, b) => b.streak - a.streak);
-  return combined.findIndex((r) => r.isPlayer) + 1;
-}
-
-function RealmPlayerSticky({
+function RealmPlayerCard({
   rank,
   streak,
   level,
@@ -101,21 +104,21 @@ function RealmPlayerSticky({
   return (
     <Animated.View
       style={[
-        styles.stickyInner,
+        styles.playerCardInner,
         {
           opacity: entryAnim,
           transform: [{ translateY: entryAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
         },
       ]}
     >
-      <Animated.View style={[styles.stickyGlow, { opacity: pulse }]} />
+      <Animated.View style={[styles.playerCardGlow, { opacity: pulse }]} />
       <LinearGradient
         colors={["#1e1830", "#151020", "#120e1c"]}
-        style={styles.stickyCard}
+        style={styles.playerCardSurface}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
-        <View style={styles.stickyHeaderRow}>
+        <View style={styles.playerCardHeaderRow}>
           <View style={styles.youRankPill}>
             <Trophy size={13} color={Colors.dark.gold} />
             <Text style={styles.youRankText}>#{rank}</Text>
@@ -128,13 +131,13 @@ function RealmPlayerSticky({
           </View>
         </View>
 
-        <View style={styles.stickyStatsRow}>
+        <View style={styles.playerCardStatsRow}>
           <View style={styles.statChip}>
             <Crown size={14} color={Colors.dark.gold} />
             <Text style={styles.statChipVal}>Lv.{level}</Text>
           </View>
           <View style={styles.statChip}>
-            <Text style={styles.statEmoji}>????</Text>
+            <Text style={styles.statEmoji}>🔥</Text>
             <Text style={[styles.statChipVal, { color: Colors.dark.fire }]}>{streak}</Text>
           </View>
         </View>
@@ -149,7 +152,7 @@ function RealmPlayerSticky({
             <RarityItemSlot
               itemId={outfitId}
               size={64}
-              emptyLabel="???"
+              emptyLabel="—"
               onPress={outfitId ? () => onInspectItem(outfitId) : undefined}
             />
           </View>
@@ -161,7 +164,7 @@ function RealmPlayerSticky({
             <RarityItemSlot
               itemId={relicId}
               size={64}
-              emptyLabel="???"
+              emptyLabel="—"
               onPress={relicId ? () => onInspectItem(relicId) : undefined}
             />
           </View>
@@ -171,97 +174,15 @@ function RealmPlayerSticky({
   );
 }
 
-function RealmRivalRow({
-  hero,
-  rank,
-  onInspectItem,
-}: {
-  hero: RealmMockHero;
-  rank: number;
-  onInspectItem: (itemId: string) => void;
-}) {
-  const entryAnim = useRef(new Animated.Value(0)).current;
-  const classColor = CLASS_COLOR[hero.playerClass];
-  const classLabel = CLASS_LABEL[hero.playerClass];
-
-  useEffect(() => {
-    Animated.spring(entryAnim, {
-      toValue: 1,
-      friction: 8,
-      tension: 48,
-      useNativeDriver: true,
-    }).start();
-  }, [entryAnim]);
-
-  return (
-    <Animated.View style={{ opacity: entryAnim }}>
-      <View style={styles.rivalCard}>
-        <LinearGradient
-          colors={[Colors.dark.surface + "ff", Colors.dark.background + "ee"]}
-          style={styles.rivalGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <View style={styles.rankCol}>
-            <Text style={styles.rankNum}>#{rank}</Text>
-          </View>
-          <View style={styles.rivalMid}>
-            <View style={styles.rivalNameRow}>
-              <Text style={styles.rivalName} numberOfLines={1}>
-                {hero.name}
-              </Text>
-              <View style={[styles.miniClass, { backgroundColor: classColor + "18" }]}>
-                <Text style={[styles.miniClassText, { color: classColor }]}>{classLabel}</Text>
-              </View>
-            </View>
-            <View style={styles.rivalMeta}>
-              <Text style={styles.rivalMetaText}>
-                Lv.<Text style={{ color: Colors.dark.gold, fontWeight: "800" }}>{hero.level}</Text>
-              </Text>
-              <Text style={styles.streakSep}>??</Text>
-              <Text style={styles.rivalMetaText}>
-                ???? <Text style={{ color: Colors.dark.fire, fontWeight: "800" }}>{hero.streak}</Text>
-              </Text>
-            </View>
-          </View>
-          <View style={styles.rivalGear}>
-            <RarityItemSlot
-              itemId={hero.outfitItemId}
-              size={44}
-              emptyLabel="???"
-              onPress={
-                hero.outfitItemId
-                  ? () => {
-                      onInspectItem(hero.outfitItemId!);
-                    }
-                  : undefined
-              }
-            />
-            <RarityItemSlot
-              itemId={hero.relicItemId}
-              size={44}
-              emptyLabel="???"
-              onPress={
-                hero.relicItemId
-                  ? () => {
-                      onInspectItem(hero.relicItemId!);
-                    }
-                  : undefined
-              }
-            />
-          </View>
-        </LinearGradient>
-      </View>
-    </Animated.View>
-  );
-}
-
 export default function KingdomScreen() {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, playerId } = useAuth();
   const streak = useGameStore((s) => s.streak);
   const playerClass = useGameStore((s) => s.playerClass);
   const getPlayerLevel = useGameStore((s) => s.getPlayerLevel);
+  const strengthXP = useGameStore((s) => s.strengthXP);
+  const agilityXP = useGameStore((s) => s.agilityXP);
+  const intelligenceXP = useGameStore((s) => s.intelligenceXP);
   const equippedOutfitId = useGameStore((s) => s.equippedOutfitId);
   const equippedRelicId = useGameStore((s) => s.equippedRelicId);
 
@@ -269,6 +190,7 @@ export default function KingdomScreen() {
   const [friendPlayerId, setFriendPlayerId] = useState("");
   const [friendBusy, setFriendBusy] = useState(false);
   const [friends, setFriends] = useState<FriendRow[]>([]);
+  const [profileSubject, setProfileSubject] = useState<KingdomProfileSubject | null>(null);
 
   const openLootItem = useCallback((itemId: string) => {
     const entry = resolveLootItemById(itemId);
@@ -277,23 +199,37 @@ export default function KingdomScreen() {
     setLootPayload({ type: "item", entry });
   }, []);
 
-  const headerAnim = useRef(new Animated.Value(0)).current;
   const orbAnim = useRef(new Animated.Value(0.2)).current;
 
   const level = getPlayerLevel();
   const classLabel = playerClass ? CLASS_LABEL[playerClass] : "Adventurer";
   const classColor = playerClass ? CLASS_COLOR[playerClass] : Colors.dark.gold;
+  const totalXP = strengthXP + agilityXP + intelligenceXP;
+  const displayName = playerId?.trim() || "Traveler";
 
-  const sortedHeroes = useMemo(
-    () => [...REALM_MOCK_HEROES].sort((a, b) => b.streak - a.streak),
-    [],
+  const leaderboard = useMemo(
+    () =>
+      buildKingdomLeaderboard(
+        {
+          name: displayName,
+          level,
+          streak,
+          playerClass,
+          totalXP,
+        },
+        REALM_MOCK_HEROES,
+      ),
+    [displayName, level, streak, playerClass, totalXP],
   );
 
-  const playerRank = useMemo(() => computePlayerRank(streak), [streak]);
-  const mappedFriends = useMemo<RealmMockHero[]>(() => {
+  const playerRankDisplay = leaderboard.find((e) => e.isPlayer)?.rank ?? 1;
+
+  const mappedFriends = useMemo<AllyHero[]>(() => {
     return friends.map((f) => {
       const gs = f.game_state ?? {};
-      const lvl = getLevelFromXP((gs.strengthXP ?? 0) + (gs.agilityXP ?? 0) + (gs.intelligenceXP ?? 0));
+      const txp =
+        (gs.strengthXP ?? 0) + (gs.agilityXP ?? 0) + (gs.intelligenceXP ?? 0);
+      const lvl = getLevelFromXP(txp);
       return {
         id: `friend_${f.user_id}`,
         name: f.player_id ?? "Unknown",
@@ -302,6 +238,7 @@ export default function KingdomScreen() {
         streak: gs.streak ?? 0,
         outfitItemId: null,
         relicItemId: null,
+        totalXP: txp,
       };
     });
   }, [friends]);
@@ -338,19 +275,13 @@ export default function KingdomScreen() {
   }, [user?.id]);
 
   useEffect(() => {
-    Animated.spring(headerAnim, {
-      toValue: 1,
-      friction: 6,
-      tension: 50,
-      useNativeDriver: true,
-    }).start();
     Animated.loop(
       Animated.sequence([
         Animated.timing(orbAnim, { toValue: 0.5, duration: 3200, useNativeDriver: true }),
         Animated.timing(orbAnim, { toValue: 0.2, duration: 3200, useNativeDriver: true }),
       ]),
     ).start();
-  }, [headerAnim, orbAnim]);
+  }, [orbAnim]);
 
   useEffect(() => {
     loadFriends();
@@ -385,7 +316,7 @@ export default function KingdomScreen() {
       { onConflict: "requester_id,addressee_id" },
     );
     if (error) {
-      Alert.alert("B??d", error.message);
+      Alert.alert("Error", error.message);
       setFriendBusy(false);
       return;
     }
@@ -393,6 +324,10 @@ export default function KingdomScreen() {
     await loadFriends();
     setFriendBusy(false);
   }, [friendBusy, friendPlayerId, loadFriends, user?.id]);
+
+  const openProfile = useCallback((s: KingdomProfileSubject) => {
+    setProfileSubject(s);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -407,13 +342,15 @@ export default function KingdomScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 28) }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: Math.max(insets.top, 10), paddingBottom: Math.max(insets.bottom, 28) },
+        ]}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[0]}
       >
-        <View style={[styles.stickyWrap, { paddingTop: 10, backgroundColor: Colors.dark.background }]}>
-          <RealmPlayerSticky
-            rank={playerRank}
+        <View style={styles.playerCardWrap}>
+          <RealmPlayerCard
+            rank={playerRankDisplay}
             streak={streak}
             level={level}
             classLabel={classLabel}
@@ -424,44 +361,8 @@ export default function KingdomScreen() {
           />
         </View>
 
-        <Animated.View
-          style={[
-            styles.headerBlock,
-            {
-              opacity: headerAnim,
-              transform: [
-                { translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) },
-              ],
-            },
-          ]}
-        >
-          <View style={styles.titleRow}>
-            <LinearGradient
-              colors={[Colors.dark.emerald + "cc", "#1a4a38"]}
-              style={styles.kingdomEmblem}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Castle size={24} color="#fff" />
-            </LinearGradient>
-            <View>
-              <Text style={styles.heroTitle}>Kingdom</Text>
-              <Text style={styles.heroSubtitle}>Top Heroes ? Mock leaderboard</Text>
-            </View>
-          </View>
-        </Animated.View>
-
-        <View style={styles.sectionBar}>
-          <Flame size={15} color={Colors.dark.fire} />
-          <Text style={styles.sectionTitle}>Top Heroes</Text>
-        </View>
-
-        {sortedHeroes.map((hero, i) => (
-          <RealmRivalRow key={hero.id} hero={hero} rank={i + 1} onInspectItem={openLootItem} />
-        ))}
-
         <View style={styles.socialCard}>
-          <Text style={styles.socialTitle}>Add Ally</Text>
+          <Text style={styles.socialTitle}>Add friend</Text>
           <View style={styles.socialRow}>
             <TextInput
               style={styles.socialInput}
@@ -475,28 +376,53 @@ export default function KingdomScreen() {
             <Pressable
               onPress={handleAddFriend}
               disabled={friendBusy || !friendPlayerId.trim()}
-              style={({ pressed }) => [styles.socialBtn, pressed && styles.socialBtnPressed]}
+              style={({ pressed }) => [
+                styles.addFriendBtn,
+                (friendBusy || !friendPlayerId.trim()) && styles.addFriendBtnDisabled,
+                pressed && !(friendBusy || !friendPlayerId.trim()) && styles.addFriendBtnPressed,
+              ]}
             >
-              <UserPlus size={14} color={Colors.dark.gold} />
+              <UserPlus size={16} color={Colors.dark.gold} strokeWidth={2.2} />
+              <Text style={styles.addFriendBtnLabel}>Add Friend</Text>
             </Pressable>
           </View>
         </View>
 
-        <View style={styles.sectionBar}>
-          <Flame size={15} color={Colors.dark.fire} />
-          <Text style={styles.sectionTitle}>Allies</Text>
-        </View>
+        <Text style={styles.alliesHeading}>Allies</Text>
         {mappedFriends.length > 0 ? (
           mappedFriends.map((hero, i) => (
-            <RealmRivalRow key={hero.id} hero={hero} rank={i + 1} onInspectItem={openLootItem} />
+            <KingdomRankedRow
+              key={hero.id}
+              rank={i + 1}
+              name={hero.name}
+              level={hero.level}
+              playerClass={hero.playerClass}
+              medalTier={0}
+              onPress={() =>
+                openProfile({
+                  name: hero.name,
+                  level: hero.level,
+                  streak: hero.streak,
+                  playerClass: hero.playerClass,
+                  totalXP: hero.totalXP,
+                })
+              }
+            />
           ))
         ) : (
           <Text style={styles.noFriendsText}>No allies in your kingdom yet. Add your first friend.</Text>
         )}
 
+        <SectionBanner title="Kingdom" source={KINGDOM_BANNER_BG} />
+
+        <KingdomRankingSection
+          entries={leaderboard}
+          onSelectEntry={(e) => openProfile(entryToProfileSubject(e))}
+        />
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            The mist hides countless banners? Friends & live ranks are coming in a future age.
+            Mock rivals fill the board—your true banner rises with every streak you keep.
           </Text>
         </View>
       </ScrollView>
@@ -508,6 +434,12 @@ export default function KingdomScreen() {
         accentHint={
           lootPayload?.type === "item" ? LOOT_RARITY_COLOR[lootPayload.entry.rarity] : undefined
         }
+      />
+
+      <PlayerProfileModal
+        visible={profileSubject !== null}
+        subject={profileSubject}
+        onClose={() => setProfileSubject(null)}
       />
     </View>
   );
@@ -524,29 +456,26 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
   },
-  stickyWrap: {
-    paddingHorizontal: 4,
-    paddingBottom: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.dark.border + "66",
+  playerCardWrap: {
+    marginBottom: 16,
   },
-  stickyInner: {
+  playerCardInner: {
     position: "relative",
     borderRadius: 18,
     overflow: "hidden",
   },
-  stickyGlow: {
+  playerCardGlow: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: Colors.dark.gold + "10",
     borderRadius: 18,
   },
-  stickyCard: {
+  playerCardSurface: {
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.dark.gold + "35",
   },
-  stickyHeaderRow: {
+  playerCardHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -593,7 +522,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
   },
-  stickyStatsRow: {
+  playerCardStatsRow: {
     flexDirection: "row",
     gap: 14,
     marginBottom: 14,
@@ -640,60 +569,18 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
-  headerBlock: {
-    marginTop: 18,
-    marginBottom: 8,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-  kingdomEmblem: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: Colors.dark.emerald,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35,
-        shadowRadius: 8,
-      },
-      android: { elevation: 6 },
-      default: {},
-    }),
-  },
-  heroTitle: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: Colors.dark.text,
-    letterSpacing: 0.4,
-  },
-  heroSubtitle: {
-    fontSize: 12,
-    color: Colors.dark.textMuted,
-    marginTop: 2,
-  },
-  sectionBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  sectionTitle: {
+  alliesHeading: {
     fontSize: 11,
     fontWeight: "800",
     color: Colors.dark.textMuted,
     letterSpacing: 1.6,
     textTransform: "uppercase",
+    marginBottom: 12,
+    marginTop: 4,
   },
   socialCard: {
-    marginTop: 8,
-    marginBottom: 14,
+    marginTop: 0,
+    marginBottom: 18,
     borderRadius: 14,
     padding: 12,
     borderWidth: 1,
@@ -722,93 +609,34 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 13,
   },
-  socialBtn: {
-    width: 42,
-    height: 42,
+  addFriendBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.dark.gold + "66",
     backgroundColor: Colors.dark.surface,
-    alignItems: "center",
-    justifyContent: "center",
   },
-  socialBtnPressed: {
+  addFriendBtnLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: Colors.dark.gold,
+  },
+  addFriendBtnPressed: {
     opacity: 0.9,
+  },
+  addFriendBtnDisabled: {
+    opacity: 0.42,
   },
   noFriendsText: {
     fontSize: 12,
     color: Colors.dark.textMuted,
     fontStyle: "italic",
-    marginBottom: 6,
-  },
-  rivalCard: {
     marginBottom: 10,
-    borderRadius: 14,
-    overflow: "hidden",
-  },
-  rivalGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.dark.border + "88",
-  },
-  rankCol: {
-    width: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rankNum: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: Colors.dark.gold,
-  },
-  rivalMid: {
-    flex: 1,
-    minWidth: 0,
-    marginHorizontal: 8,
-  },
-  rivalNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 4,
-  },
-  rivalName: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: "800",
-    color: Colors.dark.text,
-  },
-  miniClass: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  miniClassText: {
-    fontSize: 9,
-    fontWeight: "800",
-  },
-  rivalMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  rivalMetaText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: Colors.dark.textSecondary,
-  },
-  streakSep: {
-    color: Colors.dark.textMuted,
-    fontSize: 12,
-  },
-  rivalGear: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
   },
   glowOrb1: {
     position: "absolute",

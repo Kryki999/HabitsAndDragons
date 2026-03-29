@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X, ChevronDown, ChevronUp } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import ActivityHeatmap from "@/components/ActivityHeatmap";
+import DayQuestLogReadOnly from "@/components/DayQuestLogReadOnly";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import { useGameStore } from "@/store/gameStore";
 import type { Habit } from "@/types/game";
@@ -60,11 +61,6 @@ export default function ActivityChroniclesModal({
     if (!trailHabit) return {};
     return habitActivityMap(trailHabit);
   }, [trailHabit]);
-
-  const generalDayTasks = useMemo(() => {
-    if (!generalSelectedDate) return [];
-    return completedHabitNamesByDate[generalSelectedDate] ?? [];
-  }, [completedHabitNamesByDate, generalSelectedDate]);
 
   const habitDayTasks = useMemo(() => {
     if (!habitSelectedDate || !trailHabit) return [];
@@ -124,21 +120,13 @@ export default function ActivityChroniclesModal({
             <View style={styles.dayCard}>
               <Text style={styles.dayCardTitle}>
                 {generalSelectedDate
-                  ? `Quest log — ${generalSelectedDate}`
-                  : "Tap a square on the map to inspect that day"}
+                  ? "That day's quest log"
+                  : "Tap a day on the map — your realm's story unfolds below"}
               </Text>
               {generalSelectedDate ? (
-                generalDayTasks.length > 0 ? (
-                  generalDayTasks.map((name, idx) => (
-                    <Text key={`${generalSelectedDate}_${idx}_${name}`} style={styles.taskLine}>
-                      • {name}
-                    </Text>
-                  ))
-                ) : (
-                  <Text style={styles.muted}>No quests recorded for this day.</Text>
-                )
+                <DayQuestLogReadOnly dateKey={generalSelectedDate} showTitle={false} />
               ) : (
-                <Text style={styles.muted}>Select a day above.</Text>
+                <Text style={styles.muted}>Select a day on the heatmap.</Text>
               )}
             </View>
 

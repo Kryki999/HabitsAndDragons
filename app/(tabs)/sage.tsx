@@ -19,10 +19,12 @@ import {
   Scroll,
   Star,
   Send,
-  Settings,
+  SlidersHorizontal,
   FlaskConical,
   Dices,
-  ScrollText,
+  Coins,
+  Check,
+  HelpCircle,
 } from "lucide-react-native";
 import { impactAsync, selectionAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,6 +35,10 @@ import { GOLD_SAGE_EPIC_REROLL } from "@/lib/economy";
 import LifeGoalModal from "@/components/LifeGoalModal";
 import { fetchSageReply } from "@/lib/sageLlm";
 import type { SageChatMessage } from "@/types/game";
+
+const QUEST_BG = require("@/assets/images/quest_bg.png");
+const WANDERER_PLAN_IMG = require("@/assets/images/wanderer.png");
+const DRAGONLORD_PLAN_IMG = require("@/assets/images/dragonlord.png");
 
 const HERO_HEIGHT = 268;
 /** Bufor nad klipsem — animacja translateY (±6) nie zostawia pustki przy suficie karty. */
@@ -79,7 +85,7 @@ function ChatBubble({ message }: { message: SageChatMessage }) {
 
 export default function SageScreen() {
   const { width: winW } = useWindowDimensions();
-  const pricingCardWidth = Math.min(winW * 0.82, 320);
+  const pricingStackVertical = winW < 440;
   const insets = useSafeAreaInsets();
   const gold = useGameStore((s) => s.gold);
   const claimSageEpicQuestReward = useGameStore((s) => s.claimSageEpicQuestReward);
@@ -128,6 +134,7 @@ export default function SageScreen() {
   const sparkleAnim = useRef(new Animated.Value(0.5)).current;
   const questPulseAnim = useRef(new Animated.Value(1)).current;
   const rewardAnim = useRef(new Animated.Value(0)).current;
+  const upgradePulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.spring(headerAnim, {
@@ -155,6 +162,13 @@ export default function SageScreen() {
       Animated.sequence([
         Animated.timing(questPulseAnim, { toValue: 1.02, duration: 1800, useNativeDriver: true }),
         Animated.timing(questPulseAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
+      ]),
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(upgradePulseAnim, { toValue: 1.035, duration: 1000, useNativeDriver: true }),
+        Animated.timing(upgradePulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
       ]),
     ).start();
   }, []);
@@ -344,11 +358,11 @@ export default function SageScreen() {
                 { top: 4 },
                 pressed && styles.settingsBtnPressed,
               ]}
-              accessibilityLabel="Settings and personalization"
+              accessibilityLabel="Personalization and life goals"
               hitSlop={10}
             >
               <LinearGradient colors={["rgba(26,18,40,0.92)", "#1a1528"]} style={styles.settingsBtnInner}>
-                <Settings size={22} color={Colors.dark.gold} />
+                <SlidersHorizontal size={22} color={Colors.dark.gold} strokeWidth={2.2} />
               </LinearGradient>
             </Pressable>
             <View style={styles.heroCaption} pointerEvents="none">
@@ -457,79 +471,95 @@ export default function SageScreen() {
             </View>
           ) : (
             <Animated.View style={[styles.questCard, { transform: [{ scale: questCompleted ? 1 : questPulseAnim }] }]}>
+              <Image
+                source={QUEST_BG}
+                style={styles.questHeaderImage}
+                resizeMode="cover"
+                accessibilityIgnoresInvertColors
+                accessibilityRole="image"
+                accessibilityLabel="Epic quest scroll illustration"
+              />
               <LinearGradient
-                colors={questCompleted ? ["#1a2a1a", "#1a2a1a"] : ["#2a1f3d", "#362a50"]}
-                style={styles.questCardGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+                colors={
+                  questCompleted
+                    ? ["#152a1c", "#0f1f14", "#0c1810"]
+                    : ["#1e1830", "#161222", "#120e1c"]
+                }
+                style={styles.questBody}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
               >
-                <View style={styles.questTop}>
-                  <Text style={styles.questEmoji}>{currentQuest.emoji}</Text>
-                  <View style={styles.questInfo}>
-                    <Text style={styles.questTitle}>{currentQuest.text}</Text>
-                    <Pressable
-                      onPress={() => Alert.alert("Sage Lore", currentQuest.lore)}
-                      style={styles.loreBtn}
-                    >
-                      <ScrollText size={14} color={Colors.dark.textMuted} />
-                      <Text style={styles.loreBtnText}>Lore</Text>
-                    </Pressable>
-                    <View style={styles.questRewards}>
-                      <View style={styles.questRewardChip}>
-                        <Text style={styles.questRewardEmoji}>🪙</Text>
-                        <Text style={styles.questRewardText}>+50 gold</Text>
-                      </View>
-                      <View style={styles.questRewardChip}>
-                        <Flame size={11} color={Colors.dark.fire} />
-                        <Text style={[styles.questRewardText, { color: Colors.dark.fire }]}>+20 XP</Text>
+                <View style={styles.questCardInner}>
+                  <View style={styles.questTop}>
+                    <Text style={styles.questEmoji}>{currentQuest.emoji}</Text>
+                    <View style={styles.questInfo}>
+                      <Text style={styles.questTitle}>{currentQuest.text}</Text>
+                      <Pressable
+                        onPress={() => Alert.alert("Sage Lore", currentQuest.lore)}
+                        style={({ pressed }) => [styles.loreBtn, pressed && styles.loreBtnPressed]}
+                        hitSlop={12}
+                        accessibilityRole="button"
+                        accessibilityLabel="Read quest lore"
+                      >
+                        <HelpCircle size={30} color={Colors.dark.gold} strokeWidth={2.6} />
+                      </Pressable>
+                      <View style={styles.questRewards}>
+                        <View style={styles.questRewardChip}>
+                          <Coins size={13} color={Colors.dark.gold} strokeWidth={2.2} />
+                          <Text style={styles.questRewardText}>+50 gold</Text>
+                        </View>
+                        <View style={styles.questRewardChip}>
+                          <Flame size={11} color={Colors.dark.fire} />
+                          <Text style={[styles.questRewardText, { color: Colors.dark.fire }]}>+20 XP</Text>
+                        </View>
                       </View>
                     </View>
                   </View>
-                </View>
 
-                {questCompleted && (
-                  <Animated.View
-                    style={[
-                      styles.completedBanner,
-                      {
-                        opacity: rewardAnim,
-                        transform: [{ scale: rewardAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }],
-                      },
-                    ]}
-                  >
-                    <Text style={styles.completedText}>⚡ QUEST COMPLETED ⚡</Text>
-                  </Animated.View>
-                )}
+                  {questCompleted && (
+                    <Animated.View
+                      style={[
+                        styles.completedBanner,
+                        {
+                          opacity: rewardAnim,
+                          transform: [{ scale: rewardAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }],
+                        },
+                      ]}
+                    >
+                      <Text style={styles.completedText}>⚡ QUEST COMPLETED ⚡</Text>
+                    </Animated.View>
+                  )}
 
-                {pendingQuests.length === 0 && (
-                  <Pressable
-                    onPress={handleCompleteQuest}
-                    disabled={questCompleted}
-                    testID="complete-epic-quest"
-                    style={styles.questCtaWrap}
-                  >
-                    {questCompleted ? (
-                      <View style={[styles.completeBtn, styles.completeBtnDone]}>
-                        <View style={styles.completeBtnInner}>
-                          <Text style={[styles.completeBtnText, { color: Colors.dark.emerald }]}>✓ Rewards claimed</Text>
+                  {pendingQuests.length === 0 && (
+                    <Pressable
+                      onPress={handleCompleteQuest}
+                      disabled={questCompleted}
+                      testID="complete-epic-quest"
+                      style={styles.questCtaWrap}
+                    >
+                      {questCompleted ? (
+                        <View style={[styles.completeBtn, styles.completeBtnDone]}>
+                          <View style={styles.completeBtnInner}>
+                            <Text style={[styles.completeBtnText, { color: Colors.dark.emerald }]}>✓ Rewards claimed</Text>
+                          </View>
                         </View>
-                      </View>
-                    ) : (
-                      <View style={styles.completeBtn}>
-                        <LinearGradient
-                          colors={[...Colors.gradients.gold]}
-                          style={styles.completeBtnGradient}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                        >
-                          <Scroll size={18} color="#1a1228" />
-                          <Text style={styles.completeBtnText}>Complete Epic Quest</Text>
-                        </LinearGradient>
-                        <View style={styles.completeBtnBottom} />
-                      </View>
-                    )}
-                  </Pressable>
-                )}
+                      ) : (
+                        <View style={styles.completeBtn}>
+                          <LinearGradient
+                            colors={[...Colors.gradients.gold]}
+                            style={styles.completeBtnGradient}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                          >
+                            <Scroll size={18} color="#1a1228" />
+                            <Text style={styles.completeBtnText}>Complete Epic Quest</Text>
+                          </LinearGradient>
+                          <View style={styles.completeBtnBottom} />
+                        </View>
+                      )}
+                    </Pressable>
+                  )}
+                </View>
               </LinearGradient>
             </Animated.View>
           )}
@@ -558,61 +588,149 @@ export default function SageScreen() {
                   (rerollDisabled || pendingQuests.length > 0) && { color: Colors.dark.textMuted },
                 ]}
               >
-                Reroll quest ({GOLD_SAGE_EPIC_REROLL} 🪙)
+                Reroll quest
               </Text>
+              <View style={styles.rerollGoldRow}>
+                <Text
+                  style={[
+                    styles.rerollGoldAmount,
+                    (rerollDisabled || pendingQuests.length > 0) && { color: Colors.dark.textMuted },
+                  ]}
+                >
+                  {GOLD_SAGE_EPIC_REROLL}
+                </Text>
+                <Coins
+                  size={20}
+                  color={rerollDisabled || pendingQuests.length > 0 ? Colors.dark.textMuted : Colors.dark.gold}
+                  strokeWidth={2.4}
+                />
+              </View>
             </LinearGradient>
           </Pressable>
           <Text style={styles.rerollHint}>Max 1 reroll per day · finish pending pick first</Text>
         </View>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.pricingSectionTitle}>Plans</Text>
-          <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          nestedScrollEnabled
-          decelerationRate="fast"
-          snapToInterval={pricingCardWidth + 14}
-          snapToAlignment="start"
-          contentContainerStyle={styles.pricingCarousel}
-        >
-          <LinearGradient
-            colors={["#1e1a28", "#16121f"]}
-            style={[styles.planCard, styles.planCardCarousel, { width: pricingCardWidth }]}
-          >
-            <Text style={styles.planName}>Free Explorer</Text>
-            <Text style={styles.planPrice}>$0</Text>
-            <View style={styles.planBullets}>
-              <Text style={styles.planBullet}>• Core habit tracker</Text>
-              <Text style={styles.planBullet}>• Base progression and quests</Text>
-              <Text style={styles.planBullet}>• One Epic Quest daily</Text>
-            </View>
-          </LinearGradient>
+        <View style={styles.pricingSectionHeader}>
+          <Text style={styles.pricingSectionTitle}>Choose your path</Text>
+          <Text style={styles.pricingSectionSub}>Whimsical power — clear tiers</Text>
+        </View>
 
-          <LinearGradient
-            colors={["#2d2048", "#1e1438"]}
-            style={[styles.planCard, styles.planCardPremium, styles.planCardCarousel, { width: pricingCardWidth }]}
+        <View style={styles.pricingCardsRow}>
+          <View
+            style={[
+              styles.pricingRowBleed,
+              pricingStackVertical && styles.pricingRowBleedStack,
+            ]}
           >
-            <View style={styles.premiumBadgeRow}>
-              <View style={{ flex: 1 }} />
-              <LinearGradient colors={[...Colors.gradients.purple]} style={styles.premiumBadgeInline}>
-                <Text style={styles.premiumBadgeText}>PREMIUM</Text>
-              </LinearGradient>
+            {/* Free — Wanderer */}
+            <View
+              style={[
+                styles.saasCard,
+                styles.saasCardFree,
+                !pricingStackVertical && styles.saasCardRow,
+              ]}
+            >
+              <View style={styles.saasCardHeaderFrame}>
+                <Image
+                  source={WANDERER_PLAN_IMG}
+                  style={styles.saasCardHeaderImageFill}
+                  resizeMode="contain"
+                  accessibilityIgnoresInvertColors
+                />
+              </View>
+              <View style={styles.saasCardBody}>
+                <Text style={styles.saasEyebrowMuted}>Mortal</Text>
+                <Text style={styles.saasTitleFree}>WANDERER</Text>
+                <Text style={styles.saasPriceLine}>$0 · free forever</Text>
+                <View style={styles.saasFeatureBlock}>
+                  <View style={styles.saasFeatureRow}>
+                    <Check size={18} color={Colors.dark.gold + "cc"} strokeWidth={2.6} />
+                    <Text style={styles.saasFeatureTextFree}>Unlimited habits & quests</Text>
+                  </View>
+                  <View style={styles.saasFeatureRow}>
+                    <Check size={18} color={Colors.dark.gold + "cc"} strokeWidth={2.6} />
+                    <Text style={styles.saasFeatureTextFree}>Standard dungeons & progression</Text>
+                  </View>
+                  <View style={styles.saasFeatureRow}>
+                    <Check size={18} color={Colors.dark.gold + "cc"} strokeWidth={2.6} />
+                    <Text style={styles.saasFeatureTextFree}>3 Sage chats / day</Text>
+                  </View>
+                  <View style={styles.saasFeatureRow}>
+                    <Check size={18} color={Colors.dark.gold + "cc"} strokeWidth={2.6} />
+                    <Text style={styles.saasFeatureTextFree}>One Epic Quest daily</Text>
+                  </View>
+                </View>
+                <View style={styles.saasCurrentPlanBtn}>
+                  <Text style={styles.saasCurrentPlanBtnText}>Your current plan</Text>
+                </View>
+              </View>
             </View>
-            <Text style={styles.planNamePremium}>Legendary Hero</Text>
-            <Text style={styles.planPricePremium}>Coming soon</Text>
-            <View style={styles.planBullets}>
-              <Text style={styles.planBulletLight}>✦ Personalized AI coach</Text>
-              <Text style={styles.planBulletLight}>✦ Unlimited Sage chat</Text>
-              <Text style={styles.planBulletLight}>✦ Habit analytics</Text>
-            </View>
-            <Pressable onPress={handlePremiumCta} style={styles.ctaPremium}>
-              <LinearGradient colors={[...Colors.gradients.gold]} style={styles.ctaPremiumGrad}>
-                <Text style={styles.ctaPremiumText}>Choose Premium</Text>
-              </LinearGradient>
-            </Pressable>
-          </LinearGradient>
-          </ScrollView>
+
+            {/* Premium — Dragonlord */}
+            <LinearGradient
+              colors={[Colors.dark.gold, Colors.dark.purple, Colors.dark.gold]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[
+                styles.saasCard,
+                styles.saasPremiumRing,
+                !pricingStackVertical && styles.saasCardRow,
+              ]}
+            >
+              <View style={styles.saasPremiumClip}>
+                  <View style={styles.saasCardHeaderFrame}>
+                    <Image
+                      source={DRAGONLORD_PLAN_IMG}
+                      style={styles.saasCardHeaderImageFill}
+                      resizeMode="contain"
+                      accessibilityIgnoresInvertColors
+                    />
+                  </View>
+                <LinearGradient
+                  colors={["#221a38", "#161022", "#0f0c18"]}
+                  style={styles.saasCardBodyPremium}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                >
+                  <Text style={styles.saasEyebrowGold}>Ascended</Text>
+                  <Text style={styles.saasTitlePremium}>DRAGONLORD</Text>
+                  <Text style={styles.saasTaglinePremium}>Pełna moc grymuaru</Text>
+                  <Text style={styles.saasComingSoon}>Coming soon</Text>
+
+                  <View style={styles.saasFeatureBlockPremium}>
+                    <View style={styles.saasFeatureRow}>
+                      <Check size={20} color={Colors.dark.gold} strokeWidth={3} />
+                      <Text style={styles.saasFeatureTextPremium}>Unlimited Sage wisdom</Text>
+                    </View>
+                    <View style={styles.saasFeatureRow}>
+                      <Check size={20} color={Colors.dark.gold} strokeWidth={3} />
+                      <Text style={styles.saasFeatureTextPremium}>+15% epic drop rate</Text>
+                    </View>
+                    <View style={styles.saasFeatureRow}>
+                      <Check size={20} color={Colors.dark.gold} strokeWidth={3} />
+                      <Text style={styles.saasFeatureTextPremium}>Custom task sorting</Text>
+                    </View>
+                    <View style={styles.saasFeatureRow}>
+                      <Check size={20} color={Colors.dark.gold} strokeWidth={3} />
+                      <Text style={styles.saasFeatureTextPremium}>Weekly freeze potion</Text>
+                    </View>
+                    <View style={styles.saasFeatureRow}>
+                      <Check size={20} color={Colors.dark.gold} strokeWidth={3} />
+                      <Text style={styles.saasFeatureTextPremium}>Golden ranking name</Text>
+                    </View>
+                  </View>
+
+                  <Animated.View style={{ transform: [{ scale: upgradePulseAnim }], width: "100%" as const }}>
+                    <Pressable onPress={handlePremiumCta} style={styles.saasUpgradeBtn}>
+                      <LinearGradient colors={[...Colors.gradients.gold]} style={styles.saasUpgradeBtnGrad}>
+                        <Text style={styles.saasUpgradeBtnText}>Upgrade now</Text>
+                      </LinearGradient>
+                    </Pressable>
+                  </Animated.View>
+                </LinearGradient>
+              </View>
+            </LinearGradient>
+          </View>
         </View>
       </ScrollView>
 
@@ -981,10 +1099,18 @@ const styles = StyleSheet.create({
   questCard: {
     borderRadius: 16,
     overflow: "hidden" as const,
-    borderWidth: 1.5,
-    borderColor: Colors.dark.gold + "30",
+    borderWidth: 2,
+    borderColor: Colors.dark.gold + "44",
   },
-  questCardGradient: {
+  questHeaderImage: {
+    width: "100%" as const,
+    height: 148,
+    backgroundColor: "#0a0814",
+  },
+  questBody: {
+    width: "100%" as const,
+  },
+  questCardInner: {
     padding: 18,
     position: "relative" as const,
   },
@@ -1004,21 +1130,24 @@ const styles = StyleSheet.create({
     fontWeight: "700" as const,
     color: Colors.dark.text,
     marginBottom: 8,
-    paddingRight: 72,
+    paddingRight: 62,
   },
   loreBtn: {
     position: "absolute" as const,
-    right: 0,
-    top: 0,
-    flexDirection: "row" as const,
+    right: -4,
+    top: -4,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     alignItems: "center" as const,
-    gap: 6,
-    marginBottom: 0,
+    justifyContent: "center" as const,
+    backgroundColor: "rgba(212, 175, 106, 0.1)",
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + "44",
   },
-  loreBtnText: {
-    fontSize: 11,
-    color: Colors.dark.textMuted,
-    fontWeight: "700" as const,
+  loreBtnPressed: {
+    opacity: 0.82,
+    backgroundColor: "rgba(212, 175, 106, 0.16)",
   },
   questRewards: {
     flexDirection: "row" as const,
@@ -1029,9 +1158,6 @@ const styles = StyleSheet.create({
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 4,
-  },
-  questRewardEmoji: {
-    fontSize: 12,
   },
   questRewardText: {
     fontSize: 12,
@@ -1068,12 +1194,24 @@ const styles = StyleSheet.create({
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
+    flexWrap: "wrap" as const,
     paddingVertical: 14,
-    gap: 10,
+    paddingHorizontal: 12,
+    gap: 8,
   },
   rerollText: {
     fontSize: 15,
     fontWeight: "800" as const,
+    color: Colors.dark.gold,
+  },
+  rerollGoldRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 5,
+  },
+  rerollGoldAmount: {
+    fontSize: 16,
+    fontWeight: "900" as const,
     color: Colors.dark.gold,
   },
   rerollHint: {
@@ -1115,100 +1253,222 @@ const styles = StyleSheet.create({
   questCtaWrap: {
     marginTop: 14,
   },
+  pricingSectionHeader: {
+    alignItems: "center" as const,
+    marginBottom: 22,
+    paddingHorizontal: 4,
+  },
   pricingSectionTitle: {
+    fontSize: 15,
+    fontWeight: "900" as const,
+    color: Colors.dark.text,
+    letterSpacing: 1.2,
+    marginBottom: 6,
+    textAlign: "center" as const,
+  },
+  pricingSectionSub: {
+    fontSize: 12,
+    color: Colors.dark.textMuted,
+    textAlign: "center" as const,
+    marginBottom: 0,
+    fontStyle: "italic" as const,
+  },
+  pricingCardsRow: {
+    marginBottom: 20,
+  },
+  pricingRowBleed: {
+    flexDirection: "row" as const,
+    alignItems: "stretch" as const,
+    gap: 24,
+  },
+  pricingRowBleedStack: {
+    flexDirection: "column" as const,
+    gap: 30,
+  },
+  saasCard: {
+    borderRadius: 20,
+    overflow: "hidden" as const,
+  },
+  saasCardRow: {
+    flex: 1,
+    minWidth: 0,
+  },
+  saasCardFree: {
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "aa",
+    backgroundColor: "#100c18",
+    minHeight: 400,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.4,
+        shadowRadius: 18,
+      },
+      android: { elevation: 8 },
+      default: {},
+    }),
+  },
+  saasCardHeaderFrame: {
+    width: "100%" as const,
+    height: 212,
+    backgroundColor: "#0a0814",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: "hidden" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  saasCardHeaderImageFill: {
+    width: "100%" as const,
+    height: "100%" as const,
+  },
+  saasCardBody: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 22,
+    backgroundColor: "#14101c",
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    flexGrow: 1,
+  },
+  saasEyebrowMuted: {
+    fontSize: 10,
+    fontWeight: "800" as const,
+    color: Colors.dark.textMuted,
+    letterSpacing: 2.2,
+    textTransform: "uppercase" as const,
+    marginBottom: 4,
+  },
+  saasTitleFree: {
+    fontSize: 22,
+    fontWeight: "900" as const,
+    color: Colors.dark.text,
+    letterSpacing: 1.4,
+    marginBottom: 4,
+  },
+  saasPriceLine: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+    marginBottom: 18,
+    fontWeight: "600" as const,
+  },
+  saasFeatureBlock: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  saasFeatureBlockPremium: {
+    gap: 14,
+    marginBottom: 22,
+    flexGrow: 1,
+  },
+  saasFeatureRow: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start" as const,
+    gap: 10,
+  },
+  saasFeatureTextFree: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+    lineHeight: 20,
+    fontWeight: "600" as const,
+  },
+  saasCurrentPlanBtn: {
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center" as const,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "88",
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  saasCurrentPlanBtnText: {
     fontSize: 13,
     fontWeight: "800" as const,
     color: Colors.dark.textMuted,
-    letterSpacing: 2,
-    marginBottom: 12,
-    textAlign: "center" as const,
+    letterSpacing: 0.5,
   },
-  pricingCarousel: {
-    paddingBottom: 8,
-    paddingHorizontal: 4,
-    flexDirection: "row" as const,
-    alignItems: "stretch" as const,
+  saasPremiumRing: {
+    borderRadius: 22,
+    padding: 3,
+    minHeight: 440,
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.dark.purple,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.55,
+        shadowRadius: 20,
+      },
+      android: { elevation: 12 },
+      default: {},
+    }),
   },
-  planCard: {
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-    minHeight: 220,
+  saasPremiumClip: {
+    borderRadius: 20,
+    overflow: "hidden" as const,
+    backgroundColor: "#0c0818",
+    position: "relative" as const,
+    flex: 1,
   },
-  planCardCarousel: {
-    marginRight: 14,
+  saasCardBodyPremium: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 22,
+    flexGrow: 1,
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.gold + "28",
   },
-  planCardPremium: {
-    borderColor: Colors.dark.purple + "66",
-    paddingTop: 12,
-  },
-  premiumBadgeRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    minHeight: 22,
-    marginBottom: 6,
-  },
-  premiumBadgeInline: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  premiumBadgeText: {
-    fontSize: 9,
-    fontWeight: "900" as const,
-    color: "#fff",
-    letterSpacing: 1,
-  },
-  planName: {
-    fontSize: 15,
-    fontWeight: "800" as const,
-    color: Colors.dark.text,
-    marginBottom: 4,
-  },
-  planNamePremium: {
-    fontSize: 15,
-    fontWeight: "800" as const,
-    color: Colors.dark.text,
-    marginBottom: 4,
-  },
-  planPrice: {
-    fontSize: 20,
-    fontWeight: "900" as const,
-    color: Colors.dark.textSecondary,
-    marginBottom: 12,
-  },
-  planPricePremium: {
-    fontSize: 18,
+  saasEyebrowGold: {
+    fontSize: 10,
     fontWeight: "800" as const,
     color: Colors.dark.gold,
-    marginBottom: 10,
+    letterSpacing: 2.2,
+    textTransform: "uppercase" as const,
+    marginBottom: 4,
+    opacity: 0.95,
   },
-  planBullets: {
-    gap: 6,
+  saasTitlePremium: {
+    fontSize: 22,
+    fontWeight: "900" as const,
+    color: Colors.dark.text,
+    letterSpacing: 1.2,
+    marginBottom: 4,
   },
-  planBullet: {
-    fontSize: 11,
-    color: Colors.dark.textSecondary,
-    lineHeight: 17,
+  saasTaglinePremium: {
+    fontSize: 13,
+    color: "#c4b8dc",
+    marginBottom: 6,
+    fontWeight: "600" as const,
   },
-  planBulletLight: {
-    fontSize: 11,
-    color: "#d4c4e8",
-    lineHeight: 17,
+  saasComingSoon: {
+    fontSize: 15,
+    fontWeight: "800" as const,
+    color: Colors.dark.gold,
+    marginBottom: 18,
   },
-  ctaPremium: {
-    marginTop: 12,
-    borderRadius: 12,
+  saasFeatureTextPremium: {
+    flex: 1,
+    fontSize: 14,
+    color: "#ebe4f5",
+    lineHeight: 21,
+    fontWeight: "600" as const,
+  },
+  saasUpgradeBtn: {
+    marginTop: 6,
+    borderRadius: 16,
     overflow: "hidden" as const,
+    borderWidth: 2,
+    borderColor: Colors.dark.gold + "cc",
   },
-  ctaPremiumGrad: {
-    paddingVertical: 12,
+  saasUpgradeBtnGrad: {
+    paddingVertical: 18,
     alignItems: "center" as const,
   },
-  ctaPremiumText: {
-    fontSize: 14,
+  saasUpgradeBtnText: {
+    fontSize: 16,
     fontWeight: "900" as const,
     color: "#1a1228",
+    letterSpacing: 0.8,
+    textTransform: "uppercase" as const,
   },
 });

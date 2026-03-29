@@ -50,6 +50,11 @@ export type CloudGameState = Pick<
   | "onboardingPhysicality"
   | "onboardingPlanningStyle"
   | "onboardingComplete"
+  | "reflectionSavedDateKeys"
+  | "heroShopPurchaseEver"
+  | "heroDailyQuestClaimsDate"
+  | "heroDailyQuestClaimedIds"
+  | "heroEpicMilestoneClaimedIds"
 >;
 
 export function pickCloudGameState(state: GameState): CloudGameState {
@@ -102,6 +107,11 @@ export function pickCloudGameState(state: GameState): CloudGameState {
     onboardingPhysicality: state.onboardingPhysicality,
     onboardingPlanningStyle: state.onboardingPlanningStyle,
     onboardingComplete: state.onboardingComplete,
+    reflectionSavedDateKeys: state.reflectionSavedDateKeys,
+    heroShopPurchaseEver: state.heroShopPurchaseEver,
+    heroDailyQuestClaimsDate: state.heroDailyQuestClaimsDate,
+    heroDailyQuestClaimedIds: state.heroDailyQuestClaimedIds,
+    heroEpicMilestoneClaimedIds: state.heroEpicMilestoneClaimedIds,
   };
 }
 

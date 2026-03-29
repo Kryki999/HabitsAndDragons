@@ -231,6 +231,97 @@ export const useGameStore = create<GameStore>()(
       lastAppOpenDate: null,
       lastDailyWelcomeDate: null,
       lastAcknowledgedPlayerLevel: 1,
+      reflectionSavedDateKeys: {},
+      heroShopPurchaseEver: false,
+      heroDailyQuestClaimsDate: null,
+      heroDailyQuestClaimedIds: [],
+      heroEpicMilestoneClaimedIds: [],
+
+      recordHeroReflectionSaved: (dateKey: string) => {
+        if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
+        set((s) => ({
+          reflectionSavedDateKeys: { ...s.reflectionSavedDateKeys, [dateKey]: true },
+        }));
+      },
+
+      claimHeroDailyQuest: (questId, goldReward, xpReward) => {
+        const today = getTodayString();
+        let claimed = false;
+        set((state) => {
+          const priorIds = state.heroDailyQuestClaimsDate === today ? state.heroDailyQuestClaimedIds : [];
+          if (priorIds.includes(questId)) return state;
+          claimed = true;
+          let gold = state.gold + goldReward;
+          let strengthXP = state.strengthXP;
+          let agilityXP = state.agilityXP;
+          let intelligenceXP = state.intelligenceXP;
+          if (xpReward) {
+            const xpKey = `${xpReward.stat}XP` as 'strengthXP' | 'agilityXP' | 'intelligenceXP';
+            const newXp = state[xpKey] + xpReward.amount;
+            strengthXP = xpReward.stat === 'strength' ? newXp : state.strengthXP;
+            agilityXP = xpReward.stat === 'agility' ? newXp : state.agilityXP;
+            intelligenceXP = xpReward.stat === 'intelligence' ? newXp : state.intelligenceXP;
+          }
+          const newTitles = collectNewTitles(
+            state.unlockedTitleIds,
+            strengthXP,
+            agilityXP,
+            intelligenceXP,
+            state.completedStrengthQuests,
+            state.completedAgilityQuests,
+            state.completedIntelligenceQuests,
+          );
+          return {
+            ...state,
+            gold,
+            strengthXP,
+            agilityXP,
+            intelligenceXP,
+            unlockedTitleIds: [...state.unlockedTitleIds, ...newTitles],
+            heroDailyQuestClaimsDate: today,
+            heroDailyQuestClaimedIds: [...priorIds, questId],
+          };
+        });
+        return claimed;
+      },
+
+      claimHeroEpicMilestone: (questId, goldReward, xpReward) => {
+        let claimed = false;
+        set((state) => {
+          if (state.heroEpicMilestoneClaimedIds.includes(questId)) return state;
+          claimed = true;
+          let gold = state.gold + goldReward;
+          let strengthXP = state.strengthXP;
+          let agilityXP = state.agilityXP;
+          let intelligenceXP = state.intelligenceXP;
+          if (xpReward) {
+            const xpKey = `${xpReward.stat}XP` as 'strengthXP' | 'agilityXP' | 'intelligenceXP';
+            const newXp = state[xpKey] + xpReward.amount;
+            strengthXP = xpReward.stat === 'strength' ? newXp : state.strengthXP;
+            agilityXP = xpReward.stat === 'agility' ? newXp : state.agilityXP;
+            intelligenceXP = xpReward.stat === 'intelligence' ? newXp : state.intelligenceXP;
+          }
+          const newTitles = collectNewTitles(
+            state.unlockedTitleIds,
+            strengthXP,
+            agilityXP,
+            intelligenceXP,
+            state.completedStrengthQuests,
+            state.completedAgilityQuests,
+            state.completedIntelligenceQuests,
+          );
+          return {
+            ...state,
+            gold,
+            strengthXP,
+            agilityXP,
+            intelligenceXP,
+            unlockedTitleIds: [...state.unlockedTitleIds, ...newTitles],
+            heroEpicMilestoneClaimedIds: [...state.heroEpicMilestoneClaimedIds, questId],
+          };
+        });
+        return claimed;
+      },
 
       dismissDailyWelcome: () =>
         set({ lastDailyWelcomeDate: getTodayString() }),
@@ -332,6 +423,19 @@ export const useGameStore = create<GameStore>()(
               snapshot.playerClass != null
                 ? true
                 : snapshot.onboardingComplete ?? state.onboardingComplete,
+            reflectionSavedDateKeys:
+              snapshot.reflectionSavedDateKeys && typeof snapshot.reflectionSavedDateKeys === "object"
+                ? { ...state.reflectionSavedDateKeys, ...snapshot.reflectionSavedDateKeys }
+                : state.reflectionSavedDateKeys,
+            heroShopPurchaseEver: snapshot.heroShopPurchaseEver ?? state.heroShopPurchaseEver,
+            heroDailyQuestClaimsDate:
+              snapshot.heroDailyQuestClaimsDate ?? state.heroDailyQuestClaimsDate,
+            heroDailyQuestClaimedIds: Array.isArray(snapshot.heroDailyQuestClaimedIds)
+              ? snapshot.heroDailyQuestClaimedIds
+              : state.heroDailyQuestClaimedIds,
+            heroEpicMilestoneClaimedIds: Array.isArray(snapshot.heroEpicMilestoneClaimedIds)
+              ? snapshot.heroEpicMilestoneClaimedIds
+              : state.heroEpicMilestoneClaimedIds,
           };
           return merged;
         }),
@@ -419,10 +523,9 @@ export const useGameStore = create<GameStore>()(
 
           return {
             ...base,
-            habits:
-              habit.taskType === 'one-off'
-                ? updatedHabits.map((h) => (h.id === habitId ? { ...h, isActive: false } : h))
-                : updatedHabits,
+            // One-off quests stay active (and visible as completed) until the daily reset,
+            // same UX as daily habits. resetDailyHabits clears completedToday + isActive for them.
+            habits: updatedHabits,
             [xpKey]: newStatXp,
             gold: base.gold + goldGranted,
             streak: newStreak,
@@ -628,6 +731,7 @@ export const useGameStore = create<GameStore>()(
         set({
           gold: state.gold - DUNGEON_KEY_GOLD_PRICE,
           dungeonKeys: state.dungeonKeys + 1,
+          heroShopPurchaseEver: true,
         });
         console.log(`[GameStore] Bought dungeon key for ${DUNGEON_KEY_GOLD_PRICE} gold`);
         return true;
@@ -642,6 +746,7 @@ export const useGameStore = create<GameStore>()(
             ...state.consumables,
             elixirOfTime: (state.consumables?.elixirOfTime ?? 0) + 1,
           },
+          heroShopPurchaseEver: true,
         });
         return true;
       },
@@ -965,6 +1070,11 @@ export const useGameStore = create<GameStore>()(
         lastAppOpenDate: state.lastAppOpenDate,
         lastDailyWelcomeDate: state.lastDailyWelcomeDate,
         lastAcknowledgedPlayerLevel: state.lastAcknowledgedPlayerLevel,
+        reflectionSavedDateKeys: state.reflectionSavedDateKeys,
+        heroShopPurchaseEver: state.heroShopPurchaseEver,
+        heroDailyQuestClaimsDate: state.heroDailyQuestClaimsDate,
+        heroDailyQuestClaimedIds: state.heroDailyQuestClaimedIds,
+        heroEpicMilestoneClaimedIds: state.heroEpicMilestoneClaimedIds,
         onboardingEnergyBaseline: state.onboardingEnergyBaseline,
         onboardingScreenDistraction: state.onboardingScreenDistraction,
         onboardingStressResponse: state.onboardingStressResponse,
@@ -1011,6 +1121,15 @@ export const useGameStore = create<GameStore>()(
               : getLevelFromXP(
                   (p?.strengthXP ?? 0) + (p?.agilityXP ?? 0) + (p?.intelligenceXP ?? 0),
                 ),
+          reflectionSavedDateKeys: p?.reflectionSavedDateKeys ?? current.reflectionSavedDateKeys,
+          heroShopPurchaseEver: p?.heroShopPurchaseEver ?? current.heroShopPurchaseEver,
+          heroDailyQuestClaimsDate: p?.heroDailyQuestClaimsDate ?? current.heroDailyQuestClaimsDate,
+          heroDailyQuestClaimedIds: Array.isArray(p?.heroDailyQuestClaimedIds)
+            ? p.heroDailyQuestClaimedIds
+            : current.heroDailyQuestClaimedIds,
+          heroEpicMilestoneClaimedIds: Array.isArray(p?.heroEpicMilestoneClaimedIds)
+            ? p.heroEpicMilestoneClaimedIds
+            : current.heroEpicMilestoneClaimedIds,
         };
       },
     },

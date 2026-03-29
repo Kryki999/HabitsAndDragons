@@ -9,7 +9,7 @@ import {
   GestureResponderEvent,
 } from "react-native";
 import { Tabs } from "expo-router";
-import { Home, Trophy, Castle, Sparkles, Coins, KeyRound, Mail, Settings as SettingsIcon, User } from "lucide-react-native";
+import { Home, Trophy, Castle, Sparkles, Coins, Mail, Settings as SettingsIcon, User } from "lucide-react-native";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import Colors from "@/constants/colors";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -83,8 +83,8 @@ function TabIcon({ color, focused, icon: Icon, label }: TabIconProps) {
 function TabsWithTopBar() {
   const insets = useSafeAreaInsets();
   const gold = useGameStore((s) => s.gold);
-  const dungeonKeys = useGameStore((s) => s.dungeonKeys);
   const streak = useGameStore((s) => s.streak);
+  const heroDisplayName = useGameStore((s) => s.heroDisplayName);
   const getPlayerLevel = useGameStore((s) => s.getPlayerLevel);
   const getCurrentLevelXP = useGameStore((s) => s.getCurrentLevelXP);
   const getXPForNextLevel = useGameStore((s) => s.getXPForNextLevel);
@@ -98,6 +98,8 @@ function TabsWithTopBar() {
   const currentLevelXP = getCurrentLevelXP();
   const xpForNext = getXPForNextLevel();
   const xpProgress = xpForNext > 0 ? currentLevelXP / xpForNext : 0;
+
+  const hudPlayerName = (heroDisplayName?.trim() || user?.email?.split("@")[0]?.trim() || "Wayfarer").slice(0, 48);
 
   return (
     <View style={styles.shell}>
@@ -122,25 +124,21 @@ function TabsWithTopBar() {
               </View>
             </CircularProgress>
             <View style={styles.playerInfo}>
-              <Text style={styles.playerName} numberOfLines={1}>
-                Player
+              <Text style={styles.playerName} numberOfLines={1} ellipsizeMode="tail">
+                {hudPlayerName}
               </Text>
               <Text style={styles.playerLevelText}>Lv.{playerLevel}</Text>
             </View>
           </Pressable>
 
-          <View style={styles.pillBadgesContainer}>
-            <View style={styles.pillBadge}>
-              <Coins color={Colors.dark.gold} size={14} />
-              <Text style={styles.pillValue}>{gold}</Text>
+          <View style={styles.hudStatsCluster}>
+            <View style={styles.hudStatItem}>
+              <Coins color={Colors.dark.gold} size={15} strokeWidth={2.2} />
+              <Text style={styles.hudStatValueGold}>{gold}</Text>
             </View>
-            <View style={styles.pillBadge}>
-              <KeyRound color={Colors.dark.cyan} size={14} />
-              <Text style={[styles.pillValue, { color: Colors.dark.cyan }]}>{dungeonKeys}</Text>
-            </View>
-            <View style={styles.pillBadge}>
-              <Text style={styles.pillEmoji}>🔥</Text>
-              <Text style={[styles.pillValue, { color: Colors.dark.fire }]}>{streak}</Text>
+            <View style={styles.hudStatItem}>
+              <Text style={styles.hudStatEmoji}>🔥</Text>
+              <Text style={styles.hudStatValueFire}>{streak}</Text>
             </View>
           </View>
 
@@ -297,7 +295,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 6,
     borderBottomWidth: 0,
-    backgroundColor: Colors.dark.surface + "e6",
+    backgroundColor: Colors.dark.background,
   },
   topBarRow: {
     flexDirection: "row",
@@ -317,6 +315,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     flex: 1,
+    minWidth: 0,
   },
   hudLeftPressed: {
     opacity: 0.9,
@@ -334,13 +333,15 @@ const styles = StyleSheet.create({
   },
   playerInfo: {
     justifyContent: "center",
-    flexShrink: 1,
+    flex: 1,
+    minWidth: 0,
   },
   playerName: {
     color: Colors.dark.text,
     fontSize: 14,
     fontWeight: "800" as const,
     marginBottom: 0,
+    maxWidth: "100%",
   },
   playerLevelText: {
     color: Colors.dark.gold,
@@ -351,7 +352,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    flex: 1,
+    flexShrink: 0,
     justifyContent: "flex-end",
   },
   iconButton: {
@@ -375,30 +376,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.dark.surfaceLight,
   },
-  pillBadgesContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-  },
-  pillBadge: {
+  hudStatsCluster: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
     justifyContent: "center",
-    gap: 4,
+    gap: 14,
+    flexShrink: 0,
+    paddingHorizontal: 4,
   },
-  pillEmoji: {
-    fontSize: 12,
+  hudStatItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
   },
-  pillValue: {
+  hudStatEmoji: {
+    fontSize: 13,
+  },
+  hudStatValueGold: {
     fontSize: 13,
     fontWeight: "800" as const,
     color: Colors.dark.gold,
+    fontVariant: ["tabular-nums"] as ("tabular-nums")[],
+  },
+  hudStatValueFire: {
+    fontSize: 13,
+    fontWeight: "800" as const,
+    color: Colors.dark.fire,
+    fontVariant: ["tabular-nums"] as ("tabular-nums")[],
   },
   tabGlow: {
     position: "absolute" as const,

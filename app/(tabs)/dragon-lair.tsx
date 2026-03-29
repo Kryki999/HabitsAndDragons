@@ -17,12 +17,10 @@ import { useRouter } from "expo-router";
 import {
   Plus,
   RotateCcw,
-  Sparkles,
   Coins,
   Key,
   Lock,
   Snowflake,
-  Info,
   AlertTriangle,
 } from "lucide-react-native";
 import {
@@ -45,6 +43,7 @@ import {
   type DungeonChallengeId,
 } from "@/constants/gameplayConfig";
 import DungeonsSection, { PORTRAIT_CARD_HEIGHT_RATIO } from "@/components/dungeons";
+import SectionBanner, { SectionBannerCounter } from "@/components/SectionBanner";
 import BattleSimulationModal, {
   type BattleApiResult,
 } from "@/components/BattleSimulationModal";
@@ -54,6 +53,9 @@ import { supabase } from "@/lib/supabase";
 import { pickCloudGameState } from "@/lib/cloudState";
 
 const DRAGON_LIST = Object.values(DRAGON_CONFIGS);
+
+const DRAGONS_BANNER_BG = require("@/assets/images/dragons_bg.png");
+const DUNGEONS_BANNER_BG = require("@/assets/images/dungeons_bg.png");
 
 const DUNGEONS_GUIDE_BODY =
   "Keys are required to fight bosses. Defeat them to earn epic loot and Relics. Pay attention to boss weaknesses to increase your win chance.";
@@ -221,18 +223,20 @@ function PortraitDragonCard({
               locations={[0.25, 0.55, 1]}
               style={styles.portraitGradientBottom}
             >
-              <View style={styles.buffRow}>
-                <View style={styles.buffChip}>
-                  <Text style={styles.buffEmoji}>🪙</Text>
-                  <Text style={styles.buffText}>+{goldPct}% gold</Text>
-                </View>
-                <View style={styles.buffChip}>
-                  <Text style={styles.buffEmoji}>🗝️</Text>
-                  <Text style={styles.buffText}>+{keyPct}% key</Text>
-                </View>
-                <View style={styles.buffChip}>
-                  <Text style={styles.buffEmoji}>⚔️</Text>
-                  <Text style={styles.buffText}>+{winPct}% win</Text>
+              <View style={styles.buffStatsPanel}>
+                <View style={styles.buffRow}>
+                  <View style={styles.buffChip}>
+                    <Text style={styles.buffEmoji}>🪙</Text>
+                    <Text style={styles.buffText}>+{goldPct}% gold</Text>
+                  </View>
+                  <View style={styles.buffChip}>
+                    <Text style={styles.buffEmoji}>🗝️</Text>
+                    <Text style={styles.buffText}>+{keyPct}% key</Text>
+                  </View>
+                  <View style={styles.buffChip}>
+                    <Text style={styles.buffEmoji}>⚔️</Text>
+                    <Text style={styles.buffText}>+{winPct}% win</Text>
+                  </View>
                 </View>
               </View>
               <Pressable
@@ -553,16 +557,6 @@ export default function DragonLairScreen() {
             },
           ]}
         >
-          <View style={styles.headerEmblem}>
-            <LinearGradient
-              colors={[...Colors.gradients.purple]}
-              style={styles.headerEmblemGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Sparkles size={26} color="#fff" />
-            </LinearGradient>
-          </View>
           <Text style={styles.title}>Dungeons & Dragons</Text>
           <Text style={styles.subtitle}>Trophy hall & forbidden depths</Text>
         </Animated.View>
@@ -580,33 +574,22 @@ export default function DragonLairScreen() {
             ],
           }}
         >
-          <View style={styles.sectionTitleWithInfo}>
-            <Text style={styles.sectionTitle}>Dragons</Text>
-            <Pressable
-              onPress={() => {
-                impactAsync(ImpactFeedbackStyle.Light);
-                setDragonsGuideOpen(true);
-              }}
-              style={({ pressed }) => [styles.guideInfoBtn, pressed && styles.guideInfoBtnPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Dragons guide"
-            >
-              <Info size={17} color={Colors.dark.gold} strokeWidth={2.4} />
-            </Pressable>
-          </View>
-
-          <View style={styles.streakAndConsumablesRow}>
-            <View style={styles.streakPill}>
-              <Text style={styles.streakEmoji}>🔥</Text>
-              <Text style={styles.streakValue}>{streak}</Text>
-              <Text style={styles.streakLabel}>day streak</Text>
-            </View>
-            <View style={styles.elixirOwnedPill}>
-              <Snowflake size={16} color={Colors.dark.cyan} strokeWidth={2.2} />
-              <Text style={styles.elixirOwnedCount}>{consumables?.elixirOfTime ?? 0}</Text>
-              <Text style={styles.elixirOwnedLabel}>Freeze potions</Text>
-            </View>
-          </View>
+          <SectionBanner
+            title="Dragons"
+            source={DRAGONS_BANNER_BG}
+            onInfoPress={() => setDragonsGuideOpen(true)}
+            infoAccessibilityLabel="Dragons guide"
+            footerSlot={
+              <>
+                <SectionBannerCounter emoji="🔥" value={streak} label="day streak" />
+                <SectionBannerCounter
+                  emoji="🧊"
+                  value={consumables?.elixirOfTime ?? 0}
+                  label="freeze potions"
+                />
+              </>
+            }
+          />
 
           <Pressable
             onPress={handleBuyElixir}
@@ -686,28 +669,15 @@ export default function DragonLairScreen() {
             },
           ]}
         >
-          <View style={styles.sectionTitleWithInfo}>
-            <Text style={styles.sectionTitle}>Dungeons</Text>
-            <Pressable
-              onPress={() => {
-                impactAsync(ImpactFeedbackStyle.Light);
-                setDungeonsGuideOpen(true);
-              }}
-              style={({ pressed }) => [styles.guideInfoBtn, pressed && styles.guideInfoBtnPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Dungeons guide"
-            >
-              <Info size={17} color={Colors.dark.gold} strokeWidth={2.4} />
-            </Pressable>
-          </View>
-
-          <View style={styles.keysSummaryRow}>
-            <View style={styles.keysOwnedPill}>
-              <Key size={16} color={Colors.dark.cyan} strokeWidth={2.2} />
-              <Text style={styles.keysStockCount}>{dungeonKeys}</Text>
-              <Text style={styles.keysStockLabel}>Dungeon keys</Text>
-            </View>
-          </View>
+          <SectionBanner
+            title="Dungeons"
+            source={DUNGEONS_BANNER_BG}
+            onInfoPress={() => setDungeonsGuideOpen(true)}
+            infoAccessibilityLabel="Dungeons guide"
+            footerSlot={
+              <SectionBannerCounter emoji="🗝️" value={dungeonKeys} label="dungeon keys" />
+            }
+          />
 
           <Pressable
             onPress={handleBuyKey}
@@ -929,28 +899,6 @@ const styles = StyleSheet.create({
     alignItems: "center" as const,
     marginBottom: 16,
   },
-  headerEmblem: {
-    marginBottom: 10,
-    borderRadius: 20,
-    overflow: "hidden" as const,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#9b6dff",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.45,
-        shadowRadius: 12,
-      },
-      android: { elevation: 10 },
-      default: {},
-    }),
-  },
-  headerEmblemGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 20,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
   title: {
     fontSize: 24,
     fontWeight: "800" as const,
@@ -962,28 +910,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.dark.textSecondary,
     marginTop: 4,
-  },
-  sectionTitleWithInfo: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    gap: 8,
-    marginBottom: 12,
-    flexWrap: "wrap" as const,
-  },
-  guideInfoBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: Colors.dark.gold + "55",
-    backgroundColor: Colors.dark.surface + "dd",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  guideInfoBtnPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.95 }],
   },
   elixirCta: {
     marginTop: 4,
@@ -1036,71 +962,12 @@ const styles = StyleSheet.create({
   elixirPriceDisabled: {
     color: Colors.dark.textMuted,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800" as const,
-    color: Colors.dark.text,
-    letterSpacing: 0.5,
-  },
   cooldownBanner: {
     fontSize: 12,
     fontWeight: "700" as const,
     color: Colors.dark.gold,
     marginBottom: 8,
     textAlign: "center" as const,
-  },
-  streakAndConsumablesRow: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    gap: 10,
-    marginBottom: 10,
-  },
-  streakPill: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.dark.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: Colors.dark.fire + "35",
-    gap: 8,
-  },
-  elixirOwnedPill: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
-    backgroundColor: Colors.dark.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: Colors.dark.cyan + "35",
-  },
-  elixirOwnedCount: {
-    fontSize: 17,
-    fontWeight: "800" as const,
-    color: Colors.dark.cyan,
-  },
-  elixirOwnedLabel: {
-    fontSize: 12,
-    fontWeight: "600" as const,
-    color: Colors.dark.textSecondary,
-  },
-  streakEmoji: {
-    fontSize: 17,
-  },
-  streakValue: {
-    fontSize: 18,
-    fontWeight: "800" as const,
-    color: Colors.dark.fire,
-  },
-  streakLabel: {
-    fontSize: 13,
-    fontWeight: "600" as const,
-    color: Colors.dark.textSecondary,
   },
   sectionHint: {
     fontSize: 12,
@@ -1179,10 +1046,29 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   portraitGradientBottom: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingBottom: 12,
     paddingTop: 28,
     justifyContent: "flex-end" as const,
+  },
+  buffStatsPanel: {
+    backgroundColor: "rgba(14, 10, 24, 0.94)",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: "rgba(212, 175, 55, 0.35)",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.45,
+        shadowRadius: 6,
+      },
+      android: { elevation: 5 },
+      default: {},
+    }),
   },
   portraitDragonName: {
     fontSize: 20,
@@ -1204,27 +1090,30 @@ const styles = StyleSheet.create({
   buffRow: {
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
-    gap: 6,
-    marginBottom: 10,
+    gap: 8,
+    justifyContent: "center" as const,
   },
   buffChip: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: 4,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    gap: 6,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 11,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.18)",
   },
   buffEmoji: {
-    fontSize: 12,
+    fontSize: 17,
   },
   buffText: {
-    fontSize: 11,
-    fontWeight: "700" as const,
-    color: "#fff",
+    fontSize: 14,
+    fontWeight: "800" as const,
+    color: "#f5f0ff",
+    textShadowColor: "rgba(0,0,0,0.65)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   setActiveBtn: {
     borderRadius: 12,
@@ -1249,35 +1138,6 @@ const styles = StyleSheet.create({
   },
   dungeonsBlock: {
     marginTop: 20,
-  },
-  keysSummaryRow: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    gap: 10,
-    marginBottom: 10,
-  },
-  keysOwnedPill: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
-    backgroundColor: Colors.dark.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: Colors.dark.cyan + "35",
-  },
-  keysStockCount: {
-    fontSize: 17,
-    fontWeight: "800" as const,
-    color: Colors.dark.cyan,
-  },
-  keysStockLabel: {
-    fontSize: 12,
-    fontWeight: "600" as const,
-    color: Colors.dark.textSecondary,
   },
   keyCta: {
     marginTop: 4,

@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { fetchDailyReflection, upsertDailyReflection } from "@/lib/dailyReflections";
+import { useGameStore } from "@/store/gameStore";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 
 type Props = {
@@ -50,6 +51,9 @@ export default function DailyReflectionPanel({ dateKey, userId, variant = "modal
         const c = row?.content ?? "";
         setDraft(c);
         setSavedRemote(c);
+        if (c.trim().length > 0) {
+          useGameStore.getState().recordHeroReflectionSaved(dateKey);
+        }
       }
       setLoading(false);
     });
@@ -76,6 +80,9 @@ export default function DailyReflectionPanel({ dateKey, userId, variant = "modal
     const next = row?.content ?? draft.trim();
     setSavedRemote(next);
     setDraft(next);
+    if (next.trim().length > 0) {
+      useGameStore.getState().recordHeroReflectionSaved(dateKey);
+    }
   }, [userId, dateKey, draft]);
 
   const bottomPad = variant === "screen" ? Math.max(insets.bottom, 12) + 8 : 8;

@@ -84,4 +84,22 @@ export const REALM_MOCK_HEROES: RealmMockHero[] = [
     outfitItemId: null,
     relicItemId: null,
   },
+  {
+    id: "m9",
+    name: "Isolde Greymark",
+    playerClass: "paladin",
+    level: 17,
+    streak: 96,
+    outfitItemId: "s-banner",
+    relicItemId: "p-sigil",
+  },
+  {
+    id: "m10",
+    name: "Darrow Kind",
+    playerClass: "warrior",
+    level: 22,
+    streak: 201,
+    outfitItemId: "s-plate",
+    relicItemId: "s-key",
+  },
 ];

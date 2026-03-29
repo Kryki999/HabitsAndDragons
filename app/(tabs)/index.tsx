@@ -14,7 +14,7 @@ import { Plus, CalendarClock, ScrollText, SlidersHorizontal } from 'lucide-react
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
-import { StatType, HabitDifficulty, TaskType, type Habit } from '@/types/game';
+import { StatType, TaskType, type Habit } from '@/types/game';
 import HabitCard from '@/components/HabitCard';
 import AddHabitModal from '@/components/AddHabitModal';
 import HomeScenePanel from '@/components/HomeScenePanel';
@@ -79,7 +79,6 @@ export default function CastleScreen() {
       stat: StatType;
       taskType: TaskType;
       icon: string;
-      difficulty: HabitDifficulty;
       scheduledDate?: string | null;
     }) => {
       addHabit(habit);

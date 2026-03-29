@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo } from "react";
 import {
   View,
   Text,
@@ -9,17 +9,16 @@ import {
   Image,
   useWindowDimensions,
   Platform,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { X, Lock } from 'lucide-react-native';
-import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
-import Colors from '@/constants/colors';
-import { KINGDOM_PROGRESSION_STAGES } from '@/constants/kingdomVisuals';
-import { getCastleTier } from '@/constants/kingdomTiers';
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { X, Lock } from "lucide-react-native";
+import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
+import Colors from "@/constants/colors";
+import { KINGDOM_PROGRESSION_STAGES } from "@/constants/kingdomVisuals";
 
-const COLUMNS = 3;
-const COL_GAP = 8;
-const ROW_GAP = 12;
+const COLUMNS = 2;
+const COL_GAP = 12;
+const ROW_GAP = 14;
 const H_PAD = 16;
 
 interface KingdomProgressionModalProps {
@@ -49,17 +48,14 @@ export default function KingdomProgressionModal({
     return (inner - COL_GAP * (COLUMNS - 1)) / COLUMNS;
   }, [modalMaxW]);
 
-  const rows = useMemo(
-    () => chunkStages(KINGDOM_PROGRESSION_STAGES, COLUMNS),
-    [],
-  );
+  const rows = useMemo(() => chunkStages(KINGDOM_PROGRESSION_STAGES, COLUMNS), []);
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={[styles.sheet, { maxWidth: modalMaxW }]} onPress={(e) => e.stopPropagation()}>
           <LinearGradient
-            colors={['#1e1628', '#120c1a', '#0a0710']}
+            colors={["#1e1628", "#120c1a", "#0a0710"]}
             style={styles.sheetGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 0.4, y: 1 }}
@@ -89,17 +85,17 @@ export default function KingdomProgressionModal({
                   key={`row-${rowIndex}`}
                   style={[styles.gridRow, rowIndex < rows.length - 1 && { marginBottom: ROW_GAP }]}
                 >
-                  {[0, 1, 2].map((col) => {
-                    const stage = row[col];
-                    const marginRight = col < COLUMNS - 1 ? COL_GAP : 0;
-                    return (
-                      <View key={`${rowIndex}-${col}`} style={{ width: cellW, marginRight }}>
-                        {stage ? (
-                          <StageCell stage={stage} playerLevel={playerLevel} cellW={cellW} />
-                        ) : null}
-                      </View>
-                    );
-                  })}
+                  {row.map((stage, col) => (
+                    <View
+                      key={stage.unlockLevel}
+                      style={{
+                        width: cellW,
+                        marginRight: col < row.length - 1 ? COL_GAP : 0,
+                      }}
+                    >
+                      <StageCell stage={stage} playerLevel={playerLevel} cellW={cellW} />
+                    </View>
+                  ))}
                 </View>
               ))}
             </ScrollView>
@@ -120,45 +116,37 @@ function StageCell({
   cellW: number;
 }) {
   const unlocked = playerLevel >= stage.unlockLevel;
-  const tier = getCastleTier(stage.unlockLevel);
-  const label = `${tier.emoji}`;
-
-  const thumbSize = cellW;
+  const thumbH = Math.round(cellW * 1.22);
 
   return (
-    <View style={[styles.card, unlocked ? styles.cardUnlocked : styles.cardLocked, { width: cellW }]}>
-      <View style={[styles.thumbWrap, { width: thumbSize, height: thumbSize }]}>
+    <View
+      style={[
+        styles.tile,
+        unlocked ? styles.tileUnlocked : styles.tileLocked,
+        { width: cellW },
+      ]}
+    >
+      <View style={[styles.artWrap, { width: cellW, height: thumbH }]}>
         {stage.previewSource ? (
           <Image
             source={stage.previewSource}
-            style={[styles.thumb, !unlocked && styles.thumbDimmed]}
+            style={[styles.art, !unlocked && styles.artDimmed]}
             resizeMode="cover"
           />
         ) : (
-          <View style={[styles.thumbPlaceholder, !unlocked && styles.thumbDimmed]} />
+          <View style={[styles.artSilhouette, !unlocked && styles.artDimmed]} />
         )}
         {!unlocked ? (
-          <View style={styles.lockOverlay}>
-            <View style={styles.lockCircle}>
-              <Lock size={16} color={Colors.dark.gold} strokeWidth={2.4} />
+          <View style={styles.lockVeil}>
+            <View style={styles.lockBadge}>
+              <Lock size={22} color={Colors.dark.gold} strokeWidth={2.6} />
             </View>
           </View>
         ) : null}
       </View>
-      <Text style={styles.stageEmoji} numberOfLines={1}>
-        {label}
-      </Text>
-      <Text style={styles.stageName} numberOfLines={2}>
-        {tier.name}
-      </Text>
-      <Text style={styles.stageMeta}>Lv.{stage.unlockLevel}</Text>
-      {!unlocked ? (
-        <Text style={styles.unlockHint} numberOfLines={2}>
-          Unlocks Lv.{stage.unlockLevel}
-        </Text>
-      ) : (
-        <Text style={styles.unlockedHint}>Unlocked</Text>
-      )}
+      <View style={[styles.reqStrip, !unlocked && styles.reqStripLocked]}>
+        <Text style={[styles.reqText, !unlocked && styles.reqTextLocked]}>Lvl {stage.unlockLevel}</Text>
+      </View>
     </View>
   );
 }
@@ -166,21 +154,21 @@ function StageCell({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.72)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.72)",
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 14,
   },
   sheet: {
-    width: '100%',
-    maxHeight: '88%',
+    width: "100%",
+    maxHeight: "88%",
     borderRadius: 18,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: Colors.dark.border + 'aa',
+    borderColor: Colors.dark.border + "aa",
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.45,
         shadowRadius: 20,
@@ -193,134 +181,119 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: H_PAD,
     paddingTop: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.dark.border + '55',
+    borderBottomColor: Colors.dark.border + "55",
   },
   title: {
     flex: 1,
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: "800",
     color: Colors.dark.text,
     letterSpacing: 0.3,
   },
   closeBtn: {
     padding: 6,
     borderRadius: 10,
-    backgroundColor: Colors.dark.surface + 'cc',
+    backgroundColor: Colors.dark.surface + "cc",
     borderWidth: 1,
-    borderColor: Colors.dark.border + '88',
+    borderColor: Colors.dark.border + "88",
   },
   closeBtnPressed: {
     opacity: 0.85,
   },
   scroll: {
-    maxHeight: 460,
+    maxHeight: 480,
   },
   scrollContent: {
     paddingHorizontal: H_PAD,
-    paddingTop: 14,
-    paddingBottom: 12,
+    paddingTop: 16,
+    paddingBottom: 14,
   },
   gridRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'stretch',
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    alignItems: "stretch",
   },
-  cellOuter: {
-    alignItems: 'center',
+  tile: {
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 2,
+    backgroundColor: "#06040a",
   },
-  card: {
-    borderRadius: 10,
-    overflow: 'hidden',
-    borderWidth: 1,
-    alignItems: 'center',
-    paddingBottom: 6,
+  tileUnlocked: {
+    borderColor: Colors.dark.gold + "88",
   },
-  cardUnlocked: {
-    borderColor: Colors.dark.gold + '44',
-    backgroundColor: Colors.dark.surface + 'aa',
+  tileLocked: {
+    borderColor: "#0d0a12",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.5,
+        shadowRadius: 0,
+      },
+      android: { elevation: 2 },
+      default: {},
+    }),
   },
-  cardLocked: {
-    borderColor: Colors.dark.border + '66',
-    backgroundColor: Colors.dark.background + 'ee',
+  artWrap: {
+    backgroundColor: "#050308",
+    overflow: "hidden",
   },
-  thumbWrap: {
-    backgroundColor: '#08060c',
-    overflow: 'hidden',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+  art: {
+    width: "100%",
+    height: "100%",
   },
-  thumb: {
-    width: '100%',
-    height: '100%',
+  artDimmed: {
+    opacity: 0.32,
   },
-  thumbDimmed: {
-    opacity: 0.38,
+  artSilhouette: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#0e0c14",
   },
-  thumbPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#0c0a12',
-  },
-  lockOverlay: {
+  lockVeil: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.48)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.52)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  lockCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.dark.surface + 'ee',
-    borderWidth: 1,
-    borderColor: Colors.dark.gold + '55',
-    alignItems: 'center',
-    justifyContent: 'center',
+  lockBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(12,10,20,0.94)",
+    borderWidth: 2,
+    borderColor: Colors.dark.gold + "66",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  stageEmoji: {
-    fontSize: 14,
-    marginTop: 4,
-    textAlign: 'center',
+  reqStrip: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    backgroundColor: "rgba(10,8,18,0.98)",
+    borderTopWidth: 2,
+    borderTopColor: "rgba(0,0,0,0.85)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  stageName: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: Colors.dark.text,
-    textAlign: 'center',
-    paddingHorizontal: 4,
-    marginTop: 2,
-    minHeight: 22,
-    lineHeight: 11,
+  reqStripLocked: {
+    backgroundColor: "rgba(6,5,12,0.98)",
+    borderTopColor: "#0a0810",
   },
-  stageMeta: {
-    fontSize: 9,
-    fontWeight: '800',
+  reqText: {
+    fontSize: 15,
+    fontWeight: "900",
     color: Colors.dark.gold,
-    marginTop: 3,
-    textAlign: 'center',
-    letterSpacing: 0.3,
+    letterSpacing: 0.6,
   },
-  unlockHint: {
-    fontSize: 8,
-    fontWeight: '700',
+  reqTextLocked: {
     color: Colors.dark.textMuted,
-    paddingHorizontal: 2,
-    marginTop: 3,
-    textAlign: 'center',
-    lineHeight: 10,
-  },
-  unlockedHint: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: Colors.dark.emerald,
-    marginTop: 3,
-    textAlign: 'center',
   },
 });

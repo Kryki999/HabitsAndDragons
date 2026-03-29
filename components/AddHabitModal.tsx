@@ -14,21 +14,15 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { X, ChevronRight, Scroll, PenTool } from 'lucide-react-native';
-import { impactAsync, selectionAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
+import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '@/constants/colors';
-import { StatType, SuggestedHabit, HabitDifficulty, TaskType } from '@/types/game';
+import { StatType, SuggestedHabit, TaskType } from '@/types/game';
 import type { OracleTaskStatWeights } from '@/types/oracle';
 import { suggestedHabits } from '@/mocks/suggestedHabits';
 import { AIStatService } from '@/services/aiStatService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-const DIFFICULTY_OPTIONS: { value: HabitDifficulty; label: string; hint: string }[] = [
-  { value: 'easy', label: 'Easy', hint: '15 XP · 5 gold' },
-  { value: 'medium', label: 'Medium', hint: '25 XP · 10 gold' },
-  { value: 'hard', label: 'Hard', hint: '40 XP · 20 gold' },
-];
 
 interface AddHabitModalProps {
   visible: boolean;
@@ -40,7 +34,6 @@ interface AddHabitModalProps {
     stat: StatType;
     taskType: TaskType;
     icon: string;
-    difficulty: HabitDifficulty;
     scheduledDate?: string | null;
     oracleStatWeights?: OracleTaskStatWeights;
   }) => void;
@@ -82,11 +75,6 @@ function SuggestedHabitItem({ habit, onSelect }: { habit: SuggestedHabit; onSele
           <View style={styles.suggestedInfo}>
             <Text style={styles.suggestedName}>{habit.name}</Text>
             <Text style={styles.suggestedDesc} numberOfLines={2}>{habit.rpgDescription}</Text>
-            <View style={styles.suggestedMetaRow}>
-              <Text style={styles.suggestedDiff}>
-                {habit.difficulty === 'easy' ? 'Easy' : habit.difficulty === 'hard' ? 'Hard' : 'Med'}
-              </Text>
-            </View>
           </View>
           <ChevronRight size={18} color={Colors.dark.textMuted} />
         </View>
@@ -102,7 +90,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
   const [customDesc, setCustomDesc] = useState('');
   const [selectedTaskType, setSelectedTaskType] = useState<TaskType>('daily');
   const [selectedIcon, setSelectedIcon] = useState('⚔️');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<HabitDifficulty>('medium');
   const [selectedScheduledDateKey, setSelectedScheduledDateKey] = useState<string | null>(initialScheduledDateKey ?? null);
   const [oracleBusy, setOracleBusy] = useState(false);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -128,7 +115,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
 
   const renderSchedulePicker = () => (
     <View style={styles.scheduleWrap}>
-      <Text style={styles.scheduleLabel}>Scheduled date</Text>
+      <Text style={styles.scheduleLabel}>Plan date</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={styles.scheduleRow}>
           {scheduleChips.map((c) => {
@@ -158,7 +145,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
       setCustomDesc('');
       setSelectedTaskType('daily');
       setSelectedIcon('⚔️');
-      setSelectedDifficulty('medium');
       const todayKey = getTodayKey();
       setSelectedScheduledDateKey(
         initialScheduledDateKey && initialScheduledDateKey === todayKey ? null : (initialScheduledDateKey ?? null),
@@ -194,7 +180,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
       stat: habit.stat,
       taskType: habit.taskType,
       icon: habit.icon,
-      difficulty: habit.difficulty,
       scheduledDate: selectedScheduledDateKey ?? null,
     });
     handleClose();
@@ -212,7 +197,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
         stat: oracle.gameStat,
         taskType: selectedTaskType,
         icon: selectedIcon,
-        difficulty: selectedDifficulty,
         scheduledDate: selectedScheduledDateKey ?? null,
         oracleStatWeights: oracle.weights,
       });
@@ -225,7 +209,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
     customDesc,
     selectedTaskType,
     selectedIcon,
-    selectedDifficulty,
     onAddHabit,
     handleClose,
     selectedScheduledDateKey,
@@ -302,9 +285,8 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
         <Pressable onPress={() => setView('choose')} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </Pressable>
-        <Text style={styles.sectionTitle}>Suggested Quests</Text>
-
         {renderSchedulePicker()}
+        <Text style={styles.sectionTitle}>Suggested Quests</Text>
 
         <Text style={styles.timeGroupLabel}>🔁 Daily Habits</Text>
         {dailyHabits.map(h => (
@@ -330,7 +312,9 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
           <Pressable onPress={() => setView('choose')} style={styles.backBtn}>
             <Text style={styles.backText}>← Back</Text>
           </Pressable>
+          {renderSchedulePicker()}
           <Text style={styles.sectionTitle}>Craft Your Quest</Text>
+
           <View style={styles.taskTypeSwitch}>
             <Pressable
               onPress={() => setSelectedTaskType('daily')}
@@ -383,34 +367,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
               </Pressable>
             ))}
           </View>
-
-          <Text style={styles.fieldLabel}>Difficulty</Text>
-          <View style={styles.statRow}>
-            {DIFFICULTY_OPTIONS.map(d => (
-              <Pressable
-                key={d.value}
-                onPress={() => {
-                  selectionAsync();
-                  setSelectedDifficulty(d.value);
-                }}
-                style={[
-                  styles.timeOption,
-                  selectedDifficulty === d.value && { borderColor: Colors.dark.gold, backgroundColor: Colors.dark.gold + '12' },
-                ]}
-                testID={`difficulty-option-${d.value}`}
-              >
-                <Text style={[
-                  styles.timeOptionText,
-                  { color: selectedDifficulty === d.value ? Colors.dark.gold : Colors.dark.textMuted },
-                ]}>
-                  {d.label}
-                </Text>
-                <Text style={styles.diffHint}>{d.hint}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {renderSchedulePicker()}
 
           <Pressable
             onPress={() => void handleCreateCustom()}
@@ -671,16 +627,6 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginBottom: 6,
   },
-  suggestedMetaRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 8,
-  },
-  suggestedDiff: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    color: Colors.dark.textMuted,
-  },
   suggestedBottom: {
     height: 3,
   },
@@ -730,38 +676,9 @@ const styles = StyleSheet.create({
   iconOptionText: {
     fontSize: 20,
   },
-  statRow: {
-    flexDirection: 'row' as const,
-    gap: 10,
-    marginBottom: 16,
-  },
-  timeOption: {
-    flex: 1,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: Colors.dark.border,
-    backgroundColor: Colors.dark.surface,
-  },
-  timeEmoji: {
-    fontSize: 18,
-    marginBottom: 4,
-  },
-  timeOptionText: {
-    fontSize: 12,
-    fontWeight: '700' as const,
-  },
-  diffHint: {
-    fontSize: 9,
-    color: Colors.dark.textMuted,
-    marginTop: 2,
-    textAlign: 'center' as const,
-  },
   scheduleWrap: {
-    marginTop: 14,
-    marginBottom: 6,
+    marginTop: 0,
+    marginBottom: 16,
   },
   scheduleLabel: {
     fontSize: 12,

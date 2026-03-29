@@ -38,8 +38,8 @@ import SpriteAnimator from "@/components/SpriteAnimator";
 
 const CHALLENGES_LIST = Object.values(DUNGEON_CHALLENGES);
 
-/** Portrait card: width × (16/9) height ≈ tall phone poster. */
-export const PORTRAIT_CARD_HEIGHT_RATIO = 16 / 9;
+/** Portrait card: height = width × ratio (taller poster in carousels). */
+export const PORTRAIT_CARD_HEIGHT_RATIO = 2.12;
 
 /** Wysokość paska lootu dopasowana do rzędu przycisku Fight (~padding 14×2 + treść). */
 const LOOT_STRIP_ROW_HEIGHT = 48;
