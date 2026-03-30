@@ -20,6 +20,7 @@ import MailboxModal from "@/components/MailboxModal";
 import SettingsModal from "@/components/SettingsModal";
 import PlayerProfileModal from "@/components/PlayerProfileModal";
 import CelebrationOverlayHost from "@/components/CelebrationOverlayHost";
+import DailyFlowModal from "@/components/DailyFlowModal";
 
 type TabIconProps = {
   color: string;
@@ -85,9 +86,11 @@ function TabsWithTopBar() {
   const gold = useGameStore((s) => s.gold);
   const streak = useGameStore((s) => s.streak);
   const heroDisplayName = useGameStore((s) => s.heroDisplayName);
+  const playerClass = useGameStore((s) => s.playerClass);
   const getPlayerLevel = useGameStore((s) => s.getPlayerLevel);
   const getCurrentLevelXP = useGameStore((s) => s.getCurrentLevelXP);
   const getXPForNextLevel = useGameStore((s) => s.getXPForNextLevel);
+  const getTotalXP = useGameStore((s) => s.getTotalXP);
   const { user, playerId, signOut } = useAuth();
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -100,6 +103,16 @@ function TabsWithTopBar() {
   const xpProgress = xpForNext > 0 ? currentLevelXP / xpForNext : 0;
 
   const hudPlayerName = (heroDisplayName?.trim() || user?.email?.split("@")[0]?.trim() || "Wayfarer").slice(0, 48);
+
+  const selfProfileSubject = playerClass
+    ? {
+        name: hudPlayerName,
+        level: playerLevel,
+        streak,
+        playerClass,
+        totalXP: getTotalXP(),
+      }
+    : null;
 
   return (
     <View style={styles.shell}>
@@ -135,10 +148,6 @@ function TabsWithTopBar() {
             <View style={styles.hudStatItem}>
               <Coins color={Colors.dark.gold} size={15} strokeWidth={2.2} />
               <Text style={styles.hudStatValueGold}>{gold}</Text>
-            </View>
-            <View style={styles.hudStatItem}>
-              <Text style={styles.hudStatEmoji}>🔥</Text>
-              <Text style={styles.hudStatValueFire}>{streak}</Text>
             </View>
           </View>
 
@@ -266,13 +275,13 @@ function TabsWithTopBar() {
       <PlayerProfileModal
         visible={profileOpen}
         onClose={() => setProfileOpen(false)}
+        subject={selfProfileSubject}
         email={user?.email ?? null}
-        playerId={playerId}
-        level={playerLevel}
         onSignOut={signOut}
       />
 
       <CelebrationOverlayHost />
+      <DailyFlowModal />
     </View>
   );
 }

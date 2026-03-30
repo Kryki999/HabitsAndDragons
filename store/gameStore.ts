@@ -70,7 +70,7 @@ function getEconomyPatchIfNewDay(state: GameState): Partial<GameState> | null {
     firstDungeonKeyDroppedToday: false,
     sageEpicQuestClaimedToday: false,
     habitCompletionLog: {},
-    completedHabitNamesByDate: {},
+    // completedHabitNamesByDate is a PERMANENT history — never reset on day change
     lastEconomyResetDate: today,
     sageEpicQuestDate: today,
     sageEpicQuestId: pickRandomEpicQuestId(),
@@ -236,6 +236,7 @@ export const useGameStore = create<GameStore>()(
       heroDailyQuestClaimsDate: null,
       heroDailyQuestClaimedIds: [],
       heroEpicMilestoneClaimedIds: [],
+      forceDailyFlowPending: false,
 
       recordHeroReflectionSaved: (dateKey: string) => {
         if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
@@ -325,6 +326,15 @@ export const useGameStore = create<GameStore>()(
 
       dismissDailyWelcome: () =>
         set({ lastDailyWelcomeDate: getTodayString() }),
+
+      triggerForceDailyFlow: () =>
+        set({ forceDailyFlowPending: true }),
+
+      resetDailyFlowStatus: () =>
+        set({ lastDailyWelcomeDate: null, lastAppOpenDate: null }),
+
+      completeDailyFlow: () =>
+        set({ lastDailyWelcomeDate: getTodayString(), forceDailyFlowPending: false }),
 
       acknowledgePlayerLevelUp: () =>
         set({ lastAcknowledgedPlayerLevel: get().getPlayerLevel() }),

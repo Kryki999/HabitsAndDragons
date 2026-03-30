@@ -4,8 +4,6 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Modal,
-  useWindowDimensions,
 } from "react-native";
 import Svg, { Line, Polygon } from "react-native-svg";
 import {
@@ -73,22 +71,23 @@ function dataPolygonPoints(
 
 type TooltipState = {
   statId: HeroHexStatId;
-  /** Screen coordinates for tooltip anchor (center above icon). */
-  anchorX: number;
-  anchorY: number;
+  /** Chart-relative x center of the stat icon */
+  iconCx: number;
+  /** Chart-relative y center of the stat icon */
+  iconCy: number;
 };
 
 const TOOLTIP_AUTO_MS = 3000;
 const ICON_HIT = 40;
+const TOOLTIP_W = 180;
+const TOOLTIP_H = 40;
 
 type Props = {
   size?: number;
-  /** Override mock for future store wiring. */
   stats?: HeroHexStats;
 };
 
 export default function HeroHexRadarChart({ size = 220, stats: statsProp }: Props) {
-  const { width: screenW, height: screenH } = useWindowDimensions();
   const stats = statsProp ?? MOCK_HERO_HEX_STATS;
   const maxScale = useMemo(() => radarDynamicMax(stats), [stats]);
 
@@ -124,7 +123,6 @@ export default function HeroHexRadarChart({ size = 220, stats: statsProp }: Prop
 
   const [tip, setTip] = useState<TooltipState | null>(null);
   const tipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const iconRefs = useRef<Partial<Record<HeroHexStatId, View | null>>>({});
 
   const clearTipTimer = useCallback(() => {
     if (tipTimerRef.current) {
@@ -141,116 +139,114 @@ export default function HeroHexRadarChart({ size = 220, stats: statsProp }: Prop
   useEffect(() => () => clearTipTimer(), [clearTipTimer]);
 
   const openTip = useCallback(
-    (statId: HeroHexStatId) => {
+    (statId: HeroHexStatId, iconCx: number, iconCy: number) => {
       clearTipTimer();
-      impactAsync(ImpactFeedbackStyle.Light);
-      const node = iconRefs.current[statId];
-      if (!node) return;
-      node.measureInWindow((x, y, iw, ih) => {
-        clearTipTimer();
-        setTip({ statId, anchorX: x + iw / 2, anchorY: y + ih / 2 });
+      // Toggle: tap same stat again to dismiss
+      setTip((prev) => {
+        if (prev?.statId === statId) return null;
+        impactAsync(ImpactFeedbackStyle.Light);
         tipTimerRef.current = setTimeout(() => {
           setTip(null);
           tipTimerRef.current = null;
         }, TOOLTIP_AUTO_MS);
+        return { statId, iconCx, iconCy };
       });
     },
     [clearTipTimer],
   );
 
+  /** Compute chart-relative tooltip position, clamped inside the chart box */
+  const tooltipPos = useMemo(() => {
+    if (!tip) return null;
+    let left = tip.iconCx - TOOLTIP_W / 2;
+    left = Math.max(4, Math.min(left, w - TOOLTIP_W - 4));
+    let top = tip.iconCy - ICON_HIT / 2 - TOOLTIP_H - 6;
+    if (top < 4) top = tip.iconCy + ICON_HIT / 2 + 6; // flip below
+    top = Math.max(4, Math.min(top, h - TOOLTIP_H - 4));
+    return { left, top };
+  }, [tip, w, h]);
+
   const tipLabel = tip ? HERO_HEX_LABELS[tip.statId] : "";
   const tipValue = tip ? formatStatValue(stats[tip.statId]) : "";
 
-  const tooltipStyle = useMemo(() => {
-    if (!tip) return null;
-    const boxW = 200;
-    const margin = 12;
-    let left = tip.anchorX - boxW / 2;
-    left = Math.max(margin, Math.min(left, screenW - boxW - margin));
-    let top = tip.anchorY - ICON_HIT / 2 - 52;
-    top = Math.max(margin, Math.min(top, screenH - 80));
-    return { left, top, width: boxW };
-  }, [tip, screenW, screenH]);
-
   return (
-    <>
-      <View style={styles.wrap}>
-        <View style={{ width: w, height: h }} collapsable={false}>
-          <Svg width={w} height={h}>
-            {rings.map((k) => (
-              <Polygon
-                key={k}
-                points={hexPointsString(cx, cy, gridR * k)}
-                fill="none"
-                stroke={Colors.dark.border + "66"}
-                strokeWidth={0.8}
-              />
-            ))}
-            {spokeLines.map((s, i) => (
-              <Line
-                key={i}
-                x1={s.x1}
-                y1={s.y1}
-                x2={s.x2}
-                y2={s.y2}
-                stroke={Colors.dark.border + "44"}
-                strokeWidth={0.7}
-              />
-            ))}
+    <View style={styles.wrap}>
+      {/* Chart frame — overflow visible so tooltip can sit over icons */}
+      <View style={[styles.chartFrame, { width: w, height: h }]} collapsable={false}>
+        <Svg width={w} height={h}>
+          {rings.map((k) => (
             <Polygon
-              points={dataPoints}
-              fill="rgba(139, 21, 56, 0.28)"
-              stroke="rgba(220, 38, 38, 0.55)"
-              strokeWidth={1.5}
-              strokeLinejoin="round"
+              key={k}
+              points={hexPointsString(cx, cy, gridR * k)}
+              fill="none"
+              stroke={Colors.dark.border + "66"}
+              strokeWidth={0.8}
             />
-          </Svg>
+          ))}
+          {spokeLines.map((s, i) => (
+            <Line
+              key={i}
+              x1={s.x1}
+              y1={s.y1}
+              x2={s.x2}
+              y2={s.y2}
+              stroke={Colors.dark.border + "44"}
+              strokeWidth={0.7}
+            />
+          ))}
+          <Polygon
+            points={dataPoints}
+            fill="rgba(139, 21, 56, 0.28)"
+            stroke="rgba(220, 38, 38, 0.55)"
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+          />
+        </Svg>
 
-          {HERO_HEX_STAT_AXIS_ORDER.map((statId, i) => {
-            const a = -Math.PI / 2 + (i * 2 * Math.PI) / N;
-            const ix = cx + iconR * Math.cos(a) - ICON_HIT / 2;
-            const iy = cy + iconR * Math.sin(a) - ICON_HIT / 2;
-            const { Icon, color } = AXIS_META[statId];
-            return (
-              <View
-                key={statId}
-                ref={(r) => {
-                  iconRefs.current[statId] = r;
-                }}
-                collapsable={false}
-                style={[styles.iconHit, { left: ix, top: iy }]}
+        {HERO_HEX_STAT_AXIS_ORDER.map((statId, i) => {
+          const a = -Math.PI / 2 + (i * 2 * Math.PI) / N;
+          const ix = cx + iconR * Math.cos(a) - ICON_HIT / 2;
+          const iy = cy + iconR * Math.sin(a) - ICON_HIT / 2;
+          const iconCx = ix + ICON_HIT / 2;
+          const iconCy = iy + ICON_HIT / 2;
+          const { Icon, color } = AXIS_META[statId];
+          const isActive = tip?.statId === statId;
+          return (
+            <View
+              key={statId}
+              collapsable={false}
+              style={[
+                styles.iconHit,
+                { left: ix, top: iy },
+                isActive && styles.iconHitActive,
+              ]}
+            >
+              <Pressable
+                onPress={() => openTip(statId, iconCx, iconCy)}
+                style={styles.iconHitInner}
+                accessibilityLabel={`${HERO_HEX_LABELS[statId]} stat`}
+                accessibilityRole="button"
               >
-                <Pressable
-                  onPress={() => openTip(statId)}
-                  style={styles.iconHitInner}
-                  accessibilityLabel={`${HERO_HEX_LABELS[statId]} stat`}
-                  accessibilityRole="button"
-                >
-                  <Icon size={20} color={color} strokeWidth={2.2} />
-                </Pressable>
-              </View>
-            );
-          })}
-        </View>
-      </View>
+                <Icon size={20} color={color} strokeWidth={2.2} />
+              </Pressable>
+            </View>
+          );
+        })}
 
-      <Modal visible={tip !== null} transparent animationType="none" onRequestClose={dismissTip}>
-        <Pressable style={styles.modalBackdrop} onPress={dismissTip} accessibilityLabel="Dismiss" />
-        {tip && tooltipStyle ? (
-          <View
-            pointerEvents="none"
-            style={[
-              styles.tooltip,
-              { left: tooltipStyle.left, top: tooltipStyle.top, width: tooltipStyle.width },
-            ]}
+        {/* Inline tooltip — no Modal, so scroll is never blocked */}
+        {tip && tooltipPos ? (
+          <Pressable
+            onPress={dismissTip}
+            style={[styles.tooltip, { left: tooltipPos.left, top: tooltipPos.top, width: TOOLTIP_W }]}
+            accessibilityLabel="Dismiss tooltip"
           >
             <Text style={styles.tooltipText}>
               {tipLabel}: {tipValue}
             </Text>
-          </View>
+          </Pressable>
         ) : null}
-      </Modal>
-    </>
+      </View>
+    </View>
   );
 }
 
@@ -259,6 +255,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 4,
+  },
+  chartFrame: {
+    position: "relative",
+    overflow: "visible",
   },
   iconHit: {
     position: "absolute",
@@ -270,32 +270,36 @@ const styles = StyleSheet.create({
     borderColor: Colors.dark.border + "66",
     overflow: "hidden",
   },
+  iconHitActive: {
+    borderColor: Colors.dark.gold + "aa",
+    backgroundColor: Colors.dark.gold + "18",
+  },
   iconHitInner: {
     width: "100%",
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
   },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "transparent",
-  },
   tooltip: {
     position: "absolute",
-    paddingVertical: 10,
+    height: TOOLTIP_H,
+    paddingVertical: 0,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: "rgba(18, 12, 28, 0.96)",
+    backgroundColor: "rgba(18, 12, 28, 0.97)",
     borderWidth: 1,
-    borderColor: Colors.dark.border + "aa",
+    borderColor: Colors.dark.gold + "88",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 100,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
+    shadowOpacity: 0.5,
     shadowRadius: 8,
     elevation: 12,
   },
   tooltipText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
     color: Colors.dark.text,
     textAlign: "center",

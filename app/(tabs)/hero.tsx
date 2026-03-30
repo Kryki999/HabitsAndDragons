@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -70,6 +70,37 @@ function calendarYesterdayKey(): string {
   return y.toISOString().split("T")[0]!;
 }
 
+function calendarTomorrowKey(): string {
+  const t = new Date();
+  t.setDate(t.getDate() + 1);
+  return t.toISOString().split("T")[0]!;
+}
+
+function formatRemainingToNextMidnight(now: Date): string {
+  const next = new Date(now);
+  next.setHours(24, 0, 0, 0);
+  const ms = Math.max(0, next.getTime() - now.getTime());
+  const totalMinutes = Math.floor(ms / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function seededOrderForDay<T extends { id: string }>(items: T[], dayKey: string): T[] {
+  const seed = dayKey
+    .split("")
+    .reduce((acc, ch) => (acc * 33 + ch.charCodeAt(0)) >>> 0, 5381);
+  return [...items]
+    .map((item) => {
+      const h = item.id
+        .split("")
+        .reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, seed);
+      return { item, h };
+    })
+    .sort((a, b) => a.h - b.h)
+    .map((x) => x.item);
+}
+
 export default function HeroScreen() {
   const { width } = useWindowDimensions();
   const cardMaxW = Math.min(width - 32, 420);
@@ -93,6 +124,8 @@ export default function HeroScreen() {
   const tasksCompletedToday = useGameStore((s) => s.tasksCompletedToday);
   const reflectionSavedDateKeys = useGameStore((s) => s.reflectionSavedDateKeys);
   const heroShopPurchaseEver = useGameStore((s) => s.heroShopPurchaseEver);
+  const sageEpicRerollsUsedToday = useGameStore((s) => s.sageEpicRerollsUsedToday);
+  const planningDayOrderByDate = useGameStore((s) => s.planningDayOrderByDate);
   const heroDailyQuestClaimsDate = useGameStore((s) => s.heroDailyQuestClaimsDate);
   const heroDailyQuestClaimedIds = useGameStore((s) => s.heroDailyQuestClaimedIds);
   const heroEpicMilestoneClaimedIds = useGameStore((s) => s.heroEpicMilestoneClaimedIds);
@@ -102,6 +135,7 @@ export default function HeroScreen() {
   const [statsTab, setStatsTab] = useState<StatsTab>("stats");
   const [chroniclesOpen, setChroniclesOpen] = useState(false);
   const [chronicleHeatmapDate, setChronicleHeatmapDate] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(() => new Date());
 
   const playerLevel = getPlayerLevel();
   const currentLevelXP = getCurrentLevelXP();
@@ -126,23 +160,47 @@ export default function HeroScreen() {
   const bossesKilled =
     completedStrengthQuests + completedAgilityQuests + completedIntelligenceQuests;
 
-  const todayKey = useMemo(() => new Date().toISOString().split("T")[0]!, []);
+  const todayKey = useMemo(() => nowTick.toISOString().split("T")[0]!, [nowTick]);
+  const nextDailyResetCountdown = useMemo(() => formatRemainingToNextMidnight(nowTick), [nowTick]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTick(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const dailyQuestRows = useMemo(() => {
     const visitedSage = sageChatMessages.some((m) => m.role === "user");
     const habitToday = habits.some((h) => h.completedToday) || tasksCompletedToday > 0;
+    const reflectionToday = !!reflectionSavedDateKeys[todayKey];
     const yKey = calendarYesterdayKey();
     const reflectionYesterday = !!reflectionSavedDateKeys[yKey];
+    const reflectionAnyRecent = reflectionToday || reflectionYesterday;
+    const tomorrowKey = calendarTomorrowKey();
+    const plannedTomorrow =
+      (planningDayOrderByDate[tomorrowKey]?.length ?? 0) > 0 ||
+      habits.some((h) => h.isActive && h.scheduledDate === tomorrowKey);
     const claimedIds =
       heroDailyQuestClaimsDate === todayKey ? heroDailyQuestClaimedIds : [];
 
     const completeById: Record<string, boolean> = {
       daily_visit_sage: visitedSage,
       daily_complete_quest: habitToday,
-      daily_yesterday_reflection: reflectionYesterday,
+      daily_affirmations: visitedSage,
+      daily_gratitude: visitedSage,
+      daily_mood: reflectionAnyRecent,
+      daily_reflection: reflectionAnyRecent,
+      daily_refresh_epic: sageEpicRerollsUsedToday > 0,
+      daily_plan_tomorrow: plannedTomorrow,
+      daily_spend_gold: heroShopPurchaseEver,
+      daily_save_progress: true,
     };
 
-    return HERO_DAILY_RITUALS.map((def) => ({
+    const trackableDailyRituals = HERO_DAILY_RITUALS.filter((def) =>
+      Object.prototype.hasOwnProperty.call(completeById, def.id),
+    );
+    const rotatedDailyRituals = seededOrderForDay(trackableDailyRituals, todayKey).slice(0, 4);
+
+    return rotatedDailyRituals.map((def) => ({
       def,
       objectiveComplete: completeById[def.id] ?? false,
       claimed: claimedIds.includes(def.id),
@@ -152,6 +210,9 @@ export default function HeroScreen() {
     habits,
     tasksCompletedToday,
     reflectionSavedDateKeys,
+    planningDayOrderByDate,
+    sageEpicRerollsUsedToday,
+    heroShopPurchaseEver,
     heroDailyQuestClaimsDate,
     heroDailyQuestClaimedIds,
     todayKey,
@@ -315,6 +376,7 @@ export default function HeroScreen() {
               epicRows={epicQuestRows}
               onClaimDaily={onClaimDaily}
               onClaimEpic={onClaimEpic}
+              dailyResetCountdown={nextDailyResetCountdown}
             />
           </View>
 

@@ -7,7 +7,7 @@ import {
   Pressable,
   ScrollView,
   Image,
-  useWindowDimensions,
+
   Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -17,6 +17,7 @@ import Colors from "@/constants/colors";
 import type { KingdomProfileSubject } from "@/lib/kingdomLeaderboard";
 import type { PlayerClass } from "@/types/game";
 import { getBaseBackgroundForLevel } from "@/constants/kingdomVisuals";
+import { LogOut } from "lucide-react-native";
 
 const CLASS_LABEL: Record<PlayerClass, string> = {
   warrior: "Warrior",
@@ -49,150 +50,127 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   subject: KingdomProfileSubject | null;
+  /** Self-profile extras: shown only when viewing the player's own profile from the HUD */
+  email?: string | null;
+  onSignOut?: () => void;
 };
 
-export default function PlayerProfileModal({ visible, onClose, subject }: Props) {
-  const { width, height } = useWindowDimensions();
-  const maxW = Math.min(width - 24, 400);
-  const maxH = Math.min(height * 0.88, 620);
-
+export default function PlayerProfileModal({ visible, onClose, subject, email, onSignOut }: Props) {
   const open = visible && subject !== null;
   const s = subject;
 
   return (
-    <Modal visible={open} animationType="fade" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+    <Modal visible={open} animationType="slide" onRequestClose={onClose}>
+      <LinearGradient
+        colors={["#2a1f18", "#1a1410", "#0e0c0a"]}
+        style={styles.screen}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      >
         {s ? (
-          <Pressable
-            style={[styles.sheet, { maxWidth: maxW, maxHeight: maxH }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <LinearGradient
-              colors={["#2a1f18", "#1a1410", "#0e0c0a"]}
-              style={styles.sheetGradient}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
+          <>
+            <View style={styles.header}>
+              <Text style={styles.wantedLabel}>Realm record</Text>
+              <Pressable
+                onPress={() => {
+                  impactAsync(ImpactFeedbackStyle.Light);
+                  onClose();
+                }}
+                style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
+                <X size={22} color={Colors.dark.textMuted} strokeWidth={2.4} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollBody}
+              bounces={false}
             >
-              <View style={styles.sheetBorderOuter}>
-                <View style={styles.sheetBorderInner}>
-                  <View style={styles.header}>
-                    <Text style={styles.wantedLabel}>Realm record</Text>
-                    <Pressable
-                      onPress={() => {
-                        impactAsync(ImpactFeedbackStyle.Light);
-                        onClose();
-                      }}
-                      style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Close"
-                    >
-                      <X size={22} color={Colors.dark.textMuted} strokeWidth={2.4} />
-                    </Pressable>
-                  </View>
+              <View style={[styles.avatarRing, { borderColor: CLASS_COLOR[s.playerClass] + "aa" }]}>
+                <LinearGradient
+                  colors={["#1c1624", "#120e18"]}
+                  style={styles.avatarInner}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Text style={styles.avatarInitials}>{initialsFromName(s.name)}</Text>
+                </LinearGradient>
+              </View>
 
-                  <ScrollView
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={styles.scrollBody}
-                    bounces={false}
-                  >
-                    <View style={[styles.avatarRing, { borderColor: CLASS_COLOR[s.playerClass] + "aa" }]}>
-                      <LinearGradient
-                        colors={["#1c1624", "#120e18"]}
-                        style={styles.avatarInner}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                      >
-                        <Text style={styles.avatarInitials}>{initialsFromName(s.name)}</Text>
-                      </LinearGradient>
-                    </View>
+              <Text style={styles.name} numberOfLines={2}>
+                {s.name}
+              </Text>
+              <Text style={[styles.classLine, { color: CLASS_COLOR[s.playerClass] }]}>
+                {CLASS_LABEL[s.playerClass]}
+              </Text>
 
-                    <Text style={styles.name} numberOfLines={2}>
-                      {s.name}
-                    </Text>
-                    <Text style={[styles.classLine, { color: CLASS_COLOR[s.playerClass] }]}>
-                      {CLASS_LABEL[s.playerClass]}
-                    </Text>
-
-                    <View style={styles.statRow}>
-                      <View style={styles.statBox}>
-                        <Text style={styles.statLabel}>Level</Text>
-                        <Text style={styles.statValue}>{s.level}</Text>
-                      </View>
-                      <View style={styles.statBox}>
-                        <Text style={styles.statLabel}>Streak</Text>
-                        <Text style={[styles.statValue, { color: Colors.dark.fire }]}>{s.streak}</Text>
-                      </View>
-                    </View>
-
-                    <Text style={styles.sectionLabel}>Fortress</Text>
-                    <View style={styles.castlePreview}>
-                      <Image
-                        source={getBaseBackgroundForLevel(s.level)}
-                        style={styles.castleImage}
-                        resizeMode="cover"
-                      />
-                      <LinearGradient
-                        colors={["transparent", "rgba(0,0,0,0.85)"]}
-                        style={styles.castleVeil}
-                      />
-                      <Text style={styles.castleCaption}>By tier of stronghold</Text>
-                    </View>
-
-                    <View style={styles.xpPanel}>
-                      <Text style={styles.xpLabel}>Total experience</Text>
-                      <Text style={styles.xpValue}>{formatXP(s.totalXP)} XP</Text>
-                    </View>
-                  </ScrollView>
+              <View style={styles.statRow}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>Level</Text>
+                  <Text style={styles.statValue}>{s.level}</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>Streak</Text>
+                  <Text style={[styles.statValue, { color: Colors.dark.fire }]}>{s.streak}</Text>
                 </View>
               </View>
-            </LinearGradient>
-          </Pressable>
+
+              <Text style={styles.sectionLabel}>Fortress</Text>
+              <View style={styles.castlePreview}>
+                <Image
+                  source={getBaseBackgroundForLevel(s.level)}
+                  style={styles.castleImage}
+                  resizeMode="cover"
+                />
+                <LinearGradient
+                  colors={["transparent", "rgba(0,0,0,0.85)"]}
+                  style={styles.castleVeil}
+                />
+                <Text style={styles.castleCaption}>By tier of stronghold</Text>
+              </View>
+
+              <View style={styles.xpPanel}>
+                <Text style={styles.xpLabel}>Total experience</Text>
+                <Text style={styles.xpValue}>{formatXP(s.totalXP)} XP</Text>
+              </View>
+
+              {email ? (
+                <View style={styles.emailRow}>
+                  <Text style={styles.emailLabel}>Account</Text>
+                  <Text style={styles.emailValue} numberOfLines={1}>{email}</Text>
+                </View>
+              ) : null}
+
+              {onSignOut ? (
+                <Pressable
+                  onPress={() => {
+                    impactAsync(ImpactFeedbackStyle.Light);
+                    onClose();
+                    onSignOut();
+                  }}
+                  style={({ pressed }) => [styles.signOutBtn, pressed && styles.signOutBtnPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Sign out"
+                >
+                  <LogOut size={16} color="#ffd7db" strokeWidth={2.2} />
+                  <Text style={styles.signOutText}>Sign out</Text>
+                </Pressable>
+              ) : null}
+            </ScrollView>
+          </>
         ) : null}
-      </Pressable>
+      </LinearGradient>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  screen: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.78)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 12,
-  },
-  sheet: {
-    width: "100%",
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 2,
-    borderColor: "#5c4a32",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.5,
-        shadowRadius: 24,
-      },
-      android: { elevation: 16 },
-      default: {},
-    }),
-  },
-  sheetGradient: {
-    padding: 3,
-  },
-  sheetBorderOuter: {
-    borderWidth: 2,
-    borderColor: "#8b7355",
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  sheetBorderInner: {
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.6)",
-    borderRadius: 10,
-    backgroundColor: "#141018",
-    overflow: "hidden",
+    paddingTop: Platform.OS === "ios" ? 52 : 28,
   },
   header: {
     flexDirection: "row",
@@ -339,6 +317,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.dark.purple + "44",
     alignItems: "center",
+    marginBottom: 14,
   },
   xpLabel: {
     fontSize: 10,
@@ -352,5 +331,50 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "900",
     color: Colors.dark.cyan,
+  },
+  emailRow: {
+    width: "100%",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "88",
+    marginBottom: 12,
+    gap: 3,
+  },
+  emailLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: Colors.dark.textMuted,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  emailValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: Colors.dark.textSecondary,
+  },
+  signOutBtn: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: "#3b1b24",
+    borderWidth: 1,
+    borderColor: "#6d3040",
+    marginBottom: 4,
+  },
+  signOutBtnPressed: {
+    opacity: 0.85,
+  },
+  signOutText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#ffd7db",
+    letterSpacing: 0.3,
   },
 });

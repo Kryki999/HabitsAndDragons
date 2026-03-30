@@ -224,11 +224,6 @@ export default function LootDetailModal({
 
             {backpackMode && itemEntry ? (
               <View style={styles.backpackActions}>
-                <Pressable onPress={handleSell} style={styles.sellBtn}>
-                  <Text style={styles.sellBtnText}>
-                    Sell ({sellPrice} 🪙)
-                  </Text>
-                </Pressable>
                 {isEquipped ? (
                   <Pressable onPress={handleUnequip} style={styles.unequipBtn}>
                     <Text style={styles.unequipBtnText}>Unequip</Text>
@@ -245,6 +240,11 @@ export default function LootDetailModal({
                     </LinearGradient>
                   </Pressable>
                 )}
+                <Pressable onPress={handleSell} style={styles.sellBtn}>
+                  <Text style={styles.sellBtnText}>
+                    Sell ({sellPrice} 🪙)
+                  </Text>
+                </Pressable>
               </View>
             ) : null}
 

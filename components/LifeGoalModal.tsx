@@ -6,8 +6,9 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
+  Platform,
 } from "react-native";
-import { Target, Dumbbell, Brain, Briefcase, Check } from "lucide-react-native";
+import { Target, Dumbbell, Brain, Briefcase, Check, X } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { useGameStore } from "@/store/gameStore";
@@ -49,89 +50,110 @@ export default function LifeGoalModal({ visible, onClose }: Props) {
   const setSageFocus = useGameStore((s) => s.setSageFocus);
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.cardWrap} onPress={(e) => e.stopPropagation()}>
-          <LinearGradient
-            colors={["#1e1530", "#140f1a"]}
-            style={styles.card}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <LinearGradient
+        colors={["#1e1530", "#140f1a"]}
+        style={styles.screen}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.header}>
+          <View style={styles.iconRow}>
+            <LinearGradient colors={[...Colors.gradients.purple]} style={styles.iconBg}>
+              <Target size={22} color="#fff" />
+            </LinearGradient>
+            <Text style={styles.title}>Twój życiowy cel</Text>
+          </View>
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
+            hitSlop={10}
+            accessibilityLabel="Close"
           >
-            <View style={styles.iconRow}>
-              <LinearGradient colors={[...Colors.gradients.purple]} style={styles.iconBg}>
-                <Target size={22} color="#fff" />
-              </LinearGradient>
-              <Text style={styles.title}>Twój życiowy cel</Text>
-            </View>
-            <Text style={styles.lead}>
-              Wybierz fokus — Starszy Mędrzec (i jego kryształowa kula) dostosuje rady do tego wątku.
-            </Text>
-            <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-              {OPTIONS.map((opt) => {
-                const selected = sageFocus === opt.id;
-                return (
-                  <Pressable
-                    key={opt.id}
-                    onPress={() => setSageFocus(opt.id)}
-                    style={({ pressed }) => [
-                      styles.option,
-                      selected && styles.optionSelected,
-                      pressed && styles.optionPressed,
-                    ]}
-                  >
-                    <View style={styles.optionIconWrap}>
-                      <opt.Icon size={22} color={selected ? Colors.dark.gold : Colors.dark.textSecondary} />
-                    </View>
-                    <View style={styles.optionTextCol}>
-                      <Text style={styles.optionTitle}>{opt.title}</Text>
-                      <Text style={styles.optionDesc}>{opt.desc}</Text>
-                    </View>
-                    {selected ? (
-                      <View style={styles.checkWrap}>
-                        <Check size={22} color={Colors.dark.emerald} />
-                      </View>
-                    ) : (
-                      <View style={styles.checkPlaceholder} />
-                    )}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            <Pressable onPress={onClose} style={styles.btnOuter}>
-              <LinearGradient colors={[...Colors.gradients.gold]} style={styles.btn}>
-                <Text style={styles.btnText}>Gotowe</Text>
-              </LinearGradient>
-            </Pressable>
-          </LinearGradient>
-        </Pressable>
-      </Pressable>
+            <X size={22} color={Colors.dark.textMuted} />
+          </Pressable>
+        </View>
+
+        <Text style={styles.lead}>
+          Wybierz fokus — Starszy Mędrzec (i jego kryształowa kula) dostosuje rady do tego wątku.
+        </Text>
+
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          {OPTIONS.map((opt) => {
+            const selected = sageFocus === opt.id;
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => setSageFocus(opt.id)}
+                style={({ pressed }) => [
+                  styles.option,
+                  selected && styles.optionSelected,
+                  pressed && styles.optionPressed,
+                ]}
+              >
+                <View style={styles.optionIconWrap}>
+                  <opt.Icon size={22} color={selected ? Colors.dark.gold : Colors.dark.textSecondary} />
+                </View>
+                <View style={styles.optionTextCol}>
+                  <Text style={styles.optionTitle}>{opt.title}</Text>
+                  <Text style={styles.optionDesc}>{opt.desc}</Text>
+                </View>
+                {selected ? (
+                  <View style={styles.checkWrap}>
+                    <Check size={22} color={Colors.dark.emerald} />
+                  </View>
+                ) : (
+                  <View style={styles.checkPlaceholder} />
+                )}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <Pressable onPress={onClose} style={styles.btnOuter}>
+            <LinearGradient colors={[...Colors.gradients.gold]} style={styles.btn}>
+              <Text style={styles.btnText}>Gotowe</Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </LinearGradient>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  screen: {
     flex: 1,
-    backgroundColor: Colors.dark.overlay,
-    justifyContent: "center",
-    paddingHorizontal: 24,
+    paddingTop: Platform.OS === "ios" ? 52 : 28,
+    paddingHorizontal: 20,
   },
-  cardWrap: {
-    borderRadius: 20,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
-  card: {
-    padding: 22,
-    maxHeight: "85%",
+  closeBtn: {
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: Colors.dark.surface + "99",
+  },
+  closeBtnPressed: {
+    opacity: 0.75,
+  },
+  scrollContent: {
+    paddingBottom: 16,
+  },
+  footer: {
+    paddingBottom: Platform.OS === "ios" ? 34 : 20,
+    paddingTop: 8,
   },
   iconRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    marginBottom: 10,
+    flex: 1,
   },
   iconBg: {
     width: 44,
@@ -153,8 +175,8 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   scroll: {
-    maxHeight: 320,
-    marginBottom: 16,
+    flex: 1,
+    marginBottom: 8,
   },
   option: {
     flexDirection: "row",

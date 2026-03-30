@@ -16,10 +16,10 @@ import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import Colors from "@/constants/colors";
 import { KINGDOM_PROGRESSION_STAGES } from "@/constants/kingdomVisuals";
 
-const COLUMNS = 2;
-const COL_GAP = 12;
-const ROW_GAP = 14;
-const H_PAD = 16;
+const COLUMNS = 3;
+const COL_GAP = 8;
+const ROW_GAP = 10;
+const H_PAD = 14;
 
 interface KingdomProgressionModalProps {
   visible: boolean;

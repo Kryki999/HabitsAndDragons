@@ -22,6 +22,7 @@ import {
   Lock,
   Snowflake,
   AlertTriangle,
+  Swords,
 } from "lucide-react-native";
 import {
   impactAsync,
@@ -36,12 +37,14 @@ import { DUNGEON_KEY_GOLD_PRICE } from "@/lib/economy";
 import type { StatType } from "@/types/game";
 import {
   DRAGON_CONFIGS,
+  DUNGEON_CHALLENGES,
   ELIXIR_OF_TIME_GOLD_COST,
   type DragonConfig,
   type DragonId,
   type DungeonChallengeConfig,
   type DungeonChallengeId,
 } from "@/constants/gameplayConfig";
+import BossVictoryLootModal from "@/components/BossVictoryLootModal";
 import DungeonsSection, { PORTRAIT_CARD_HEIGHT_RATIO } from "@/components/dungeons";
 import SectionBanner, { SectionBannerCounter } from "@/components/SectionBanner";
 import BattleSimulationModal, {
@@ -223,20 +226,24 @@ function PortraitDragonCard({
               locations={[0.25, 0.55, 1]}
               style={styles.portraitGradientBottom}
             >
-              <View style={styles.buffStatsPanel}>
-                <View style={styles.buffRow}>
-                  <View style={styles.buffChip}>
-                    <Text style={styles.buffEmoji}>🪙</Text>
-                    <Text style={styles.buffText}>+{goldPct}% gold</Text>
+              <View style={styles.buffRow}>
+                <View style={styles.buffChip}>
+                  <View style={styles.buffIconWrap}>
+                    <Coins size={18} color={Colors.dark.gold} strokeWidth={2.4} />
                   </View>
-                  <View style={styles.buffChip}>
-                    <Text style={styles.buffEmoji}>🗝️</Text>
-                    <Text style={styles.buffText}>+{keyPct}% key</Text>
+                  <Text style={styles.buffText}>+{goldPct}% gold</Text>
+                </View>
+                <View style={styles.buffChip}>
+                  <View style={styles.buffIconWrap}>
+                    <Key size={18} color={Colors.dark.gold} strokeWidth={2.4} />
                   </View>
-                  <View style={styles.buffChip}>
-                    <Text style={styles.buffEmoji}>⚔️</Text>
-                    <Text style={styles.buffText}>+{winPct}% win</Text>
+                  <Text style={styles.buffText}>+{keyPct}% key</Text>
+                </View>
+                <View style={styles.buffChip}>
+                  <View style={styles.buffIconWrap}>
+                    <Swords size={18} color={Colors.dark.emerald} strokeWidth={2.4} />
                   </View>
+                  <Text style={styles.buffText}>+{winPct}% win</Text>
                 </View>
               </View>
               <Pressable
@@ -302,6 +309,8 @@ export default function DragonLairScreen() {
   const setActiveDragon = useGameStore((s) => s.setActiveDragon);
   const resolveDungeonBattle = useGameStore((s) => s.resolveDungeonBattle);
   const devResetOnboarding = useGameStore((s) => s.devResetOnboarding);
+  const triggerForceDailyFlow = useGameStore((s) => s.triggerForceDailyFlow);
+  const resetDailyFlowStatus = useGameStore((s) => s.resetDailyFlowStatus);
 
   const resolveBattleForModal = useCallback(
     async (challengeId: string): Promise<BattleApiResult> => {
@@ -334,6 +343,10 @@ export default function DragonLairScreen() {
     dungeonName: string;
     bossName: string;
   }>({ open: false, challengeId: null, dungeonName: "", bossName: "" });
+  const [victoryLoot, setVictoryLoot] = useState<{
+    itemId: string;
+    challengeId: DungeonChallengeId;
+  } | null>(null);
   const [dungeonsGuideOpen, setDungeonsGuideOpen] = useState(false);
   const [dragonsGuideOpen, setDragonsGuideOpen] = useState(false);
 
@@ -511,6 +524,18 @@ export default function DragonLairScreen() {
 
   const closeBattle = useCallback(() => {
     setBattle({ open: false, challengeId: null, dungeonName: "", bossName: "" });
+  }, []);
+
+  const handleBossVictory = useCallback(
+    (itemId: string, challengeId: DungeonChallengeId) => {
+      setBattle({ open: false, challengeId: null, dungeonName: "", bossName: "" });
+      setVictoryLoot({ itemId, challengeId });
+    },
+    [],
+  );
+
+  const handleCollectLoot = useCallback(() => {
+    setVictoryLoot(null);
   }, []);
 
   const canBuy = gold >= DUNGEON_KEY_GOLD_PRICE;
@@ -723,6 +748,48 @@ export default function DragonLairScreen() {
           />
         </Animated.View>
 
+        {/* ── Daily Flow Testing ─────────────────────────────────────── */}
+        <View style={[styles.debugSection, styles.dailyFlowDebugSection]}>
+          <Text style={[styles.debugTitle, styles.dailyFlowDebugTitle]}>
+            🌅 Daily Flow Testing
+          </Text>
+          <Text style={styles.dailyFlowDebugDesc}>
+            Trigger and reset the two-screen daily login sequence.
+          </Text>
+          <Pressable
+            onPress={() => {
+              impactAsync(ImpactFeedbackStyle.Heavy);
+              triggerForceDailyFlow();
+            }}
+            style={({ pressed }) => [
+              styles.dailyFlowBtn,
+              styles.dailyFlowBtnTrigger,
+              pressed && styles.debugButtonPressed,
+            ]}
+            testID="debug-force-daily-flow"
+          >
+            <Text style={styles.dailyFlowBtnTextTrigger}>[ Force Trigger Daily Flow ]</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              impactAsync(ImpactFeedbackStyle.Medium);
+              resetDailyFlowStatus();
+              Alert.alert(
+                "Daily Flow Reset",
+                "Login status cleared. Reopen the app (or navigate away and back) to trigger the flow naturally.",
+              );
+            }}
+            style={({ pressed }) => [
+              styles.dailyFlowBtn,
+              styles.dailyFlowBtnReset,
+              pressed && styles.debugButtonPressed,
+            ]}
+            testID="debug-reset-daily-flow"
+          >
+            <Text style={styles.dailyFlowBtnTextReset}>[ Reset Daily Login Status ]</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.debugSection}>
           <Text style={styles.debugTitle}>⚙️ Debug Controls</Text>
           <View style={styles.debugRow}>
@@ -848,7 +915,23 @@ export default function DragonLairScreen() {
         bossName={battle.bossName}
         resolveDungeonBattle={resolveBattleForModal}
         onClose={closeBattle}
+        onVictory={handleBossVictory}
       />
+
+      {victoryLoot && (() => {
+        const challenge = DUNGEON_CHALLENGES[victoryLoot.challengeId];
+        return (
+          <BossVictoryLootModal
+            visible={true}
+            bossName={challenge?.bossName ?? "Boss"}
+            dungeonName={challenge?.dungeonName ?? "Dungeon"}
+            accentColor={challenge?.accentColor ?? "#ffc845"}
+            lootTable={challenge?.lootTable ?? []}
+            wonItemId={victoryLoot.itemId}
+            onCollect={handleCollectLoot}
+          />
+        );
+      })()}
 
       <GuideInfoModal
         visible={dragonsGuideOpen}
@@ -1051,25 +1134,6 @@ const styles = StyleSheet.create({
     paddingTop: 28,
     justifyContent: "flex-end" as const,
   },
-  buffStatsPanel: {
-    backgroundColor: "rgba(14, 10, 24, 0.94)",
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: "rgba(212, 175, 55, 0.35)",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.45,
-        shadowRadius: 6,
-      },
-      android: { elevation: 5 },
-      default: {},
-    }),
-  },
   portraitDragonName: {
     fontSize: 20,
     fontWeight: "800" as const,
@@ -1092,28 +1156,32 @@ const styles = StyleSheet.create({
     flexWrap: "wrap" as const,
     gap: 8,
     justifyContent: "center" as const,
+    marginBottom: 10,
   },
   buffChip: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: 6,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    gap: 8,
+    backgroundColor: "rgba(18, 14, 28, 0.92)",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 11,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    borderColor: "rgba(255,255,255,0.22)",
   },
-  buffEmoji: {
-    fontSize: 17,
+  buffIconWrap: {
+    width: 22,
+    height: 22,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
   },
   buffText: {
     fontSize: 14,
     fontWeight: "800" as const,
-    color: "#f5f0ff",
-    textShadowColor: "rgba(0,0,0,0.65)",
+    color: "#f8f6ff",
+    textShadowColor: "rgba(0,0,0,0.85)",
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    textShadowRadius: 4,
   },
   setActiveBtn: {
     borderRadius: 12,
@@ -1289,5 +1357,48 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800" as const,
     color: Colors.dark.text,
+  },
+  dailyFlowDebugSection: {
+    borderColor: Colors.dark.fire + "55",
+    backgroundColor: Colors.dark.fireDark + "0a",
+    gap: 10,
+  },
+  dailyFlowDebugTitle: {
+    color: Colors.dark.fire,
+  },
+  dailyFlowDebugDesc: {
+    fontSize: 11,
+    color: Colors.dark.textMuted,
+    textAlign: "center" as const,
+    marginTop: -6,
+    marginBottom: 2,
+    fontStyle: "italic" as const,
+  },
+  dailyFlowBtn: {
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderWidth: 2,
+  },
+  dailyFlowBtnTrigger: {
+    backgroundColor: Colors.dark.fire + "14",
+    borderColor: Colors.dark.fire + "88",
+  },
+  dailyFlowBtnReset: {
+    backgroundColor: Colors.dark.purple + "10",
+    borderColor: Colors.dark.purple + "66",
+  },
+  dailyFlowBtnTextTrigger: {
+    fontSize: 14,
+    fontWeight: "800" as const,
+    color: Colors.dark.fire,
+    letterSpacing: 0.4,
+  },
+  dailyFlowBtnTextReset: {
+    fontSize: 14,
+    fontWeight: "800" as const,
+    color: Colors.dark.purple,
+    letterSpacing: 0.4,
   },
 });

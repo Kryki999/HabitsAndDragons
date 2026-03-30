@@ -22,7 +22,10 @@ import type { OracleTaskStatWeights } from '@/types/oracle';
 import { suggestedHabits } from '@/mocks/suggestedHabits';
 import { AIStatService } from '@/services/aiStatService';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Approximate chip width: minWidth(92) + gap(10) between chips
+const CHIP_W = 102;
 
 interface AddHabitModalProps {
   visible: boolean;
@@ -93,6 +96,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
   const [selectedScheduledDateKey, setSelectedScheduledDateKey] = useState<string | null>(initialScheduledDateKey ?? null);
   const [oracleBusy, setOracleBusy] = useState(false);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const scheduleScrollRef = useRef<ScrollView>(null);
 
   const ICON_OPTIONS = ['⚔️', '🛡️', '🏃', '📖', '🧠', '💪', '🎯', '🔥', '⭐', '🌟', '💎', '🏆'];
 
@@ -116,7 +120,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
   const renderSchedulePicker = () => (
     <View style={styles.scheduleWrap}>
       <Text style={styles.scheduleLabel}>Plan date</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <ScrollView ref={scheduleScrollRef} horizontal showsHorizontalScrollIndicator={false}>
         <View style={styles.scheduleRow}>
           {scheduleChips.map((c) => {
             const isActive = c.key === selectedScheduledDateKey;
@@ -163,6 +167,21 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
       }).start();
     }
   }, [visible, initialScheduledDateKey]);
+
+  // Auto-scroll the date-picker to the pre-selected date whenever
+  // the schedule picker becomes visible (suggested / custom views).
+  useEffect(() => {
+    if (view === 'choose' || !selectedScheduledDateKey) return;
+    const idx = scheduleChips.findIndex((c) => c.key === selectedScheduledDateKey);
+    if (idx <= 0) return;
+    // Center the selected chip: left edge of chip - half viewport + half chip
+    const x = Math.max(0, idx * CHIP_W - SCREEN_WIDTH / 2 + CHIP_W / 2);
+    // Small delay so the ScrollView has finished its layout pass
+    const t = setTimeout(() => {
+      scheduleScrollRef.current?.scrollTo({ x, animated: false });
+    }, 60);
+    return () => clearTimeout(t);
+  }, [view, selectedScheduledDateKey, scheduleChips]);
 
   const handleClose = useCallback(() => {
     Animated.timing(slideAnim, {
@@ -265,7 +284,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
               <PenTool size={28} color={Colors.dark.purple} />
             </View>
             <View style={styles.pathInfo}>
-              <Text style={styles.pathTitle}>Custom Habit</Text>
+              <Text style={styles.pathTitle}>Custom Quest</Text>
               <Text style={styles.pathDesc}>Craft your own quest</Text>
             </View>
             <ChevronRight size={20} color={Colors.dark.textMuted} />
@@ -340,18 +359,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
             testID="custom-habit-name"
           />
 
-          <Text style={styles.fieldLabel}>Description (optional)</Text>
-          <TextInput
-            style={[styles.textInput, styles.textInputMulti]}
-            placeholder="A short description of your quest..."
-            placeholderTextColor={Colors.dark.textMuted}
-            value={customDesc}
-            onChangeText={setCustomDesc}
-            multiline
-            numberOfLines={2}
-            testID="custom-habit-desc"
-          />
-
           <Text style={styles.fieldLabel}>Icon</Text>
           <View style={styles.iconGrid}>
             {ICON_OPTIONS.map(icon => (
@@ -424,43 +431,48 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
       onRequestClose={handleClose}
       statusBarTranslucent
     >
-      <View style={styles.overlay}>
-        <Pressable style={styles.overlayBg} onPress={handleClose} />
-        <Animated.View
-          style={[
-            styles.sheet,
-            { transform: [{ translateY: slideAnim }] },
-          ]}
-        >
-          <View style={styles.handleBar} />
+      {view === 'choose' ? (
+        // ── Bottom sheet for the choose screen ──
+        <View style={styles.overlay}>
+          <Pressable style={styles.overlayBg} onPress={handleClose} />
+          <Animated.View
+            style={[styles.chooseSheet, { transform: [{ translateY: slideAnim }] }]}
+          >
+            <View style={styles.handleBar} />
+            <Pressable onPress={handleClose} style={styles.closeBtn} testID="close-modal">
+              <X size={20} color={Colors.dark.textSecondary} />
+            </Pressable>
+            {renderChooseView()}
+          </Animated.View>
+        </View>
+      ) : (
+        // ── Full screen for suggested / custom form ──
+        <View style={styles.fullSheet}>
           <Pressable onPress={handleClose} style={styles.closeBtn} testID="close-modal">
             <X size={20} color={Colors.dark.textSecondary} />
           </Pressable>
-
-          {view === 'choose' && renderChooseView()}
           {view === 'suggested' && renderSuggestedView()}
           {view === 'custom' && renderCustomView()}
-        </Animated.View>
-      </View>
+        </View>
+      )}
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  // Bottom-sheet overlay (choose view)
   overlay: {
     flex: 1,
     justifyContent: 'flex-end' as const,
   },
   overlayBg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.62)',
   },
-  sheet: {
+  chooseSheet: {
     backgroundColor: Colors.dark.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: SCREEN_HEIGHT * 0.85,
-    minHeight: SCREEN_HEIGHT * 0.45,
     paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     borderTopWidth: 1,
     borderColor: Colors.dark.border,
@@ -474,9 +486,16 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 6,
   },
+  // Full screen (suggested / custom views)
+  fullSheet: {
+    flex: 1,
+    backgroundColor: Colors.dark.background,
+    paddingTop: Platform.OS === 'ios' ? 52 : 28,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
   closeBtn: {
     position: 'absolute' as const,
-    top: 12,
+    top: Platform.OS === 'ios' ? 52 : 28,
     right: 16,
     width: 32,
     height: 32,

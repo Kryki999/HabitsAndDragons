@@ -10,7 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
-import { Plus, CalendarClock, ScrollText, SlidersHorizontal } from 'lucide-react-native';
+import { Plus, CalendarClock, ScrollText, SlidersHorizontal, GripVertical } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
@@ -191,14 +191,21 @@ export default function CastleScreen() {
           delayLongPress={180}
           style={isActive ? styles.dragRowActive : undefined}
         >
-          <HabitCard
-            habit={item}
-            onComplete={handleComplete}
-            onUncomplete={handleUncomplete}
-            onDelete={handleRemove}
-            readOnly={isPastCastleView}
-            historicalCompleted={!!completedNamesForFocusedDay?.includes(item.name)}
-          />
+          <View style={styles.dragRowWrap}>
+            <View style={styles.dragHandle}>
+              <GripVertical size={18} color={Colors.dark.textMuted} strokeWidth={2} />
+            </View>
+            <View style={styles.dragCardFlex}>
+              <HabitCard
+                habit={item}
+                onComplete={handleComplete}
+                onUncomplete={handleUncomplete}
+                onDelete={handleRemove}
+                readOnly={isPastCastleView}
+                historicalCompleted={!!completedNamesForFocusedDay?.includes(item.name)}
+              />
+            </View>
+          </View>
         </TouchableOpacity>
       </ScaleDecorator>
     ),
@@ -298,14 +305,7 @@ export default function CastleScreen() {
               <Text style={styles.emptyTitle}>No quests yet</Text>
               <Text style={styles.emptyDesc}>Tap + to create your first habit or side quest</Text>
             </View>
-          ) : isCustomQuestOrder ? (
-            <View style={styles.customOrderHint}>
-              <Text style={styles.customOrderHintTitle}>Custom order</Text>
-              <Text style={styles.customOrderHintText}>
-                Long-press a quest card, then drag to reorder. Order is saved automatically.
-              </Text>
-            </View>
-          ) : (
+          ) : !isCustomQuestOrder ? (
             <>
               <View style={styles.taskSection}>
                 <View style={styles.taskSectionHeaderRow}>
@@ -355,7 +355,7 @@ export default function CastleScreen() {
                 )}
               </View>
             </>
-          )}
+          ) : null}
           {!isCustomQuestOrder ? (
             <View style={{ height: isPastCastleView ? 220 : 100 }} />
           ) : (
@@ -468,27 +468,19 @@ const styles = StyleSheet.create({
   dragRowActive: {
     opacity: 0.95,
   },
-  customOrderHint: {
-    marginTop: 4,
-    marginBottom: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: Colors.dark.gold + '12',
-    borderWidth: 1,
-    borderColor: Colors.dark.gold + '33',
+  dragRowWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  customOrderHintTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.dark.gold,
-    marginBottom: 4,
-    letterSpacing: 0.3,
+  dragHandle: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 10,
+    opacity: 0.7,
   },
-  customOrderHintText: {
-    fontSize: 12,
-    color: Colors.dark.textSecondary,
-    lineHeight: 17,
+  dragCardFlex: {
+    flex: 1,
   },
   taskCommandHeader: {
     flexDirection: 'row',

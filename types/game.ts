@@ -200,6 +200,11 @@ export interface GameState {
   heroDailyQuestClaimedIds: string[];
   /** One-time epic milestone quest ids already claimed. */
   heroEpicMilestoneClaimedIds: string[];
+  /**
+   * Runtime-only flag (not persisted). Set by dev debug button to force
+   * the Daily Flow to show regardless of lastDailyWelcomeDate.
+   */
+  forceDailyFlowPending: boolean;
 }
 
 export interface GameActions {
@@ -307,6 +312,12 @@ export interface GameActions {
     goldReward: number,
     xpReward?: { stat: StatType; amount: number },
   ) => boolean;
+  /** Dev: Force-trigger Daily Flow on next render (ignores daily date guard). */
+  triggerForceDailyFlow: () => void;
+  /** Dev: Clear lastDailyWelcomeDate to simulate a fresh new day. */
+  resetDailyFlowStatus: () => void;
+  /** Called when player finishes the Daily Flow sequence. Marks today as seen. */
+  completeDailyFlow: () => void;
 }
 
 export interface SuggestedHabit {

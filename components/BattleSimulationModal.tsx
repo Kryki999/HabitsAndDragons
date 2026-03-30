@@ -36,6 +36,8 @@ type Props = {
   bossName: string;
   resolveDungeonBattle: (id: string) => Promise<BattleApiResult>;
   onClose: () => void;
+  /** When provided, victory shows "Otwórz Skrzynię" and calls this instead of onClose */
+  onVictory?: (itemId: string, challengeId: DungeonChallengeId) => void;
 };
 
 export default function BattleSimulationModal({
@@ -45,6 +47,7 @@ export default function BattleSimulationModal({
   bossName,
   resolveDungeonBattle,
   onClose,
+  onVictory,
 }: Props) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<BattleApiResult | null>(null);
@@ -53,6 +56,8 @@ export default function BattleSimulationModal({
   const pulse = useRef(new Animated.Value(1)).current;
   const goldBurst = useRef(new Animated.Value(0)).current;
   const hapticRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onVictoryRef = useRef(onVictory);
+  useEffect(() => { onVictoryRef.current = onVictory; }, [onVictory]);
 
   const stopHeartbeat = useCallback(() => {
     if (hapticRef.current) {
@@ -150,20 +155,30 @@ export default function BattleSimulationModal({
       stopHeartbeat();
       clash.stop();
       pulseLoop.stop();
-      setResult(res);
-      setPhase("result");
 
-      if (res.ok && res.won) {
+      if (res.ok && res.won && onVictoryRef.current && challengeId) {
+        // Victory + loot roulette mode: skip the win card entirely,
+        // brief haptic then hand off to BossVictoryLootModal
         impactAsync(ImpactFeedbackStyle.Heavy);
-        goldBurst.setValue(0);
-        Animated.spring(goldBurst, {
-          toValue: 1,
-          friction: 5,
-          tension: 80,
-          useNativeDriver: true,
-        }).start();
-      } else if (res.ok && !res.won) {
-        impactAsync(ImpactFeedbackStyle.Medium);
+        setTimeout(() => {
+          if (!cancelled) onVictoryRef.current?.(res.reward.itemId, challengeId);
+        }, 350);
+      } else {
+        // Defeat / error / no-roulette mode: show the result card
+        setResult(res);
+        setPhase("result");
+        if (res.ok && res.won) {
+          impactAsync(ImpactFeedbackStyle.Heavy);
+          goldBurst.setValue(0);
+          Animated.spring(goldBurst, {
+            toValue: 1,
+            friction: 5,
+            tension: 80,
+            useNativeDriver: true,
+          }).start();
+        } else if (res.ok && !res.won) {
+          impactAsync(ImpactFeedbackStyle.Medium);
+        }
       }
     })();
 
@@ -297,14 +312,25 @@ export default function BattleSimulationModal({
                 <Text style={[styles.lootRarity, { color: winAccent }]}>
                   {winItem.rarity.toUpperCase()}
                 </Text>
-                <Pressable onPress={handleClose} style={styles.collectBtn}>
+                <Pressable
+                  onPress={() => {
+                    if (onVictory && result?.ok && result.won && challengeId) {
+                      onVictory(result.reward.itemId, challengeId);
+                    } else {
+                      handleClose();
+                    }
+                  }}
+                  style={styles.collectBtn}
+                >
                   <LinearGradient
                     colors={[...Colors.gradients.gold]}
                     style={styles.collectGradient}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                   >
-                    <Text style={styles.collectText}>Collect</Text>
+                    <Text style={styles.collectText}>
+                      {onVictory ? "Otwórz Skrzynię Bossa ⚔️" : "Collect"}
+                    </Text>
                   </LinearGradient>
                 </Pressable>
               </LinearGradient>

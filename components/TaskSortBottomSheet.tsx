@@ -9,7 +9,7 @@ import {
   Dimensions,
   Platform,
 } from "react-native";
-import { X } from "lucide-react-native";
+import { X, Check } from "lucide-react-native";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import Colors from "@/constants/colors";
 import { useGameStore } from "@/store/gameStore";
@@ -81,9 +81,16 @@ export default function TaskSortBottomSheet({ visible, onClose }: Props) {
               pressed && styles.optionCardPressed,
             ]}
           >
-            <Text style={[styles.optionTitle, castleQuestSortMode === "default" && styles.optionTitleActive]}>
-              Default order
-            </Text>
+            <View style={styles.optionHeaderRow}>
+              <Text style={[styles.optionTitle, castleQuestSortMode === "default" && styles.optionTitleActive]}>
+                Default order
+              </Text>
+              {castleQuestSortMode === "default" ? (
+                <View style={styles.activeCheckBadge}>
+                  <Check size={13} color={Colors.dark.gold} strokeWidth={3} />
+                </View>
+              ) : null}
+            </View>
             <Text style={styles.optionHint}>Same order as when you added quests (stable roster).</Text>
           </Pressable>
 
@@ -95,11 +102,18 @@ export default function TaskSortBottomSheet({ visible, onClose }: Props) {
               pressed && styles.optionCardPressed,
             ]}
           >
-            <Text style={[styles.optionTitle, castleQuestSortMode === "custom" && styles.optionTitleActive]}>
-              Custom order
-            </Text>
+            <View style={styles.optionHeaderRow}>
+              <Text style={[styles.optionTitle, castleQuestSortMode === "custom" && styles.optionTitleActive]}>
+                Custom order
+              </Text>
+              {castleQuestSortMode === "custom" ? (
+                <View style={styles.activeCheckBadge}>
+                  <Check size={13} color={Colors.dark.gold} strokeWidth={3} />
+                </View>
+              ) : null}
+            </View>
             <Text style={styles.optionHint}>
-              Long-press and drag quests to reorder. Your layout is saved for the next visit.
+              Grab the grip handles on each quest card to drag and reorder. Your layout is saved automatically.
             </Text>
           </Pressable>
         </Animated.View>
@@ -168,24 +182,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 12,
     backgroundColor: Colors.dark.surface + "ee",
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: Colors.dark.border + "aa",
   },
   optionCardActive: {
-    borderColor: Colors.dark.gold + "66",
-    backgroundColor: Colors.dark.gold + "12",
+    borderColor: Colors.dark.gold,
+    backgroundColor: Colors.dark.gold + "18",
   },
   optionCardPressed: {
     opacity: 0.92,
+  },
+  optionHeaderRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+    marginBottom: 6,
   },
   optionTitle: {
     fontSize: 16,
     fontWeight: "800" as const,
     color: Colors.dark.text,
-    marginBottom: 6,
+    flex: 1,
   },
   optionTitleActive: {
     color: Colors.dark.gold,
+  },
+  activeCheckBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.dark.gold + "22",
+    borderWidth: 1.5,
+    borderColor: Colors.dark.gold + "88",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    flexShrink: 0,
   },
   optionHint: {
     fontSize: 12,

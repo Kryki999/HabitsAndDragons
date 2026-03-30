@@ -7,10 +7,9 @@ import {
   Pressable,
   ScrollView,
   Alert,
-  Dimensions,
-  LayoutChangeEvent,
   Platform,
   FlatList,
+  useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,6 +26,8 @@ import {
   Check,
   CalendarClock,
   GripVertical,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import type { Habit } from "@/types/game";
@@ -37,8 +38,6 @@ import { applyPlanningOrderForDate } from "@/lib/planningDayOrder";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
-const CHIP_W = 78;
-const CHIP_GAP = 10;
 
 function getTodayKey(): string {
   return new Date().toISOString().split("T")[0]!;
@@ -83,6 +82,60 @@ function formatDateKeyToShortLabel(dateKey: string): string {
 function formatMonthYearLabel(y: number, month: number): string {
   const d = new Date(y, month - 1, 1);
   return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+// ─── Week Swiper helpers ────────────────────────────────────────────────────
+
+const WEEKS_BACK = 52;
+const WEEKS_FORWARD = 8;
+const CURRENT_WEEK_IDX = WEEKS_BACK;
+const TOTAL_WEEKS = WEEKS_BACK + WEEKS_FORWARD + 1;
+const WEEK_DAY_LETTERS = ["M", "T", "W", "T", "F", "S", "S"] as const;
+
+function getMondayOfCurrentWeek(): Date {
+  const today = new Date();
+  const day = today.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(today);
+  mon.setDate(today.getDate() + diff);
+  mon.setHours(0, 0, 0, 0);
+  return mon;
+}
+
+function getMondayOfWeekForDate(dateKey: string): Date {
+  const p = parseDateKey(dateKey);
+  if (!p) return getMondayOfCurrentWeek();
+  const d = new Date(p.y, p.m - 1, p.d);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(d);
+  mon.setDate(d.getDate() + diff);
+  mon.setHours(0, 0, 0, 0);
+  return mon;
+}
+
+function dateKeyFromDate(d: Date): string {
+  return dateKeyFromYMD(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+/** Returns the Thursday of the week starting on `monday`, used for month/year syncing. */
+function thursdayOfWeek(monday: Date): Date {
+  const d = new Date(monday);
+  d.setDate(monday.getDate() + 3);
+  return d;
+}
+
+/**
+ * Returns how many weeks offset the week containing `dateKey` is
+ * relative to the current week stored at index CURRENT_WEEK_IDX.
+ */
+function weekIndexForDate(dateKey: string, weeksData: Date[]): number {
+  const targetMonday = getMondayOfWeekForDate(dateKey);
+  const targetKey = dateKeyFromDate(targetMonday);
+  for (let i = 0; i < weeksData.length; i++) {
+    if (dateKeyFromDate(weeksData[i]!) === targetKey) return i;
+  }
+  return CURRENT_WEEK_IDX;
 }
 
 type Props = {
@@ -204,6 +257,141 @@ function TaskRow({
   );
 }
 
+// ─── WeekPage sub-component ─────────────────────────────────────────────────
+
+function WeekPage({
+  weekStart,
+  pageWidth,
+  todayKey,
+  selectedDateKey,
+  minSelectableKey,
+  completedHabitNamesByDate,
+  onSelectDate,
+}: {
+  weekStart: Date;
+  pageWidth: number;
+  todayKey: string;
+  selectedDateKey: string;
+  minSelectableKey: string;
+  completedHabitNamesByDate: Record<string, string[]>;
+  onSelectDate: (key: string) => void;
+}) {
+  const cellWidth = Math.floor((pageWidth - 32) / 7);
+  const days = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(weekStart);
+        d.setDate(weekStart.getDate() + i);
+        return d;
+      }),
+    [weekStart],
+  );
+
+  return (
+    <View style={[wpStyles.row, { width: pageWidth, paddingHorizontal: 16 }]}>
+      {days.map((day, idx) => {
+        const key = dateKeyFromDate(day);
+        const isSelected = key === selectedDateKey;
+        const isToday = key === todayKey;
+        const isFuture = key > todayKey;
+        const isBlocked = key < minSelectableKey;
+        const hasActivity = (completedHabitNamesByDate[key]?.length ?? 0) > 0;
+
+        return (
+          <Pressable
+            key={key}
+            onPress={() => {
+              if (!isBlocked) {
+                impactAsync(ImpactFeedbackStyle.Light);
+                onSelectDate(key);
+              }
+            }}
+            style={[
+              wpStyles.cell,
+              { width: cellWidth },
+              isSelected && wpStyles.cellSelected,
+              isToday && !isSelected && wpStyles.cellToday,
+              (isFuture || isBlocked) && wpStyles.cellDim,
+            ]}
+          >
+            <Text style={[wpStyles.dayLetter, (isSelected || isToday) && wpStyles.dayLetterAccent]}>
+              {WEEK_DAY_LETTERS[idx]}
+            </Text>
+            <Text
+              style={[
+                wpStyles.dayNum,
+                isSelected && wpStyles.dayNumSelected,
+                isToday && !isSelected && wpStyles.dayNumToday,
+              ]}
+            >
+              {day.getDate()}
+            </Text>
+            <View style={[wpStyles.dot, hasActivity && !isFuture && !isBlocked && wpStyles.dotActive]} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const wpStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+  },
+  cell: {
+    alignItems: "center",
+    paddingVertical: 9,
+    borderRadius: 12,
+    gap: 3,
+  },
+  cellSelected: {
+    backgroundColor: Colors.dark.gold + "28",
+    borderWidth: 1.5,
+    borderColor: Colors.dark.gold + "aa",
+  },
+  cellToday: {
+    borderWidth: 1,
+    borderColor: Colors.dark.emerald + "88",
+  },
+  cellDim: {
+    opacity: 0.35,
+  },
+  dayLetter: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: Colors.dark.textMuted,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  dayLetterAccent: {
+    color: Colors.dark.gold,
+  },
+  dayNum: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: Colors.dark.text,
+    lineHeight: 18,
+  },
+  dayNumSelected: {
+    color: Colors.dark.gold,
+  },
+  dayNumToday: {
+    color: Colors.dark.emerald,
+  },
+  dot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "transparent",
+  },
+  dotActive: {
+    backgroundColor: Colors.dark.gold,
+  },
+});
+
 export default function ExpeditionCalendarModal({
   visible,
   onClose,
@@ -213,7 +401,7 @@ export default function ExpeditionCalendarModal({
   userId,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const screenW = Dimensions.get("window").width;
+  const { width: screenW } = useWindowDimensions();
   const [todayKey] = useState(() => getTodayKey());
 
   const allHabits = useGameStore((s) => s.habits);
@@ -242,9 +430,22 @@ export default function ExpeditionCalendarModal({
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [reflectionOpen, setReflectionOpen] = useState(false);
 
-  const timelineRef = useRef<ScrollView>(null);
+  // ── Week swiper ──
+  const weekFlatListRef = useRef<FlatList<Date>>(null);
+  const [visibleWeekIdx, setVisibleWeekIdx] = useState(CURRENT_WEEK_IDX);
+
+  const weeksData = useMemo<Date[]>(() => {
+    const base = getMondayOfCurrentWeek();
+    return Array.from({ length: TOTAL_WEEKS }, (_, i) => {
+      const d = new Date(base);
+      d.setDate(base.getDate() + (i - WEEKS_BACK) * 7);
+      return d;
+    });
+  }, []);
+
+  const weekOffset = visibleWeekIdx - CURRENT_WEEK_IDX;
+
   const prevVisibleRef = useRef(false);
-  const [timelineW, setTimelineW] = useState(screenW);
 
   const todayParsed = parseDateKey(todayKey);
   const [displayYM, setDisplayYM] = useState(() => ({
@@ -252,6 +453,7 @@ export default function ExpeditionCalendarModal({
     m: todayParsed?.m ?? new Date().getMonth() + 1,
   }));
 
+  // Sync displayYM to the month of the currently selected day
   useEffect(() => {
     if (!visible) return;
     const p = parseDateKey(selectedDateKey);
@@ -262,37 +464,24 @@ export default function ExpeditionCalendarModal({
     if (visible && !prevVisibleRef.current) {
       const initial = expeditionFocusDateKey ?? todayKey;
       setSelectedDateKey(initial);
-      const p = parseDateKey(initial);
-      if (p) setDisplayYM({ y: p.y, m: p.m });
+      const wIdx = weekIndexForDate(initial, weeksData);
+      setVisibleWeekIdx(wIdx);
     }
     prevVisibleRef.current = visible;
-  }, [visible, expeditionFocusDateKey, todayKey]);
+  }, [visible, expeditionFocusDateKey, todayKey, weeksData]);
 
   const isPastReadOnly = selectedDateKey < todayKey && selectedDateKey >= minSelectableKey;
   const completedNamesForSelected = completedHabitNamesByDate[selectedDateKey];
 
-  const prevNavDisabled = useMemo(() => {
-    const prevMonth = new Date(displayYM.y, displayYM.m - 2, 1);
-    const py = prevMonth.getFullYear();
-    const pm = prevMonth.getMonth() + 1;
-    const pDim = daysInMonth(py, pm);
-    const prevMonthLastKey = dateKeyFromYMD(py, pm, pDim);
-    return prevMonthLastKey < minSelectableKey;
-  }, [displayYM.y, displayYM.m, minSelectableKey]);
-
   const monthYearLabel = formatMonthYearLabel(displayYM.y, displayYM.m);
 
-  const monthTimeline = useMemo(() => {
-    const { y: viewY, m: viewM } = displayYM;
-    const dim = daysInMonth(viewY, viewM);
-    return Array.from({ length: dim }, (_, i) => {
-      const d = i + 1;
-      const key = dateKeyFromYMD(viewY, viewM, d);
-      const dt = new Date(viewY, viewM - 1, d);
-      const wk = dt.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 3);
-      return { key, label: `${wk} ${d}` };
-    });
-  }, [displayYM]);
+  // "Thu, Apr 9" — shown in the collapsed header instead of "March 2026"
+  const selectedDayLabel = useMemo(() => {
+    const p = parseDateKey(selectedDateKey);
+    if (!p) return selectedDateKey;
+    const d = new Date(p.y, p.m - 1, p.d);
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  }, [selectedDateKey]);
 
   const monthGridCells = useMemo(
     () => buildMonthGridCells(displayYM.y, displayYM.m),
@@ -314,48 +503,50 @@ export default function ExpeditionCalendarModal({
     setListData(orderedTasks);
   }, [orderedTasks]);
 
-  const selectedIndexInMonth = useMemo(() => {
-    const p = parseDateKey(selectedDateKey);
-    if (!p || p.y !== displayYM.y || p.m !== displayYM.m) return 0;
-    return Math.max(0, p.d - 1);
-  }, [selectedDateKey, displayYM.y, displayYM.m]);
+  const weekGetItemLayout = useCallback(
+    (_: any, index: number) => ({
+      length: screenW,
+      offset: screenW * index,
+      index,
+    }),
+    [screenW],
+  );
 
-  useEffect(() => {
-    if (!visible) return;
-    const chip = CHIP_W + CHIP_GAP;
-    const x = Math.max(0, selectedIndexInMonth * chip - timelineW / 2 + CHIP_W / 2);
-    const t = requestAnimationFrame(() => timelineRef.current?.scrollTo({ x, animated: true }));
-    return () => cancelAnimationFrame(t);
-  }, [visible, selectedIndexInMonth, timelineW, selectedDateKey, displayYM.y, displayYM.m]);
+  const handleWeekMomentumScrollEnd = useCallback(
+    (e: any) => {
+      const idx = Math.round(e.nativeEvent.contentOffset.x / screenW);
+      const clamped = Math.max(0, Math.min(TOTAL_WEEKS - 1, idx));
+      setVisibleWeekIdx(clamped);
 
-  const shiftDisplayMonth = useCallback(
-    (delta: number) => {
-      const nd = new Date(displayYM.y, displayYM.m - 1 + delta, 1);
-      const ny = nd.getFullYear();
-      const nm = nd.getMonth() + 1;
-      const pSel = parseDateKey(selectedDateKey);
-      let day = 1;
-      if (pSel && pSel.y === displayYM.y && pSel.m === displayYM.m) day = pSel.d;
-      const dim = daysInMonth(ny, nm);
-      const nextD = Math.min(Math.max(1, day), dim);
-      let nextKey = dateKeyFromYMD(ny, nm, nextD);
-      if (nextKey < minSelectableKey) {
-        const pMin = parseDateKey(minSelectableKey);
-        if (pMin && delta < 0) {
-          setDisplayYM({ y: pMin.y, m: pMin.m });
-          setSelectedDateKey(minSelectableKey);
-          onExpeditionFocusDateKeyChange(minSelectableKey);
-          impactAsync(ImpactFeedbackStyle.Light);
-          return;
+      // Auto-select the same weekday in the new week
+      const newWeekMonday = weeksData[clamped];
+      if (newWeekMonday) {
+        const selP = parseDateKey(selectedDateKey);
+        if (selP) {
+          const selDate = new Date(selP.y, selP.m - 1, selP.d);
+          const jsDay = selDate.getDay(); // 0=Sun, 1=Mon … 6=Sat
+          const dayIdx = jsDay === 0 ? 6 : jsDay - 1; // Mon=0 … Sun=6
+          const candidate = new Date(newWeekMonday);
+          candidate.setDate(newWeekMonday.getDate() + dayIdx);
+          const newKey = dateKeyFromDate(candidate);
+          if (newKey >= minSelectableKey) {
+            setSelectedDateKey(newKey);
+            onExpeditionFocusDateKeyChange(newKey);
+          }
         }
       }
-      setDisplayYM({ y: ny, m: nm });
-      setSelectedDateKey(nextKey);
-      onExpeditionFocusDateKeyChange(nextKey);
-      impactAsync(ImpactFeedbackStyle.Light);
     },
-    [displayYM, selectedDateKey, minSelectableKey, onExpeditionFocusDateKeyChange],
+    [screenW, weeksData, selectedDateKey, minSelectableKey, onExpeditionFocusDateKeyChange],
   );
+
+  const handleReturnToToday = useCallback(() => {
+    impactAsync(ImpactFeedbackStyle.Light);
+    setSelectedDateKey(todayKey);
+    onExpeditionFocusDateKeyChange(todayKey);
+    setVisibleWeekIdx(CURRENT_WEEK_IDX);
+    weekFlatListRef.current?.scrollToIndex({ index: CURRENT_WEEK_IDX, animated: true });
+  }, [todayKey, onExpeditionFocusDateKeyChange]);
+
 
   const addAllowed = selectedDateKey >= todayKey && selectedDateKey >= minSelectableKey;
 
@@ -437,9 +628,23 @@ export default function ExpeditionCalendarModal({
     return chips;
   }, []);
 
-  const onTimelineLayout = useCallback((e: LayoutChangeEvent) => {
-    setTimelineW(e.nativeEvent.layout.width);
-  }, []);
+  const renderWeekPage = useCallback(
+    ({ item }: { item: Date }) => (
+      <WeekPage
+        weekStart={item}
+        pageWidth={screenW}
+        todayKey={todayKey}
+        selectedDateKey={selectedDateKey}
+        minSelectableKey={minSelectableKey}
+        completedHabitNamesByDate={completedHabitNamesByDate}
+        onSelectDate={(key) => {
+          setSelectedDateKey(key);
+          onExpeditionFocusDateKeyChange(key);
+        }}
+      />
+    ),
+    [screenW, todayKey, selectedDateKey, minSelectableKey, completedHabitNamesByDate, onExpeditionFocusDateKeyChange],
+  );
 
   const selectDayFromGrid = useCallback(
     (day: number) => {
@@ -447,11 +652,30 @@ export default function ExpeditionCalendarModal({
       if (key < minSelectableKey) return;
       setSelectedDateKey(key);
       onExpeditionFocusDateKeyChange(key);
-      setMonthExpanded(false);
+      // Calendar stays open — user closes it manually
       impactAsync(ImpactFeedbackStyle.Light);
+      const wIdx = weekIndexForDate(key, weeksData);
+      setVisibleWeekIdx(wIdx);
+      weekFlatListRef.current?.scrollToIndex({ index: wIdx, animated: true });
     },
-    [displayYM.y, displayYM.m, minSelectableKey, onExpeditionFocusDateKeyChange],
+    [displayYM.y, displayYM.m, minSelectableKey, onExpeditionFocusDateKeyChange, weeksData],
   );
+
+  const handlePrevMonth = useCallback(() => {
+    impactAsync(ImpactFeedbackStyle.Light);
+    setDisplayYM((prev) => {
+      if (prev.m === 1) return { y: prev.y - 1, m: 12 };
+      return { y: prev.y, m: prev.m - 1 };
+    });
+  }, []);
+
+  const handleNextMonth = useCallback(() => {
+    impactAsync(ImpactFeedbackStyle.Light);
+    setDisplayYM((prev) => {
+      if (prev.m === 12) return { y: prev.y + 1, m: 1 };
+      return { y: prev.y, m: prev.m + 1 };
+    });
+  }, []);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -464,7 +688,7 @@ export default function ExpeditionCalendarModal({
         />
 
         <View style={[styles.safeTop, { paddingTop: Math.max(insets.top, 12) }]}>
-          {/* Module 1–2: header + expandable month */}
+          {/* Header */}
           <View style={styles.headerBar}>
             <Pressable
               onPress={() => {
@@ -479,45 +703,23 @@ export default function ExpeditionCalendarModal({
               <X size={24} color={Colors.dark.text} />
             </Pressable>
 
-            <View style={styles.monthNav}>
-              <Pressable
-                onPress={() => shiftDisplayMonth(-1)}
-                disabled={prevNavDisabled}
-                style={({ pressed }) => [
-                  styles.monthArrowBtn,
-                  prevNavDisabled && styles.monthArrowBtnDisabled,
-                  pressed && !prevNavDisabled && styles.monthArrowBtnPressed,
-                ]}
-                hitSlop={8}
-                accessibilityLabel="Previous month"
-              >
-                <ChevronLeft size={20} color={prevNavDisabled ? Colors.dark.textMuted : Colors.dark.gold} />
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  impactAsync(ImpactFeedbackStyle.Light);
-                  setMonthExpanded((v) => !v);
-                }}
-                style={({ pressed }) => [styles.monthCenter, pressed && styles.monthCenterPressed]}
-                accessibilityRole="button"
-                accessibilityLabel={monthExpanded ? "Collapse calendar" : "Expand calendar"}
-              >
-                <Text style={styles.monthYearText}>{monthYearLabel}</Text>
-                {monthExpanded ? (
-                  <ChevronUp size={18} color={Colors.dark.gold} style={styles.monthChevron} />
-                ) : (
-                  <ChevronDown size={18} color={Colors.dark.gold} style={styles.monthChevron} />
-                )}
-              </Pressable>
-              <Pressable
-                onPress={() => shiftDisplayMonth(1)}
-                style={({ pressed }) => [styles.monthArrowBtn, pressed && styles.monthArrowBtnPressed]}
-                hitSlop={8}
-                accessibilityLabel="Next month"
-              >
-                <ChevronRight size={20} color={Colors.dark.gold} />
-              </Pressable>
-            </View>
+            {/* Month/year — dynamic, taps to expand/collapse full grid */}
+            <Pressable
+              onPress={() => {
+                impactAsync(ImpactFeedbackStyle.Light);
+                setMonthExpanded((v) => !v);
+              }}
+              style={({ pressed }) => [styles.monthCenter, pressed && styles.monthCenterPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={monthExpanded ? "Collapse calendar" : "Expand calendar"}
+            >
+              <Text style={styles.monthYearText}>{selectedDayLabel}</Text>
+              {monthExpanded ? (
+                <ChevronUp size={18} color={Colors.dark.gold} style={styles.monthChevron} />
+              ) : (
+                <ChevronDown size={18} color={Colors.dark.gold} style={styles.monthChevron} />
+              )}
+            </Pressable>
 
             <View style={styles.headerSpacer} />
           </View>
@@ -526,6 +728,26 @@ export default function ExpeditionCalendarModal({
 
           {monthExpanded ? (
             <View style={styles.monthGridWrap}>
+              {/* Month nav header */}
+              <View style={styles.monthNavRow}>
+                <Pressable
+                  onPress={handlePrevMonth}
+                  style={({ pressed }) => [styles.monthNavBtn, pressed && styles.monthNavBtnPressed]}
+                  hitSlop={10}
+                  accessibilityLabel="Previous month"
+                >
+                  <ChevronLeft size={20} color={Colors.dark.gold} strokeWidth={2.4} />
+                </Pressable>
+                <Text style={styles.monthGridLabel}>{monthYearLabel}</Text>
+                <Pressable
+                  onPress={handleNextMonth}
+                  style={({ pressed }) => [styles.monthNavBtn, pressed && styles.monthNavBtnPressed]}
+                  hitSlop={10}
+                  accessibilityLabel="Next month"
+                >
+                  <ChevronRight size={20} color={Colors.dark.gold} strokeWidth={2.4} />
+                </Pressable>
+              </View>
               <View style={styles.weekdayRow}>
                 {WEEKDAY_LABELS.map((w) => (
                   <Text key={w} style={styles.weekdayCell}>
@@ -570,48 +792,31 @@ export default function ExpeditionCalendarModal({
             </View>
           ) : null}
 
-          {/* Module 3: horizontal timeline */}
-          <View onLayout={onTimelineLayout}>
-            <ScrollView
-              ref={timelineRef}
+          {/* Module 3: weekly swiper — hidden when full calendar is open */}
+          {!monthExpanded && <View style={styles.weekSwiperWrap}>
+            <FlatList
+              ref={weekFlatListRef}
+              data={weeksData}
+              keyExtractor={(_, idx) => String(idx)}
+              renderItem={renderWeekPage}
               horizontal
+              pagingEnabled
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.timelineContent}
-              style={styles.timelineScroll}
-            >
-              {monthTimeline.map((c) => {
-                const active = c.key === selectedDateKey;
-                const blocked = c.key < minSelectableKey;
-                return (
-                  <Pressable
-                    key={c.key}
-                    disabled={blocked}
-                    onPress={() => {
-                      if (blocked) return;
-                      impactAsync(ImpactFeedbackStyle.Light);
-                      setSelectedDateKey(c.key);
-                      onExpeditionFocusDateKeyChange(c.key);
-                    }}
-                    style={[
-                      styles.timelineChip,
-                      active && styles.timelineChipActive,
-                      blocked && styles.timelineChipBlocked,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.timelineChipText,
-                        active && styles.timelineChipTextActive,
-                        blocked && styles.timelineChipTextBlocked,
-                      ]}
-                    >
-                      {c.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
+              getItemLayout={weekGetItemLayout}
+              initialScrollIndex={visibleWeekIdx}
+              onMomentumScrollEnd={handleWeekMomentumScrollEnd}
+              scrollEventThrottle={16}
+              windowSize={5}
+              maxToRenderPerBatch={3}
+              initialNumToRender={3}
+              onLayout={() => {
+                weekFlatListRef.current?.scrollToIndex({
+                  index: visibleWeekIdx,
+                  animated: false,
+                });
+              }}
+            />
+          </View>}
 
           {!isPastReadOnly ? (
             <Text style={styles.reorderHint}>Long-press a row to drag and reorder quests for this day.</Text>
@@ -749,6 +954,26 @@ export default function ExpeditionCalendarModal({
           </Modal>
         ) : null}
 
+        {/* Return to Today floating button */}
+        {weekOffset !== 0 ? (
+          <Pressable
+            onPress={handleReturnToToday}
+            style={[
+              styles.returnTodayBtn,
+              weekOffset < 0 ? styles.returnTodayRight : styles.returnTodayLeft,
+              { bottom: Math.max(insets.bottom + 80, 96) },
+            ]}
+            accessibilityLabel="Return to today"
+          >
+            {weekOffset > 0 ? (
+              <ArrowLeft size={14} color={Colors.dark.gold} strokeWidth={2.4} />
+            ) : (
+              <ArrowRight size={14} color={Colors.dark.gold} strokeWidth={2.4} />
+            )}
+            <Text style={styles.returnTodayText}>Today</Text>
+          </Pressable>
+        ) : null}
+
         {reflectionOpen ? (
           <Modal
             visible
@@ -831,30 +1056,6 @@ const styles = StyleSheet.create({
     opacity: 0.88,
     transform: [{ scale: 0.97 }],
   },
-  monthNav: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 2,
-    paddingHorizontal: 4,
-  },
-  monthArrowBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.dark.surface + "aa",
-    borderWidth: 1,
-    borderColor: Colors.dark.border + "88",
-  },
-  monthArrowBtnPressed: {
-    opacity: 0.88,
-  },
-  monthArrowBtnDisabled: {
-    opacity: 0.35,
-  },
   monthCenter: {
     flex: 1,
     flexDirection: "row",
@@ -897,6 +1098,35 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.surface + "99",
     borderWidth: 1,
     borderColor: Colors.dark.gold + "33",
+  },
+  monthNavRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  monthNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.dark.background + "99",
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + "44",
+  },
+  monthNavBtnPressed: {
+    opacity: 0.75,
+    transform: [{ scale: 0.93 }],
+  },
+  monthGridLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "800" as const,
+    color: Colors.dark.gold,
+    textAlign: "center" as const,
+    letterSpacing: 0.5,
+    textTransform: "uppercase" as const,
   },
   weekdayRow: {
     flexDirection: "row",
@@ -951,54 +1181,39 @@ const styles = StyleSheet.create({
   gridCellTextBlocked: {
     color: Colors.dark.textMuted,
   },
-  timelineScroll: {
-    marginBottom: 8,
-    maxHeight: 56,
+  weekSwiperWrap: {
+    height: 90,
+    marginLeft: -16,
+    marginRight: -16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border + "44",
+    marginBottom: 6,
   },
-  timelineContent: {
-    paddingVertical: 4,
-    paddingRight: 16,
-    gap: CHIP_GAP,
+  returnTodayBtn: {
+    position: "absolute",
     flexDirection: "row",
     alignItems: "center",
-  },
-  timelineChip: {
-    width: CHIP_W,
-    paddingVertical: 12,
-    borderRadius: 14,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: Colors.dark.gold + "22",
     borderWidth: 1.5,
-    borderColor: Colors.dark.border,
-    backgroundColor: Colors.dark.surface + "cc",
-    alignItems: "center",
+    borderColor: Colors.dark.gold + "88",
+    zIndex: 30,
   },
-  timelineChipActive: {
-    borderColor: Colors.dark.gold,
-    backgroundColor: Colors.dark.gold + "18",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-      },
-      android: { elevation: 3 },
-      default: {},
-    }),
+  returnTodayLeft: {
+    left: 16,
   },
-  timelineChipText: {
+  returnTodayRight: {
+    right: 16,
+  },
+  returnTodayText: {
     fontSize: 12,
     fontWeight: "800" as const,
-    color: Colors.dark.textMuted,
-    textAlign: "center" as const,
-  },
-  timelineChipTextActive: {
     color: Colors.dark.gold,
-  },
-  timelineChipBlocked: {
-    opacity: 0.4,
-  },
-  timelineChipTextBlocked: {
-    color: Colors.dark.textMuted,
+    letterSpacing: 0.5,
+    textTransform: "uppercase" as const,
   },
   reorderHint: {
     fontSize: 11,

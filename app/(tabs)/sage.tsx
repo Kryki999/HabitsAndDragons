@@ -107,7 +107,8 @@ export default function SageScreen() {
   const [lifeGoalOpen, setLifeGoalOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [isSageReplying, setIsSageReplying] = useState(false);
-  const chatScrollRef = useRef<ScrollView>(null);
+  /** Only the chat window — NOT the page ScrollView (pricing / epic quest live below). */
+  const sageChatWindowScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     ensureSageEpicState();
@@ -232,7 +233,7 @@ export default function SageScreen() {
 
   const scrollChatToEnd = useCallback(() => {
     requestAnimationFrame(() => {
-      chatScrollRef.current?.scrollToEnd({ animated: true });
+      sageChatWindowScrollRef.current?.scrollToEnd({ animated: true });
     });
   }, []);
 
@@ -304,7 +305,6 @@ export default function SageScreen() {
       />
 
       <ScrollView
-        ref={chatScrollRef}
         keyboardShouldPersistTaps="handled"
         style={styles.scrollView}
         contentContainerStyle={[
@@ -313,7 +313,6 @@ export default function SageScreen() {
         ]}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
-        onContentSizeChange={scrollChatToEnd}
       >
         <Animated.View
           style={[
@@ -378,11 +377,13 @@ export default function SageScreen() {
 
           <View style={styles.sageChatBody}>
             <ScrollView
+              ref={sageChatWindowScrollRef}
               style={styles.chatWindowScroll}
               contentContainerStyle={styles.chatWindow}
               nestedScrollEnabled
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              onContentSizeChange={scrollChatToEnd}
             >
               {sageChatMessages.map((msg) => (
                 <ChatBubble key={msg.id} message={msg} />
