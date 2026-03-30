@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import * as WebBrowser from "expo-web-browser";
 import type { Session, User } from "@supabase/supabase-js";
+import { AUTH_NETWORK_TIMEOUT_MS, PROFILE_BOOTSTRAP_TIMEOUT_MS, withTimeout } from "@/lib/authTimeout";
+import { signInWithOAuthExpo } from "@/lib/oauthNative";
 import { supabase } from "@/lib/supabase";
 import { useGameStore } from "@/store/gameStore";
 import type { PlayerClass, SageLifeFocus } from "@/types/game";
@@ -131,15 +134,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isProfileReady, setIsProfileReady] = useState(false);
 
   useEffect(() => {
+    WebBrowser.maybeCompleteAuthSession();
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!active) return;
-      setSession(data.session ?? null);
-      setIsAuthLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!active) return;
+        setSession(data.session ?? null);
+      })
+      .catch((err) => {
+        console.warn("[auth] getSession failed", err);
+        if (!active) return;
+        setSession(null);
+      })
+      .finally(() => {
+        if (active) setIsAuthLoading(false);
+      });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession ?? null);
     });
 
@@ -159,12 +175,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       setIsProfileReady(false);
-      const result = await bootstrapProfile(session.user.id, session.user.email);
-      if (!cancelled) setPlayerId(result.playerId);
-      if (!cancelled) setProfileCreatedAtDateKey(result.profileCreatedAtDateKey);
-      if (!cancelled) setIsProfileReady(true);
+      try {
+        const result = await withTimeout(
+          bootstrapProfile(session.user.id, session.user.email),
+          PROFILE_BOOTSTRAP_TIMEOUT_MS,
+          "bootstrapProfile",
+        );
+        if (!cancelled) setPlayerId(result.playerId);
+        if (!cancelled) setProfileCreatedAtDateKey(result.profileCreatedAtDateKey);
+      } catch (e) {
+        console.warn("[auth] profile bootstrap failed or timed out", e);
+        if (!cancelled) {
+          setPlayerId(null);
+          setProfileCreatedAtDateKey(null);
+        }
+      } finally {
+        if (!cancelled) setIsProfileReady(true);
+      }
     };
-    run();
+    void run();
     return () => {
       cancelled = true;
     };
@@ -179,50 +208,89 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthLoading,
       isProfileReady,
       signIn: async (email, password) => {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
-        return {};
+        try {
+          const { data, error } = await withTimeout(
+            supabase.auth.signInWithPassword({ email, password }),
+            AUTH_NETWORK_TIMEOUT_MS,
+            "signInWithPassword",
+          );
+          if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
+          if (!data.session) {
+            return { error: "Sign-in succeeded on server but no session was returned to the app." };
+          }
+          // Keep UI deterministic even if auth state event is delayed.
+          setSession(data.session);
+          return {};
+        } catch (e: any) {
+          return { error: e?.message ?? "Sign-in failed." };
+        }
       },
       signUp: async (email, password) => {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
-        return {};
+        try {
+          const { error } = await withTimeout(
+            supabase.auth.signUp({ email, password }),
+            AUTH_NETWORK_TIMEOUT_MS,
+            "signUp",
+          );
+          if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
+          return {};
+        } catch (e: any) {
+          return { error: e?.message ?? "Sign-up failed." };
+        }
       },
       signInWithGoogle: async () => {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: { redirectTo: typeof window !== "undefined" ? window.location.origin : undefined },
-        });
-        if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
-        return {};
+        try {
+          return await signInWithOAuthExpo("google");
+        } catch (e: any) {
+          return { error: e?.message ?? "Google sign-in failed." };
+        }
       },
       signInWithApple: async () => {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: "apple",
-          options: { redirectTo: typeof window !== "undefined" ? window.location.origin : undefined },
-        });
-        if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
-        return {};
+        try {
+          return await signInWithOAuthExpo("apple");
+        } catch (e: any) {
+          return { error: e?.message ?? "Apple sign-in failed." };
+        }
       },
       signInWithEmailOtp: async (email) => {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: email.trim(),
-          options: { shouldCreateUser: true },
-        });
-        if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
-        return {};
+        try {
+          const { error } = await withTimeout(
+            supabase.auth.signInWithOtp({
+              email: email.trim(),
+              options: { shouldCreateUser: true },
+            }),
+            AUTH_NETWORK_TIMEOUT_MS,
+            "signInWithOtp",
+          );
+          if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
+          return {};
+        } catch (e: any) {
+          return { error: e?.message ?? "Could not send code." };
+        }
       },
       verifyEmailOtp: async (email, token) => {
-        const { error } = await supabase.auth.verifyOtp({
-          email: email.trim(),
-          token: token.replace(/\s/g, ""),
-          type: "email",
-        });
-        if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
-        return {};
+        try {
+          const { error } = await withTimeout(
+            supabase.auth.verifyOtp({
+              email: email.trim(),
+              token: token.replace(/\s/g, ""),
+              type: "email",
+            }),
+            AUTH_NETWORK_TIMEOUT_MS,
+            "verifyOtp",
+          );
+          if (error) return { error: error.message, status: (error as any).status, code: (error as any).code };
+          return {};
+        } catch (e: any) {
+          return { error: e?.message ?? "Could not verify code." };
+        }
       },
       signOut: async () => {
-        await supabase.auth.signOut();
+        try {
+          await withTimeout(supabase.auth.signOut(), AUTH_NETWORK_TIMEOUT_MS, "signOut");
+        } catch (e) {
+          console.warn("[auth] signOut timed out or failed; clearing local state anyway", e);
+        }
         useGameStore.setState(useGameStore.getInitialState());
         await useGameStore.persist.clearStorage();
       },

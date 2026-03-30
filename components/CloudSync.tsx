@@ -44,7 +44,11 @@ export default function CloudSync() {
     const beforeUnload = () => {
       void flush();
     };
-    if (typeof window !== "undefined") {
+    const hasWindowListeners =
+      typeof window !== "undefined" &&
+      typeof window.addEventListener === "function" &&
+      typeof window.removeEventListener === "function";
+    if (hasWindowListeners) {
       window.addEventListener("beforeunload", beforeUnload);
     }
 
@@ -54,7 +58,7 @@ export default function CloudSync() {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
       }
-      if (typeof window !== "undefined") {
+      if (hasWindowListeners) {
         window.removeEventListener("beforeunload", beforeUnload);
       }
       void flush();

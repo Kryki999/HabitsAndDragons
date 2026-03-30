@@ -66,6 +66,7 @@ export default function WelcomeScreen() {
     if (msg.includes("user already registered")) return "This email is already registered. Sign in instead.";
     if (msg.includes("signup is disabled")) return "Sign-ups are disabled in project settings.";
     if (msg.includes("otp") || msg.includes("token")) return "Invalid or expired code. Request a new one.";
+    if (msg.includes("timed out")) return "Request took too long. Check your connection and try again.";
     return e.error;
   };
 
@@ -73,22 +74,25 @@ export default function WelcomeScreen() {
     if (inCooldown) return;
     setBusy(true);
     setError(null);
-    const trimmed = email.trim();
-    const action = mode === "signIn" ? signIn : signUp;
-    const result = await action(trimmed, password);
-    if (result.error) {
-      if (result.status === 429) setCooldownUntil(Date.now() + 20_000);
-      setError(humanizeError(result));
-    } else {
-      setCooldownUntil(null);
-      if (mode === "signUp") {
-        Alert.alert(
-          "Check your inbox",
-          "If your project requires email confirmation, verify your account from the message we sent.",
-        );
+    try {
+      const trimmed = email.trim();
+      const action = mode === "signIn" ? signIn : signUp;
+      const result = await action(trimmed, password);
+      if (result.error) {
+        if (result.status === 429) setCooldownUntil(Date.now() + 20_000);
+        setError(humanizeError(result));
+      } else {
+        setCooldownUntil(null);
+        if (mode === "signUp") {
+          Alert.alert(
+            "Check your inbox",
+            "If your project requires email confirmation, verify your account from the message we sent.",
+          );
+        }
       }
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const sendOtp = useCallback(async () => {
@@ -99,15 +103,18 @@ export default function WelcomeScreen() {
     }
     setBusy(true);
     setError(null);
-    const result = await signInWithEmailOtp(trimmed);
-    if (result.error) {
-      if (result.status === 429) setCooldownUntil(Date.now() + 20_000);
-      setError(humanizeError(result));
-    } else {
-      setOtpSent(true);
-      Alert.alert("Code sent", "Check your email and enter the one-time code below.");
+    try {
+      const result = await signInWithEmailOtp(trimmed);
+      if (result.error) {
+        if (result.status === 429) setCooldownUntil(Date.now() + 20_000);
+        setError(humanizeError(result));
+      } else {
+        setOtpSent(true);
+        Alert.alert("Code sent", "Check your email and enter the one-time code below.");
+      }
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }, [email, signInWithEmailOtp]);
 
   const verifyOtp = useCallback(async () => {
@@ -118,12 +125,15 @@ export default function WelcomeScreen() {
     }
     setBusy(true);
     setError(null);
-    const result = await verifyEmailOtp(trimmed, otpCode);
-    if (result.error) {
-      if (result.status === 429) setCooldownUntil(Date.now() + 20_000);
-      setError(humanizeError(result));
+    try {
+      const result = await verifyEmailOtp(trimmed, otpCode);
+      if (result.error) {
+        if (result.status === 429) setCooldownUntil(Date.now() + 20_000);
+        setError(humanizeError(result));
+      }
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }, [email, otpCode, verifyEmailOtp]);
 
   return (
@@ -157,9 +167,12 @@ export default function WelcomeScreen() {
                 onPress={async () => {
                   setBusy(true);
                   setError(null);
-                  const result = await signInWithApple();
-                  if (result.error) setError(humanizeError(result));
-                  setBusy(false);
+                  try {
+                    const result = await signInWithApple();
+                    if (result.error) setError(humanizeError(result));
+                  } finally {
+                    setBusy(false);
+                  }
                 }}
                 disabled={formDisabled}
                 style={({ pressed }) => [styles.appleBtn, pressed && styles.btnPressed]}
@@ -178,9 +191,12 @@ export default function WelcomeScreen() {
                 onPress={async () => {
                   setBusy(true);
                   setError(null);
-                  const result = await signInWithGoogle();
-                  if (result.error) setError(humanizeError(result));
-                  setBusy(false);
+                  try {
+                    const result = await signInWithGoogle();
+                    if (result.error) setError(humanizeError(result));
+                  } finally {
+                    setBusy(false);
+                  }
                 }}
                 disabled={formDisabled}
                 style={({ pressed }) => [styles.googleBtn, pressed && styles.btnPressed]}
