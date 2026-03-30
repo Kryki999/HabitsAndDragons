@@ -13,7 +13,6 @@ import {
   KeyboardAvoidingView,
   ActivityIndicator,
 } from 'react-native';
-import { TouchableOpacity } from 'react-native-gesture-handler';
 import { X, ChevronRight, Scroll, PenTool } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,7 +22,7 @@ import type { OracleTaskStatWeights } from '@/types/oracle';
 import { suggestedHabits } from '@/mocks/suggestedHabits';
 import { AIStatService } from '@/services/aiStatService';
 
-const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Approximate chip width: minWidth(92) + gap(10) between chips
 const CHIP_W = 102;
@@ -96,7 +95,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
   const [selectedIcon, setSelectedIcon] = useState('⚔️');
   const [selectedScheduledDateKey, setSelectedScheduledDateKey] = useState<string | null>(initialScheduledDateKey ?? null);
   const [oracleBusy, setOracleBusy] = useState(false);
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const scheduleScrollRef = useRef<ScrollView>(null);
 
   const ICON_OPTIONS = ['⚔️', '🛡️', '🏃', '📖', '🧠', '💪', '🎯', '🔥', '⭐', '🌟', '💎', '🏆'];
@@ -154,18 +152,6 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
       setSelectedScheduledDateKey(
         initialScheduledDateKey && initialScheduledDateKey === todayKey ? null : (initialScheduledDateKey ?? null),
       );
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        friction: 8,
-        tension: 65,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(slideAnim, {
-        toValue: SCREEN_HEIGHT,
-        duration: 250,
-        useNativeDriver: true,
-      }).start();
     }
   }, [visible, initialScheduledDateKey]);
 
@@ -185,12 +171,8 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
   }, [view, selectedScheduledDateKey, scheduleChips]);
 
   const handleClose = useCallback(() => {
-    Animated.timing(slideAnim, {
-      toValue: SCREEN_HEIGHT,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => onClose());
-  }, [slideAnim, onClose]);
+    onClose();
+  }, [onClose]);
 
   const handleSelectSuggested = useCallback((habit: SuggestedHabit) => {
     impactAsync(ImpactFeedbackStyle.Heavy);
@@ -428,34 +410,34 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
     <Modal
       visible={visible}
       transparent
-      animationType="none"
+      animationType="fade"
       onRequestClose={handleClose}
       statusBarTranslucent
     >
       {view === 'choose' ? (
-        <View style={styles.overlay} pointerEvents="box-none">
-          <TouchableOpacity
-            style={styles.overlayBg}
-            onPress={handleClose}
-            activeOpacity={1}
-          />
-          <Animated.View
-            style={[styles.chooseSheet, { transform: [{ translateY: slideAnim }] }]}
-          >
-            <View style={styles.chooseSheetHeader}>
-              <View style={styles.handleBar} />
-              <TouchableOpacity onPress={handleClose} style={styles.closeBtnSheet} activeOpacity={0.7} testID="close-modal">
-                <X size={18} color={Colors.dark.textSecondary} />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.overlay}>
+          <Pressable style={styles.overlayBg} onPress={handleClose} />
+          <View style={styles.chooseSheet}>
+            <View style={styles.handleBar} />
+            <Pressable
+              onPress={handleClose}
+              style={({ pressed }) => [styles.closeBtnSheet, pressed && styles.closeBtnPressed]}
+              testID="close-modal"
+            >
+              <X size={18} color={Colors.dark.textSecondary} />
+            </Pressable>
             {renderChooseView()}
-          </Animated.View>
+          </View>
         </View>
       ) : (
         <View style={styles.fullSheet}>
-          <TouchableOpacity onPress={handleClose} style={styles.closeBtn} activeOpacity={0.7} testID="close-modal">
+          <Pressable
+            onPress={handleClose}
+            style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
+            testID="close-modal"
+          >
             <X size={20} color={Colors.dark.textSecondary} />
-          </TouchableOpacity>
+          </Pressable>
           {view === 'suggested' && renderSuggestedView()}
           {view === 'custom' && renderCustomView()}
         </View>
@@ -484,24 +466,18 @@ const styles = StyleSheet.create({
     zIndex: 2,
     elevation: 16,
   },
-  chooseSheetHeader: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    paddingTop: 10,
-    paddingBottom: 8,
-    paddingHorizontal: 12,
-  },
   handleBar: {
     width: 40,
     height: 4,
     backgroundColor: Colors.dark.textMuted,
     borderRadius: 2,
-    flex: 1,
-    maxWidth: 40,
+    alignSelf: 'center' as const,
+    marginTop: 10,
+    marginBottom: 6,
   },
   closeBtnSheet: {
     position: 'absolute' as const,
+    top: 10,
     right: 14,
     width: 32,
     height: 32,
@@ -509,8 +485,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.surface,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+    zIndex: 10,
     borderWidth: 1,
     borderColor: Colors.dark.border + '88',
+  },
+  closeBtnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
   },
   fullSheet: {
     flex: 1,

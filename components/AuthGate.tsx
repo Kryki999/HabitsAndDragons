@@ -18,24 +18,24 @@ export default function AuthGate() {
   useEffect(() => {
     if (isAuthLoading || (session && !isProfileReady)) return;
 
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
     if (!session && !inAuth) {
-      router.replace("/(auth)/welcome" as any);
-      return;
+      timeoutId = setTimeout(() => router.replace("/(auth)/welcome" as any), 0);
+    } else if (session && !onboardingComplete && !inOnboarding && !inAuth) {
+      timeoutId = setTimeout(() => router.replace("/onboarding" as any), 0);
+    } else if (session && inAuth) {
+      timeoutId = setTimeout(
+        () => router.replace((onboardingComplete ? "/(tabs)" : "/onboarding") as any),
+        0
+      );
+    } else if (session && onboardingComplete && inOnboarding) {
+      timeoutId = setTimeout(() => router.replace("/(tabs)" as any), 0);
     }
 
-    if (session && !onboardingComplete && !inOnboarding && !inAuth) {
-      router.replace("/onboarding" as any);
-      return;
-    }
-
-    if (session && inAuth) {
-      router.replace((onboardingComplete ? "/(tabs)" : "/onboarding") as any);
-      return;
-    }
-
-    if (session && onboardingComplete && inOnboarding) {
-      router.replace("/(tabs)" as any);
-    }
+    return () => {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    };
   }, [isAuthLoading, isProfileReady, session, onboardingComplete, inAuth, inOnboarding, router]);
 
   if (isAuthLoading || (session && !isProfileReady)) {

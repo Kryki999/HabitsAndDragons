@@ -1,14 +1,13 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
   Modal,
-  Animated,
+  Pressable,
   Dimensions,
   Platform,
 } from "react-native";
-import { TouchableOpacity } from "react-native-gesture-handler";
 import { X, Check } from "lucide-react-native";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import Colors from "@/constants/colors";
@@ -22,69 +21,41 @@ type Props = {
 };
 
 export default function TaskSortBottomSheet({ visible, onClose }: Props) {
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const castleQuestSortMode = useGameStore((s) => s.castleQuestSortMode);
   const setCastleQuestSortMode = useGameStore((s) => s.setCastleQuestSortMode);
-
-  useEffect(() => {
-    if (visible) {
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        friction: 8,
-        tension: 65,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(slideAnim, {
-        toValue: SCREEN_HEIGHT,
-        duration: 250,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [visible, slideAnim]);
-
-  const handleClose = useCallback(() => {
-    Animated.timing(slideAnim, {
-      toValue: SCREEN_HEIGHT,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => onClose());
-  }, [slideAnim, onClose]);
 
   const pick = useCallback(
     (mode: "default" | "custom") => {
       impactAsync(ImpactFeedbackStyle.Light);
       setCastleQuestSortMode(mode);
-      handleClose();
+      onClose();
     },
-    [setCastleQuestSortMode, handleClose],
+    [setCastleQuestSortMode, onClose],
   );
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose} statusBarTranslucent>
-      <View style={styles.overlay} pointerEvents="box-none">
-        <TouchableOpacity
-          style={styles.overlayBg}
-          onPress={handleClose}
-          activeOpacity={1}
-        />
-        <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-          <View style={styles.sheetHeader}>
-            <View style={styles.handleBar} />
-            <TouchableOpacity onPress={handleClose} style={styles.closeBtn} activeOpacity={0.7} accessibilityLabel="Close">
-              <X size={18} color={Colors.dark.textSecondary} />
-            </TouchableOpacity>
-          </View>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.overlay}>
+        <Pressable style={styles.overlayBg} onPress={onClose} />
+        <View style={styles.sheet}>
+          <View style={styles.handleBar} />
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
+            accessibilityLabel="Close"
+          >
+            <X size={18} color={Colors.dark.textSecondary} />
+          </Pressable>
 
           <Text style={styles.title}>Quest order</Text>
           <Text style={styles.subtitle}>Choose how your due quests appear on the Castle screen.</Text>
 
-          <TouchableOpacity
+          <Pressable
             onPress={() => pick("default")}
-            activeOpacity={0.88}
-            style={[
+            style={({ pressed }) => [
               styles.optionCard,
               castleQuestSortMode === "default" && styles.optionCardActive,
+              pressed && styles.optionCardPressed,
             ]}
           >
             <View style={styles.optionHeaderRow}>
@@ -98,14 +69,14 @@ export default function TaskSortBottomSheet({ visible, onClose }: Props) {
               ) : null}
             </View>
             <Text style={styles.optionHint}>Same order as when you added quests (stable roster).</Text>
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
             onPress={() => pick("custom")}
-            activeOpacity={0.88}
-            style={[
+            style={({ pressed }) => [
               styles.optionCard,
               castleQuestSortMode === "custom" && styles.optionCardActive,
+              pressed && styles.optionCardPressed,
             ]}
           >
             <View style={styles.optionHeaderRow}>
@@ -121,8 +92,8 @@ export default function TaskSortBottomSheet({ visible, onClose }: Props) {
             <Text style={styles.optionHint}>
               Grab the grip handles on each quest card to drag and reorder. Your layout is saved automatically.
             </Text>
-          </TouchableOpacity>
-        </Animated.View>
+          </Pressable>
+        </View>
       </View>
     </Modal>
   );
@@ -150,24 +121,18 @@ const styles = StyleSheet.create({
     zIndex: 2,
     elevation: 16,
   },
-  sheetHeader: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    paddingTop: 10,
-    paddingBottom: 10,
-    paddingHorizontal: 12,
-  },
   handleBar: {
     width: 40,
     height: 4,
     backgroundColor: Colors.dark.textMuted,
     borderRadius: 2,
-    flex: 1,
-    maxWidth: 40,
+    alignSelf: "center" as const,
+    marginTop: 10,
+    marginBottom: 8,
   },
   closeBtn: {
     position: "absolute" as const,
+    top: 10,
     right: 14,
     width: 32,
     height: 32,
@@ -175,8 +140,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.surface,
     alignItems: "center" as const,
     justifyContent: "center" as const,
+    zIndex: 10,
     borderWidth: 1,
     borderColor: Colors.dark.border + "88",
+  },
+  closeBtnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
   },
   title: {
     fontSize: 18,

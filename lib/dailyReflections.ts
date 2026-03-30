@@ -11,7 +11,7 @@ export type DailyReflectionRow = {
 export async function fetchDailyReflection(
   userId: string,
   dateKey: string,
-): Promise<{ row: DailyReflectionRow | null; error?: string }> {
+): Promise<{ row: DailyReflectionRow | null; error?: string; tableMissing?: boolean }> {
   const { data, error } = await supabase
     .from("daily_reflections")
     .select("id, user_id, reflection_date, content, updated_at")
@@ -19,7 +19,11 @@ export async function fetchDailyReflection(
     .eq("reflection_date", dateKey)
     .maybeSingle();
 
-  if (error) return { row: null, error: error.message };
+  if (error) {
+    const msg = error.message ?? "";
+    const missing = msg.includes("schema cache") || msg.includes("relation") || error.code === "PGRST204";
+    return { row: null, error: msg, tableMissing: missing };
+  }
   return { row: data as DailyReflectionRow | null };
 }
 
@@ -27,7 +31,7 @@ export async function upsertDailyReflection(
   userId: string,
   dateKey: string,
   content: string,
-): Promise<{ row: DailyReflectionRow | null; error?: string }> {
+): Promise<{ row: DailyReflectionRow | null; error?: string; tableMissing?: boolean }> {
   const { data, error } = await supabase
     .from("daily_reflections")
     .upsert(
@@ -42,6 +46,10 @@ export async function upsertDailyReflection(
     .select("id, user_id, reflection_date, content, updated_at")
     .maybeSingle();
 
-  if (error) return { row: null, error: error.message };
+  if (error) {
+    const msg = error.message ?? "";
+    const missing = msg.includes("schema cache") || msg.includes("relation") || error.code === "PGRST204";
+    return { row: null, error: msg, tableMissing: missing };
+  }
   return { row: data as DailyReflectionRow | null };
 }

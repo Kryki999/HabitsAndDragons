@@ -1,5 +1,5 @@
 import "react-native-url-polyfill/auto";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system/legacy";
 import { createClient } from "@supabase/supabase-js";
 import { AppState, Platform } from "react-native";
 
@@ -26,10 +26,33 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.warn("[supabase] Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY");
 }
 
+/** Legacy API: `documentDirectory` ends with `/`; keys from Supabase auth are safe filenames. */
+const authFileUri = (key: string): string | null => {
+  const base = FileSystem.documentDirectory;
+  if (base == null || base === "") return null;
+  return base + key;
+};
+
 const RNStorage = {
-  getItem: (key: string) => AsyncStorage.getItem(key),
-  setItem: (key: string, value: string) => AsyncStorage.setItem(key, value),
-  removeItem: (key: string) => AsyncStorage.removeItem(key),
+  getItem: async (key: string): Promise<string | null> => {
+    const uri = authFileUri(key);
+    if (!uri) return null;
+    try {
+      return await FileSystem.readAsStringAsync(uri);
+    } catch {
+      return null;
+    }
+  },
+  setItem: async (key: string, value: string) => {
+    const uri = authFileUri(key);
+    if (!uri) throw new Error("[supabase] FileSystem.documentDirectory unavailable");
+    await FileSystem.writeAsStringAsync(uri, value);
+  },
+  removeItem: async (key: string) => {
+    const uri = authFileUri(key);
+    if (!uri) return;
+    await FileSystem.deleteAsync(uri, { idempotent: true });
+  },
 };
 
 const storage = Platform.OS === "web" ? undefined : RNStorage;

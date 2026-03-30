@@ -28,12 +28,14 @@ export default function DailyReflectionPanel({ dateKey, userId, variant = "modal
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [tableMissing, setTableMissing] = useState(false);
 
   const dirty = draft.trim() !== savedRemote.trim();
 
   useEffect(() => {
     let cancelled = false;
     setLoadError(null);
+    setTableMissing(false);
     if (!userId) {
       setDraft("");
       setSavedRemote("");
@@ -41,9 +43,10 @@ export default function DailyReflectionPanel({ dateKey, userId, variant = "modal
       return;
     }
     setLoading(true);
-    fetchDailyReflection(userId, dateKey).then(({ row, error }) => {
+    fetchDailyReflection(userId, dateKey).then(({ row, error, tableMissing: missing }) => {
       if (cancelled) return;
       if (error) {
+        if (missing) setTableMissing(true);
         setLoadError(error);
         setDraft("");
         setSavedRemote("");
@@ -91,7 +94,13 @@ export default function DailyReflectionPanel({ dateKey, userId, variant = "modal
     <View style={[styles.wrap, { paddingBottom: bottomPad }]}>
       <Text style={styles.title}>Daily Reflection</Text>
       <Text style={styles.sub}>Refleksja</Text>
-      {loading ? (
+      {tableMissing ? (
+        <View style={styles.loaderRow}>
+          <Text style={styles.missingText}>
+            Refleksje nie są jeszcze dostępne — uruchom migrację bazy danych (schema.sql).
+          </Text>
+        </View>
+      ) : loading ? (
         <View style={styles.loaderRow}>
           <ActivityIndicator color={Colors.dark.gold} />
         </View>
@@ -154,6 +163,14 @@ const styles = StyleSheet.create({
   loaderRow: {
     paddingVertical: 24,
     alignItems: "center",
+  },
+  missingText: {
+    fontSize: 12,
+    color: Colors.dark.textMuted,
+    fontStyle: "italic",
+    textAlign: "center",
+    lineHeight: 17,
+    paddingHorizontal: 12,
   },
   input: {
     minHeight: 100,

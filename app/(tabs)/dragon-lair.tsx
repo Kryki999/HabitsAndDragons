@@ -498,7 +498,7 @@ export default function DragonLairScreen() {
     }
 
     const seedDays = 8;
-    const reflectionSavedDateKeys: Record<string, boolean> = {};
+    const reflectionSavedDateKeys: Record<string, true> = {};
     const completedHabitNamesByDate: Record<string, string[]> = {};
     const activityByDate: Record<string, { completions: number; xpFromHabits: number }> = {};
     const completionMap = new Map<string, Set<string>>();
