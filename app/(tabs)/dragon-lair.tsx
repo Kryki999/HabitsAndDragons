@@ -54,6 +54,7 @@ import GuideInfoModal from "@/components/GuideInfoModal";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabase";
 import { pickCloudGameState } from "@/lib/cloudState";
+import { upsertDailyReflection } from "@/lib/dailyReflections";
 
 const DRAGON_LIST = Object.values(DRAGON_CONFIGS);
 
@@ -76,6 +77,12 @@ function formatSwitchCooldownRemaining(iso: string | null): string | null {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
+}
+
+function dateKeyDaysAgo(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toISOString().split("T")[0]!;
 }
 
 function PortraitDragonCard({
@@ -469,6 +476,84 @@ export default function DragonLairScreen() {
       ],
     );
   }, [devResetOnboarding, user?.id, router]);
+
+  const handleSeedMockHistory = useCallback(async () => {
+    impactAsync(ImpactFeedbackStyle.Heavy);
+    const mockReflections = [
+      "Today I kept momentum and finished even when motivation dipped.",
+      "Small wins stacked up and made the whole day easier.",
+      "I focused on consistency over perfection and it paid off.",
+      "Energy was low, but I still closed key quests.",
+      "Hard start, strong finish. Better than yesterday.",
+      "I protected my routine and avoided unnecessary distractions.",
+      "Progress looked tiny in the moment, but the log says otherwise.",
+      "I learned to start first and optimize later.",
+    ];
+
+    const activeHabits = useGameStore.getState().habits.filter((h) => h.isActive);
+    const dailyHabits = activeHabits.filter((h) => h.taskType === "daily");
+    if (dailyHabits.length === 0) {
+      Alert.alert("No habits", "Create at least one active daily habit before seeding mock history.");
+      return;
+    }
+
+    const seedDays = 8;
+    const reflectionSavedDateKeys: Record<string, boolean> = {};
+    const completedHabitNamesByDate: Record<string, string[]> = {};
+    const activityByDate: Record<string, { completions: number; xpFromHabits: number }> = {};
+    const completionMap = new Map<string, Set<string>>();
+
+    for (let ago = seedDays; ago >= 1; ago--) {
+      const dayKey = dateKeyDaysAgo(ago);
+      const targetCount = Math.max(1, Math.floor(Math.random() * Math.min(4, dailyHabits.length)) + 1);
+      const pool = [...dailyHabits].sort(() => Math.random() - 0.5).slice(0, targetCount);
+      completedHabitNamesByDate[dayKey] = pool.map((h) => h.name);
+      activityByDate[dayKey] = {
+        completions: pool.length,
+        xpFromHabits: pool.length * (20 + Math.floor(Math.random() * 35)),
+      };
+      reflectionSavedDateKeys[dayKey] = true;
+      for (const habit of pool) {
+        if (!completionMap.has(habit.id)) completionMap.set(habit.id, new Set(habit.completionDates ?? []));
+        completionMap.get(habit.id)!.add(dayKey);
+      }
+
+      if (user?.id) {
+        const txt = mockReflections[Math.floor(Math.random() * mockReflections.length)]!;
+        await upsertDailyReflection(user.id, dayKey, txt);
+      }
+    }
+
+    useGameStore.setState((s) => ({
+      habits: s.habits.map((h) => {
+        const seededDates = completionMap.get(h.id);
+        if (!seededDates) return h;
+        const mergedDates = Array.from(seededDates).sort();
+        const totalCompletions = Math.max(h.totalCompletions ?? 0, mergedDates.length);
+        const longestStreak = Math.max(h.longestStreak ?? 0, mergedDates.length);
+        return {
+          ...h,
+          completionDates: mergedDates,
+          totalCompletions,
+          longestStreak,
+        };
+      }),
+      completedHabitNamesByDate: {
+        ...(s.completedHabitNamesByDate ?? {}),
+        ...completedHabitNamesByDate,
+      },
+      activityByDate: {
+        ...(s.activityByDate ?? {}),
+        ...activityByDate,
+      },
+      reflectionSavedDateKeys: {
+        ...(s.reflectionSavedDateKeys ?? {}),
+        ...reflectionSavedDateKeys,
+      },
+    }));
+
+    Alert.alert("Seed complete", "Mock quest history and reflections were generated for recent days.");
+  }, [user?.id]);
 
   const handleBuyKey = useCallback(() => {
     if (gold < DUNGEON_KEY_GOLD_PRICE) {
@@ -889,6 +974,19 @@ export default function DragonLairScreen() {
               testID="debug-xp-int"
             >
               <Text style={[styles.debugButtonTextXp, { color: Colors.dark.cyan }]}>+100 INT</Text>
+            </Pressable>
+          </View>
+          <View style={[styles.debugRow, styles.debugRowLast]}>
+            <Pressable
+              onPress={handleSeedMockHistory}
+              style={({ pressed }) => [
+                styles.debugButton,
+                styles.debugButtonSeedHistory,
+                pressed && styles.debugButtonPressed,
+              ]}
+              testID="debug-seed-mock-history"
+            >
+              <Text style={styles.debugButtonTextSeedHistory}>Seed Mock History</Text>
             </Pressable>
           </View>
           <View style={[styles.debugRow, styles.debugRowLast]}>
@@ -1314,6 +1412,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#ff4d6a18",
     borderColor: "#ff4d6a66",
     borderWidth: 2,
+  },
+  debugButtonSeedHistory: {
+    backgroundColor: Colors.dark.emerald + "14",
+    borderColor: Colors.dark.emerald + "66",
+  },
+  debugButtonTextSeedHistory: {
+    fontSize: 14,
+    fontWeight: "800" as const,
+    color: Colors.dark.emerald,
   },
   debugButtonTextOnboardingReset: {
     fontSize: 14,

@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   ActivityIndicator,
 } from 'react-native';
+import { TouchableOpacity } from 'react-native-gesture-handler';
 import { X, ChevronRight, Scroll, PenTool } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -432,25 +433,29 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
       statusBarTranslucent
     >
       {view === 'choose' ? (
-        // ── Bottom sheet for the choose screen ──
-        <View style={styles.overlay}>
-          <Pressable style={styles.overlayBg} onPress={handleClose} />
+        <View style={styles.overlay} pointerEvents="box-none">
+          <TouchableOpacity
+            style={styles.overlayBg}
+            onPress={handleClose}
+            activeOpacity={1}
+          />
           <Animated.View
             style={[styles.chooseSheet, { transform: [{ translateY: slideAnim }] }]}
           >
-            <View style={styles.handleBar} />
-            <Pressable onPress={handleClose} style={styles.closeBtn} testID="close-modal">
-              <X size={20} color={Colors.dark.textSecondary} />
-            </Pressable>
+            <View style={styles.chooseSheetHeader}>
+              <View style={styles.handleBar} />
+              <TouchableOpacity onPress={handleClose} style={styles.closeBtnSheet} activeOpacity={0.7} testID="close-modal">
+                <X size={18} color={Colors.dark.textSecondary} />
+              </TouchableOpacity>
+            </View>
             {renderChooseView()}
           </Animated.View>
         </View>
       ) : (
-        // ── Full screen for suggested / custom form ──
         <View style={styles.fullSheet}>
-          <Pressable onPress={handleClose} style={styles.closeBtn} testID="close-modal">
+          <TouchableOpacity onPress={handleClose} style={styles.closeBtn} activeOpacity={0.7} testID="close-modal">
             <X size={20} color={Colors.dark.textSecondary} />
-          </Pressable>
+          </TouchableOpacity>
           {view === 'suggested' && renderSuggestedView()}
           {view === 'custom' && renderCustomView()}
         </View>
@@ -476,17 +481,37 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     borderTopWidth: 1,
     borderColor: Colors.dark.border,
+    zIndex: 2,
+    elevation: 16,
+  },
+  chooseSheetHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingTop: 10,
+    paddingBottom: 8,
+    paddingHorizontal: 12,
   },
   handleBar: {
     width: 40,
     height: 4,
     backgroundColor: Colors.dark.textMuted,
     borderRadius: 2,
-    alignSelf: 'center' as const,
-    marginTop: 10,
-    marginBottom: 6,
+    flex: 1,
+    maxWidth: 40,
   },
-  // Full screen (suggested / custom views)
+  closeBtnSheet: {
+    position: 'absolute' as const,
+    right: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.dark.surface,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + '88',
+  },
   fullSheet: {
     flex: 1,
     backgroundColor: Colors.dark.background,

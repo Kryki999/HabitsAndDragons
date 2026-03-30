@@ -7,10 +7,9 @@ import {
   ScrollView,
   Pressable,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
-import { Plus, CalendarClock, ScrollText, SlidersHorizontal, GripVertical } from 'lucide-react-native';
+import { CalendarClock, ScrollText, SlidersHorizontal, GripVertical } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
@@ -56,21 +55,13 @@ export default function CastleScreen() {
 
   const castleScaleAnim = useRef(new Animated.Value(0.8)).current;
   const listHeaderAnim = useRef(new Animated.Value(0)).current;
-  const fabPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.spring(castleScaleAnim, { toValue: 1, friction: 6, tension: 60, useNativeDriver: true }),
       Animated.timing(listHeaderAnim, { toValue: 1, duration: 420, delay: 100, useNativeDriver: true }),
     ]).start();
-
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(fabPulse, { toValue: 1.08, duration: 1500, useNativeDriver: true }),
-        Animated.timing(fabPulse, { toValue: 1, duration: 1500, useNativeDriver: true }),
-      ]),
-    ).start();
-  }, [castleScaleAnim, listHeaderAnim, fabPulse]);
+  }, [castleScaleAnim, listHeaderAnim]);
 
   const handleAddHabit = useCallback(
     (habit: {
@@ -191,7 +182,7 @@ export default function CastleScreen() {
           delayLongPress={180}
           style={isActive ? styles.dragRowActive : undefined}
         >
-          <View style={styles.dragRowWrap}>
+          <View style={[styles.dragRowWrap, styles.dragRowPadded]}>
             <View style={styles.dragHandle}>
               <GripVertical size={18} color={Colors.dark.textMuted} strokeWidth={2} />
             </View>
@@ -215,191 +206,274 @@ export default function CastleScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.mainColumn}>
-      <ScrollView
-        style={isCustomQuestOrder ? styles.scrollViewShrink : styles.scrollView}
-        scrollEnabled={!isCustomQuestOrder}
-        nestedScrollEnabled
-        contentContainerStyle={[
-          styles.scrollContent,
-          isCustomQuestOrder && styles.scrollContentShrink,
-        ]}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <Animated.View style={{ transform: [{ scale: castleScaleAnim }] }}>
-          <HomeScenePanel
-            playerLevel={playerLevel}
-            baseName={{ emoji: castleTier.emoji, name: castleTier.name }}
-            onPressBackpack={() => setBackpackOpen(true)}
+        {isCustomQuestOrder ? (
+          <DraggableFlatList
+            data={dragQuestData}
+            keyExtractor={(item) => item.id}
+            renderItem={renderDraggableQuest}
+            onDragEnd={onQuestDragEnd}
+            activationDistance={6}
+            containerStyle={styles.scrollView}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            ListHeaderComponent={
+              <>
+                <Animated.View style={{ transform: [{ scale: castleScaleAnim }] }}>
+                  <HomeScenePanel
+                    playerLevel={playerLevel}
+                    baseName={{ emoji: castleTier.emoji, name: castleTier.name }}
+                    onPressBackpack={() => setBackpackOpen(true)}
+                  />
+                </Animated.View>
+
+                <Animated.View
+                  style={[
+                    styles.taskCommandHeader,
+                    {
+                      opacity: listHeaderAnim,
+                      transform: [
+                        {
+                          translateY: listHeaderAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [12, 0],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                >
+                  <View style={styles.taskHeaderLead}>
+                    <Pressable
+                      onPress={() => {
+                        impactAsync(ImpactFeedbackStyle.Light);
+                        setCalendarOpen(true);
+                      }}
+                      style={({ pressed }) => [styles.taskIconBtn, pressed && styles.taskIconBtnPressed]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Expedition calendar"
+                    >
+                      <CalendarClock size={20} color={Colors.dark.gold} strokeWidth={2.2} />
+                    </Pressable>
+                  </View>
+                  <View style={styles.taskHeaderCenter}>
+                    <Text style={styles.taskProgressText} numberOfLines={2}>
+                      {progressLabel}
+                    </Text>
+                  </View>
+                  <View style={styles.taskHeaderTail}>
+                    <Pressable
+                      onPress={() => {
+                        impactAsync(ImpactFeedbackStyle.Light);
+                        setChroniclesOpen(true);
+                      }}
+                      style={({ pressed }) => [styles.taskIconBtn, pressed && styles.taskIconBtnPressed]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Chronicles"
+                    >
+                      <ScrollText size={20} color={Colors.dark.emerald} strokeWidth={2.2} />
+                    </Pressable>
+                    {!isPastCastleView ? (
+                      <Pressable
+                        onPress={() => {
+                          impactAsync(ImpactFeedbackStyle.Light);
+                          setSortMenuOpen(true);
+                        }}
+                        style={({ pressed }) => [styles.taskIconBtn, pressed && styles.taskIconBtnPressed]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Sort quests"
+                      >
+                        <SlidersHorizontal size={20} color={Colors.dark.textSecondary} strokeWidth={2.2} />
+                      </Pressable>
+                    ) : (
+                      <View style={styles.taskIconBtn} />
+                    )}
+                  </View>
+                </Animated.View>
+              </>
+            }
+            ListFooterComponent={
+              !isPastCastleView ? (
+                <View style={styles.customFooter}>
+                  <Pressable
+                    onPress={() => {
+                      impactAsync(ImpactFeedbackStyle.Heavy);
+                      setModalVisible(true);
+                    }}
+                    style={({ pressed }) => [
+                      styles.addQuestCard,
+                      styles.addQuestCardCustomAligned,
+                      pressed && styles.addQuestCardPressed,
+                    ]}
+                    testID="add-habit-inline-card-custom"
+                    accessibilityRole="button"
+                    accessibilityLabel="Add new quest"
+                  >
+                    <Text style={styles.addQuestCardTitle}>Add new quest</Text>
+                    <Text style={styles.addQuestCardSub}>Forge a new habit or side quest for your realm.</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={{ height: 20 }} />
+              )
+            }
           />
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.taskCommandHeader,
-            {
-              opacity: listHeaderAnim,
-              transform: [
-                {
-                  translateY: listHeaderAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [12, 0],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          <View style={styles.taskHeaderLead}>
-            <Pressable
-              onPress={() => {
-                impactAsync(ImpactFeedbackStyle.Light);
-                setCalendarOpen(true);
-              }}
-              style={({ pressed }) => [styles.taskIconBtn, pressed && styles.taskIconBtnPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Expedition calendar"
-            >
-              <CalendarClock size={20} color={Colors.dark.gold} strokeWidth={2.2} />
-            </Pressable>
-          </View>
-          <View style={styles.taskHeaderCenter}>
-            <Text style={styles.taskProgressText} numberOfLines={2}>
-              {progressLabel}
-            </Text>
-          </View>
-          <View style={styles.taskHeaderTail}>
-            <Pressable
-              onPress={() => {
-                impactAsync(ImpactFeedbackStyle.Light);
-                setChroniclesOpen(true);
-              }}
-              style={({ pressed }) => [styles.taskIconBtn, pressed && styles.taskIconBtnPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Chronicles"
-            >
-              <ScrollText size={20} color={Colors.dark.emerald} strokeWidth={2.2} />
-            </Pressable>
-            {!isPastCastleView ? (
-              <Pressable
-                onPress={() => {
-                  impactAsync(ImpactFeedbackStyle.Light);
-                  setSortMenuOpen(true);
-                }}
-                style={({ pressed }) => [styles.taskIconBtn, pressed && styles.taskIconBtnPressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Sort quests"
-              >
-                <SlidersHorizontal size={20} color={Colors.dark.textSecondary} strokeWidth={2.2} />
-              </Pressable>
-            ) : (
-              <View style={styles.taskIconBtn} />
-            )}
-          </View>
-        </Animated.View>
-
-        <View style={styles.habitsSection}>
-          {totalCount === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>⚔️</Text>
-              <Text style={styles.emptyTitle}>No quests yet</Text>
-              <Text style={styles.emptyDesc}>Tap + to create your first habit or side quest</Text>
-            </View>
-          ) : !isCustomQuestOrder ? (
-            <>
-              <View style={styles.taskSection}>
-                <View style={styles.taskSectionHeaderRow}>
-                  <View style={styles.taskSectionAccent} />
-                  <Text style={styles.taskSectionTitle}>Habits</Text>
-                  <View style={styles.taskSectionLine} />
-                </View>
-                {habitsDaily.length === 0 ? (
-                  <Text style={styles.taskSectionEmpty}>No habits due today</Text>
-                ) : (
-                  habitsDaily.map((habit) => (
-                    <HabitCard
-                      key={habit.id}
-                      habit={habit}
-                      onComplete={handleComplete}
-                      onUncomplete={handleUncomplete}
-                      onDelete={handleRemove}
-                      readOnly={isPastCastleView}
-                      historicalCompleted={!!completedNamesForFocusedDay?.includes(habit.name)}
-                    />
-                  ))
-                )}
-              </View>
-
-              <View style={styles.taskSectionSpacer} />
-
-              <View style={styles.taskSection}>
-                <View style={styles.taskSectionHeaderRow}>
-                  <View style={styles.taskSectionAccent} />
-                  <Text style={styles.taskSectionTitle}>Side quests</Text>
-                  <View style={styles.taskSectionLine} />
-                </View>
-                {habitsSide.length === 0 ? (
-                  <Text style={styles.taskSectionEmpty}>No side quests due today</Text>
-                ) : (
-                  habitsSide.map((habit) => (
-                    <HabitCard
-                      key={habit.id}
-                      habit={habit}
-                      onComplete={handleComplete}
-                      onUncomplete={handleUncomplete}
-                      onDelete={handleRemove}
-                      readOnly={isPastCastleView}
-                      historicalCompleted={!!completedNamesForFocusedDay?.includes(habit.name)}
-                    />
-                  ))
-                )}
-              </View>
-            </>
-          ) : null}
-          {!isCustomQuestOrder ? (
-            <View style={{ height: isPastCastleView ? 220 : 100 }} />
-          ) : (
-            <View style={{ height: 16 }} />
-          )}
-        </View>
-      </ScrollView>
-
-      {isCustomQuestOrder ? (
-        <DraggableFlatList
-          style={styles.draggableQuestList}
-          data={dragQuestData}
-          keyExtractor={(item) => item.id}
-          renderItem={renderDraggableQuest}
-          onDragEnd={onQuestDragEnd}
-          activationDistance={10}
-          containerStyle={styles.draggableQuestListInner}
-          contentContainerStyle={styles.draggableQuestListContent}
-          ListFooterComponent={<View style={{ height: 100 }} />}
-        />
-      ) : null}
-      </View>
-
-      {!isPastCastleView ? (
-        <Animated.View style={[styles.fabContainer, { transform: [{ scale: fabPulse }] }]}>
-          <Pressable
-            onPress={() => {
-              impactAsync(ImpactFeedbackStyle.Heavy);
-              setModalVisible(true);
-            }}
-            testID="add-habit-fab"
+        ) : (
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
           >
-            <LinearGradient
-              colors={[...Colors.gradients.gold]}
-              style={styles.fab}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+            <Animated.View style={{ transform: [{ scale: castleScaleAnim }] }}>
+              <HomeScenePanel
+                playerLevel={playerLevel}
+                baseName={{ emoji: castleTier.emoji, name: castleTier.name }}
+                onPressBackpack={() => setBackpackOpen(true)}
+              />
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.taskCommandHeader,
+                {
+                  opacity: listHeaderAnim,
+                  transform: [
+                    {
+                      translateY: listHeaderAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [12, 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}
             >
-              <Plus size={28} color="#1a1228" strokeWidth={3} />
-            </LinearGradient>
-            <View style={styles.fabShadow} />
-          </Pressable>
-        </Animated.View>
-      ) : null}
+              <View style={styles.taskHeaderLead}>
+                <Pressable
+                  onPress={() => {
+                    impactAsync(ImpactFeedbackStyle.Light);
+                    setCalendarOpen(true);
+                  }}
+                  style={({ pressed }) => [styles.taskIconBtn, pressed && styles.taskIconBtnPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Expedition calendar"
+                >
+                  <CalendarClock size={20} color={Colors.dark.gold} strokeWidth={2.2} />
+                </Pressable>
+              </View>
+              <View style={styles.taskHeaderCenter}>
+                <Text style={styles.taskProgressText} numberOfLines={2}>
+                  {progressLabel}
+                </Text>
+              </View>
+              <View style={styles.taskHeaderTail}>
+                <Pressable
+                  onPress={() => {
+                    impactAsync(ImpactFeedbackStyle.Light);
+                    setChroniclesOpen(true);
+                  }}
+                  style={({ pressed }) => [styles.taskIconBtn, pressed && styles.taskIconBtnPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Chronicles"
+                >
+                  <ScrollText size={20} color={Colors.dark.emerald} strokeWidth={2.2} />
+                </Pressable>
+                {!isPastCastleView ? (
+                  <Pressable
+                    onPress={() => {
+                      impactAsync(ImpactFeedbackStyle.Light);
+                      setSortMenuOpen(true);
+                    }}
+                    style={({ pressed }) => [styles.taskIconBtn, pressed && styles.taskIconBtnPressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Sort quests"
+                  >
+                    <SlidersHorizontal size={20} color={Colors.dark.textSecondary} strokeWidth={2.2} />
+                  </Pressable>
+                ) : (
+                  <View style={styles.taskIconBtn} />
+                )}
+              </View>
+            </Animated.View>
+
+            <View style={styles.habitsSection}>
+              {totalCount === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyEmoji}>⚔️</Text>
+                  <Text style={styles.emptyTitle}>No quests yet</Text>
+                  <Text style={styles.emptyDesc}>Tap Add new quest to create your first habit or side quest</Text>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.taskSection}>
+                    <View style={styles.taskSectionHeaderRow}>
+                      <View style={styles.taskSectionAccent} />
+                      <Text style={styles.taskSectionTitle}>Habits</Text>
+                      <View style={styles.taskSectionLine} />
+                    </View>
+                    {habitsDaily.length === 0 ? (
+                      <Text style={styles.taskSectionEmpty}>No habits due today</Text>
+                    ) : (
+                      habitsDaily.map((habit) => (
+                        <HabitCard
+                          key={habit.id}
+                          habit={habit}
+                          onComplete={handleComplete}
+                          onUncomplete={handleUncomplete}
+                          onDelete={handleRemove}
+                          readOnly={isPastCastleView}
+                          historicalCompleted={!!completedNamesForFocusedDay?.includes(habit.name)}
+                        />
+                      ))
+                    )}
+                  </View>
+
+                  <View style={styles.taskSectionSpacer} />
+
+                  <View style={styles.taskSection}>
+                    <View style={styles.taskSectionHeaderRow}>
+                      <View style={styles.taskSectionAccent} />
+                      <Text style={styles.taskSectionTitle}>Side quests</Text>
+                      <View style={styles.taskSectionLine} />
+                    </View>
+                    {habitsSide.length === 0 ? (
+                      <Text style={styles.taskSectionEmpty}>No side quests due today</Text>
+                    ) : (
+                      habitsSide.map((habit) => (
+                        <HabitCard
+                          key={habit.id}
+                          habit={habit}
+                          onComplete={handleComplete}
+                          onUncomplete={handleUncomplete}
+                          onDelete={handleRemove}
+                          readOnly={isPastCastleView}
+                          historicalCompleted={!!completedNamesForFocusedDay?.includes(habit.name)}
+                        />
+                      ))
+                    )}
+                  </View>
+                </>
+              )}
+              {!isPastCastleView ? (
+                <Pressable
+                  onPress={() => {
+                    impactAsync(ImpactFeedbackStyle.Heavy);
+                    setModalVisible(true);
+                  }}
+                  style={({ pressed }) => [styles.addQuestCard, pressed && styles.addQuestCardPressed]}
+                  testID="add-habit-inline-card"
+                  accessibilityRole="button"
+                  accessibilityLabel="Add new quest"
+                >
+                  <Text style={styles.addQuestCardTitle}>Add new quest</Text>
+                  <Text style={styles.addQuestCardSub}>Forge a new habit or side quest for your realm.</Text>
+                </Pressable>
+              ) : null}
+              <View style={{ height: isPastCastleView ? 220 : 36 }} />
+            </View>
+          </ScrollView>
+        )}
+      </View>
 
       <AddHabitModal
         visible={modalVisible}
@@ -444,19 +518,16 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  scrollViewShrink: {
-    flexGrow: 0,
-    flexShrink: 0,
-  },
   scrollContent: {
     paddingTop: 0,
-  },
-  scrollContentShrink: {
-    flexGrow: 0,
   },
   draggableQuestList: {
     flex: 1,
     minHeight: 120,
+  },
+  draggableQuestListInline: {
+    minHeight: 120,
+    marginTop: 4,
   },
   draggableQuestListInner: {
     flex: 1,
@@ -465,12 +536,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 4,
   },
+  draggableQuestListContentInline: {
+    paddingHorizontal: 0,
+    paddingTop: 4,
+  },
   dragRowActive: {
     opacity: 0.95,
   },
   dragRowWrap: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  dragRowPadded: {
+    paddingHorizontal: 20,
   },
   dragHandle: {
     width: 28,
@@ -595,25 +673,39 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 240,
   },
-  fabContainer: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-  },
-  fab: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+  addQuestCard: {
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: Colors.dark.gold + '66',
+    backgroundColor: Colors.dark.gold + '14',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  fabShadow: {
-    position: 'absolute',
-    bottom: -3,
-    left: 4,
-    right: 4,
-    height: 6,
-    borderRadius: 20,
-    backgroundColor: Colors.dark.goldDark,
+  addQuestCardPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  addQuestCardCustomAligned: {
+    marginLeft: 28,
+  },
+  customFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 36,
+  },
+  addQuestCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.dark.gold,
+    letterSpacing: 0.2,
+  },
+  addQuestCardSub: {
+    marginTop: 3,
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.dark.textMuted,
   },
 });

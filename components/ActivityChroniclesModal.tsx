@@ -320,6 +320,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.dark.emerald + "33",
     marginBottom: 12,
+    overflow: "hidden" as const,
   },
   dayCard: {
     borderRadius: 14,

@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import Colors from "@/constants/colors";
 
@@ -54,6 +54,7 @@ type Props = {
   onSelectDate?: (dateKey: string) => void;
   /** Kept for back-compat; internally converted to weeks. Default 112 days ≈ 16 weeks. */
   numDays?: number;
+  autoScrollToLatest?: boolean;
 };
 
 const DEFAULT_NUM_DAYS = 91; // ~13 weeks ≈ 3 months
@@ -66,7 +67,9 @@ export default function ActivityHeatmap({
   selectedDate,
   onSelectDate,
   numDays = DEFAULT_NUM_DAYS,
+  autoScrollToLatest = true,
 }: Props) {
+  const scrollRef = useRef<ScrollView>(null);
   const numWeeks = Math.max(5, Math.ceil(numDays / 7));
 
   const { weeks, monthMap } = useMemo(() => {
@@ -118,6 +121,14 @@ export default function ActivityHeatmap({
     return { weeks: weeksData, monthMap: monthLabelMap };
   }, [activityByDate, numWeeks]);
 
+  useEffect(() => {
+    if (!autoScrollToLatest) return;
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: false });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [autoScrollToLatest, numWeeks]);
+
   return (
     <View style={[styles.wrap, embedded && styles.wrapEmbedded]}>
       {/* ── Header ── */}
@@ -128,10 +139,16 @@ export default function ActivityHeatmap({
 
       {/* ── Scrollable heatmap ── */}
       <ScrollView
+        ref={scrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         bounces={false}
         overScrollMode="never"
+        onContentSizeChange={() => {
+          if (autoScrollToLatest) {
+            scrollRef.current?.scrollToEnd({ animated: false });
+          }
+        }}
       >
         <View>
           {/* Month labels row — each cell has same width as a column so they align */}

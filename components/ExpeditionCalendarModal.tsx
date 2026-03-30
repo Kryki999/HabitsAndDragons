@@ -443,8 +443,6 @@ export default function ExpeditionCalendarModal({
     });
   }, []);
 
-  const weekOffset = visibleWeekIdx - CURRENT_WEEK_IDX;
-
   const prevVisibleRef = useRef(false);
 
   const todayParsed = parseDateKey(todayKey);
@@ -549,6 +547,7 @@ export default function ExpeditionCalendarModal({
 
 
   const addAllowed = selectedDateKey >= todayKey && selectedDateKey >= minSelectableKey;
+  const reflectionAllowed = selectedDateKey <= todayKey && selectedDateKey >= minSelectableKey;
 
   const handleCompleteToggle = useCallback(
     (habitId: string) => {
@@ -724,8 +723,6 @@ export default function ExpeditionCalendarModal({
             <View style={styles.headerSpacer} />
           </View>
 
-          <Text style={styles.planningSubtitle}>Planning center</Text>
-
           {monthExpanded ? (
             <View style={styles.monthGridWrap}>
               {/* Month nav header */}
@@ -840,21 +837,23 @@ export default function ExpeditionCalendarModal({
               </View>
             }
             ListFooterComponent={
-              <View style={[styles.footerBlock, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-                <Pressable
-                  onPress={() => {
-                    impactAsync(ImpactFeedbackStyle.Light);
-                    setReflectionOpen(true);
-                  }}
-                  style={({ pressed }) => [
-                    styles.reflectionBtn,
-                    pressed && styles.reflectionBtnPressed,
-                  ]}
-                >
-                  <Plus size={18} color={Colors.dark.gold} />
-                  <Text style={styles.reflectionBtnText}>Daily Reflection</Text>
-                </Pressable>
-              </View>
+              reflectionAllowed ? (
+                <View style={[styles.footerBlock, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+                  <Pressable
+                    onPress={() => {
+                      impactAsync(ImpactFeedbackStyle.Light);
+                      setReflectionOpen(true);
+                    }}
+                    style={({ pressed }) => [
+                      styles.reflectionBtn,
+                      pressed && styles.reflectionBtnPressed,
+                    ]}
+                  >
+                    <Plus size={18} color={Colors.dark.gold} />
+                    <Text style={styles.reflectionBtnText}>Daily Reflection</Text>
+                  </Pressable>
+                </View>
+              ) : null
             }
           />
         ) : (
@@ -892,6 +891,22 @@ export default function ExpeditionCalendarModal({
                   <Plus size={18} color={Colors.dark.text} />
                   <Text style={styles.addBtnText}>Add for this day</Text>
                 </Pressable>
+                {reflectionAllowed ? (
+                  <Pressable
+                    onPress={() => {
+                      impactAsync(ImpactFeedbackStyle.Light);
+                      setReflectionOpen(true);
+                    }}
+                    style={({ pressed }) => [
+                      styles.reflectionBtn,
+                      pressed && styles.reflectionBtnPressed,
+                      { marginTop: 10 },
+                    ]}
+                  >
+                    <Plus size={18} color={Colors.dark.gold} />
+                    <Text style={styles.reflectionBtnText}>Daily Reflection</Text>
+                  </Pressable>
+                ) : null}
               </View>
             }
           />
@@ -955,22 +970,18 @@ export default function ExpeditionCalendarModal({
         ) : null}
 
         {/* Return to Today floating button */}
-        {weekOffset !== 0 ? (
+        {selectedDateKey !== todayKey ? (
           <Pressable
             onPress={handleReturnToToday}
             style={[
               styles.returnTodayBtn,
-              weekOffset < 0 ? styles.returnTodayRight : styles.returnTodayLeft,
-              { bottom: Math.max(insets.bottom + 80, 96) },
+              { bottom: Math.max(insets.bottom + 8, 12) },
             ]}
             accessibilityLabel="Return to today"
           >
-            {weekOffset > 0 ? (
-              <ArrowLeft size={14} color={Colors.dark.gold} strokeWidth={2.4} />
-            ) : (
-              <ArrowRight size={14} color={Colors.dark.gold} strokeWidth={2.4} />
-            )}
+            <ArrowLeft size={14} color={Colors.dark.gold} strokeWidth={2.4} />
             <Text style={styles.returnTodayText}>Today</Text>
+            <ArrowRight size={14} color={Colors.dark.gold} strokeWidth={2.4} />
           </Pressable>
         ) : null}
 
@@ -1082,15 +1093,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
   },
-  planningSubtitle: {
-    fontSize: 11,
-    fontWeight: "700" as const,
-    letterSpacing: 1.6,
-    color: Colors.dark.textMuted,
-    textTransform: "uppercase" as const,
-    textAlign: "center" as const,
-    marginBottom: 12,
-  },
   monthGridWrap: {
     borderRadius: 16,
     padding: 12,
@@ -1147,16 +1149,15 @@ const styles = StyleSheet.create({
   },
   gridCellEmpty: {
     width: "14.28%",
-    aspectRatio: 1,
-    maxHeight: 48,
+    height: 42,
   },
   gridCellBtn: {
     width: "14.28%",
-    aspectRatio: 1,
-    maxHeight: 48,
+    height: 42,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
+    paddingVertical: 0,
   },
   gridCellBtnSelected: {
     backgroundColor: Colors.dark.gold + "28",
@@ -1174,6 +1175,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700" as const,
     color: Colors.dark.textSecondary,
+    textAlign: "center" as const,
+    lineHeight: 16,
   },
   gridCellTextSelected: {
     color: Colors.dark.gold,
@@ -1193,6 +1196,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 9,
@@ -1201,11 +1205,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Colors.dark.gold + "88",
     zIndex: 30,
-  },
-  returnTodayLeft: {
     left: 16,
-  },
-  returnTodayRight: {
     right: 16,
   },
   returnTodayText: {

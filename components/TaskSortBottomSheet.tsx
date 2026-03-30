@@ -4,11 +4,11 @@ import {
   Text,
   StyleSheet,
   Modal,
-  Pressable,
   Animated,
   Dimensions,
   Platform,
 } from "react-native";
+import { TouchableOpacity } from "react-native-gesture-handler";
 import { X, Check } from "lucide-react-native";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 import Colors from "@/constants/colors";
@@ -62,23 +62,29 @@ export default function TaskSortBottomSheet({ visible, onClose }: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose} statusBarTranslucent>
-      <View style={styles.overlay}>
-        <Pressable style={styles.overlayBg} onPress={handleClose} />
+      <View style={styles.overlay} pointerEvents="box-none">
+        <TouchableOpacity
+          style={styles.overlayBg}
+          onPress={handleClose}
+          activeOpacity={1}
+        />
         <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-          <View style={styles.handleBar} />
-          <Pressable onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close">
-            <X size={20} color={Colors.dark.textSecondary} />
-          </Pressable>
+          <View style={styles.sheetHeader}>
+            <View style={styles.handleBar} />
+            <TouchableOpacity onPress={handleClose} style={styles.closeBtn} activeOpacity={0.7} accessibilityLabel="Close">
+              <X size={18} color={Colors.dark.textSecondary} />
+            </TouchableOpacity>
+          </View>
 
           <Text style={styles.title}>Quest order</Text>
           <Text style={styles.subtitle}>Choose how your due quests appear on the Castle screen.</Text>
 
-          <Pressable
+          <TouchableOpacity
             onPress={() => pick("default")}
-            style={({ pressed }) => [
+            activeOpacity={0.88}
+            style={[
               styles.optionCard,
               castleQuestSortMode === "default" && styles.optionCardActive,
-              pressed && styles.optionCardPressed,
             ]}
           >
             <View style={styles.optionHeaderRow}>
@@ -92,14 +98,14 @@ export default function TaskSortBottomSheet({ visible, onClose }: Props) {
               ) : null}
             </View>
             <Text style={styles.optionHint}>Same order as when you added quests (stable roster).</Text>
-          </Pressable>
+          </TouchableOpacity>
 
-          <Pressable
+          <TouchableOpacity
             onPress={() => pick("custom")}
-            style={({ pressed }) => [
+            activeOpacity={0.88}
+            style={[
               styles.optionCard,
               castleQuestSortMode === "custom" && styles.optionCardActive,
-              pressed && styles.optionCardPressed,
             ]}
           >
             <View style={styles.optionHeaderRow}>
@@ -115,7 +121,7 @@ export default function TaskSortBottomSheet({ visible, onClose }: Props) {
             <Text style={styles.optionHint}>
               Grab the grip handles on each quest card to drag and reorder. Your layout is saved automatically.
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         </Animated.View>
       </View>
     </Modal>
@@ -141,27 +147,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderTopWidth: 1,
     borderColor: Colors.dark.border,
+    zIndex: 2,
+    elevation: 16,
+  },
+  sheetHeader: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingHorizontal: 12,
   },
   handleBar: {
     width: 40,
     height: 4,
     backgroundColor: Colors.dark.textMuted,
     borderRadius: 2,
-    alignSelf: "center" as const,
-    marginTop: 10,
-    marginBottom: 8,
+    flex: 1,
+    maxWidth: 40,
   },
   closeBtn: {
     position: "absolute" as const,
-    top: 12,
-    right: 16,
+    right: 14,
     width: 32,
     height: 32,
     borderRadius: 16,
     backgroundColor: Colors.dark.surface,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    zIndex: 10,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "88",
   },
   title: {
     fontSize: 18,
