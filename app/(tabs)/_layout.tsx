@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Platform,
   GestureResponderEvent,
 } from "react-native";
+import Reanimated from "react-native-reanimated";
 import { Tabs } from "expo-router";
 import { Home, Trophy, Castle, Sparkles, Coins, Mail, Settings as SettingsIcon, User } from "lucide-react-native";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
@@ -21,6 +22,7 @@ import SettingsModal from "@/components/SettingsModal";
 import PlayerProfileModal from "@/components/PlayerProfileModal";
 import CelebrationOverlayHost from "@/components/CelebrationOverlayHost";
 import DailyFlowModal from "@/components/DailyFlowModal";
+import { useLootTrajectory } from "@/providers/LootTrajectoryProvider";
 
 type TabIconProps = {
   color: string;
@@ -92,12 +94,15 @@ function TabsWithTopBar() {
   const getXPForNextLevel = useGameStore((s) => s.getXPForNextLevel);
   const getTotalXP = useGameStore((s) => s.getTotalXP);
   const { user, playerId, signOut } = useAuth();
+  const { registerGoldTarget, onGoldTargetLayout, goldPulseStyle, pendingGoldInFlight } = useLootTrajectory();
+  const goldHudRef = useRef<View | null>(null);
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [mailboxOpen, setMailboxOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const playerLevel = getPlayerLevel();
+  const visibleGold = Math.max(0, gold - pendingGoldInFlight);
   const currentLevelXP = getCurrentLevelXP();
   const xpForNext = getXPForNextLevel();
   const xpProgress = xpForNext > 0 ? currentLevelXP / xpForNext : 0;
@@ -113,6 +118,20 @@ function TabsWithTopBar() {
         totalXP: getTotalXP(),
       }
     : null;
+
+  const syncGoldTarget = useCallback(() => {
+    goldHudRef.current?.measureInWindow((x, y, width, height) => {
+      registerGoldTarget({
+        x: x + width / 2,
+        y: y + height / 2,
+      });
+    });
+  }, [registerGoldTarget]);
+
+  useEffect(() => {
+    const t = setTimeout(syncGoldTarget, 30);
+    return () => clearTimeout(t);
+  }, [gold, syncGoldTarget]);
 
   return (
     <View style={styles.shell}>
@@ -145,10 +164,17 @@ function TabsWithTopBar() {
           </Pressable>
 
           <View style={styles.hudStatsCluster}>
-            <View style={styles.hudStatItem}>
+            <Reanimated.View
+              ref={goldHudRef}
+              onLayout={(event) => {
+                onGoldTargetLayout(event);
+                syncGoldTarget();
+              }}
+              style={[styles.hudStatItem, goldPulseStyle]}
+            >
               <Coins color={Colors.dark.gold} size={15} strokeWidth={2.2} />
-              <Text style={styles.hudStatValueGold}>{gold}</Text>
-            </View>
+              <Text style={styles.hudStatValueGold}>{visibleGold}</Text>
+            </Reanimated.View>
           </View>
 
           <View style={styles.hudRight}>

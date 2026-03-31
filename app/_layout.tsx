@@ -11,6 +11,7 @@ import DailyLoginSync from "@/components/DailyLoginSync";
 import AuthGate from "@/components/AuthGate";
 import CloudSync from "@/components/CloudSync";
 import { AuthProvider, useAuth } from "@/providers/AuthProvider";
+import { LootTrajectoryProvider } from "@/providers/LootTrajectoryProvider";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -56,10 +57,12 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <AuthProvider>
-          <AuthenticatedEffects />
-          <StatusBar style="light" />
-          <RootLayoutNav />
-          <AuthGate />
+          <LootTrajectoryProvider>
+            <AuthenticatedEffects />
+            <StatusBar style="light" />
+            <RootLayoutNav />
+            <AuthGate />
+          </LootTrajectoryProvider>
         </AuthProvider>
       </GestureHandlerRootView>
     </QueryClientProvider>

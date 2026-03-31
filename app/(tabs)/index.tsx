@@ -13,7 +13,7 @@ import { CalendarClock, ScrollText, SlidersHorizontal, GripVertical } from 'luci
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
-import { StatType, TaskType, type Habit } from '@/types/game';
+import { StatType, TaskType, type Habit, type HabitDifficulty } from '@/types/game';
 import HabitCard from '@/components/HabitCard';
 import AddHabitModal from '@/components/AddHabitModal';
 import HomeScenePanel from '@/components/HomeScenePanel';
@@ -23,10 +23,13 @@ import TaskSortBottomSheet from '@/components/TaskSortBottomSheet';
 import { getCastleTier } from '@/constants/kingdomTiers';
 import { orderDueHabitsForCastle } from '@/lib/castleQuestOrder';
 import { applyPlanningOrderForDate } from '@/lib/planningDayOrder';
+import { DIFFICULTY_BASE_REWARDS } from '@/lib/economy';
 import { useAuth } from '@/providers/AuthProvider';
+import { useLootTrajectory } from '@/providers/LootTrajectoryProvider';
 
 export default function CastleScreen() {
   const { user, profileCreatedAtDateKey } = useAuth();
+  const { triggerLootTrajectory } = useLootTrajectory();
   const [modalVisible, setModalVisible] = useState(false);
   const [chroniclesOpen, setChroniclesOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -76,10 +79,19 @@ export default function CastleScreen() {
   );
 
   const handleComplete = useCallback(
-    (id: string) => {
+    (id: string, meta?: { source: { x: number; y: number } }) => {
+      const habit = habits.find((h) => h.id === id);
       completeHabit(id);
+      if (meta?.source) {
+        const diffKey = (habit?.difficulty ?? 'medium') as HabitDifficulty;
+        const rewardGold = DIFFICULTY_BASE_REWARDS[diffKey].gold;
+        triggerLootTrajectory({
+          from: meta.source,
+          amount: rewardGold,
+        });
+      }
     },
-    [completeHabit],
+    [completeHabit, habits, triggerLootTrajectory],
   );
 
   const handleUncomplete = useCallback(

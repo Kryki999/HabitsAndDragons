@@ -65,7 +65,7 @@ interface Props {
   /** Absolute page-space bounds of the source card (from ref.measure pageX/pageY). */
   originMetrics: CardMetrics | null;
   onClose: () => void;
-  onComplete: (id: string) => void;
+  onComplete: (id: string, meta?: { source: { x: number; y: number } }) => void;
   onUncomplete: (id: string) => void;
   onDelete: (id: string) => void;
   onEdit?: (habit: Habit) => void;

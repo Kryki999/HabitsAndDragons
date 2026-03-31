@@ -19,7 +19,7 @@ const ACCENT = Colors.dark.gold;
 
 interface HabitCardProps {
   habit: Habit;
-  onComplete: (id: string) => void;
+  onComplete: (id: string, meta?: { source: { x: number; y: number } }) => void;
   onUncomplete: (id: string) => void;
   onDelete: (id: string) => void;
   onEdit?: (habit: Habit) => void;
@@ -79,14 +79,19 @@ function HabitCard({
   }, [readOnly, habit.isFrozen]);
 
   // Tapping the checkbox directly → complete/uncomplete (no card animation conflict)
-  const handleCheckboxPress = useCallback(() => {
+  const handleCheckboxPress = useCallback((event: { nativeEvent: { pageX: number; pageY: number } }) => {
     if (readOnly || habit.isFrozen) return;
     impactAsync(ImpactFeedbackStyle.Heavy);
     if (habit.completedToday) {
       onUncomplete(habit.id);
       Animated.spring(checkAnim, { toValue: 0, friction: 6, tension: 80, useNativeDriver: true }).start();
     } else {
-      onComplete(habit.id);
+      onComplete(habit.id, {
+        source: {
+          x: event.nativeEvent.pageX,
+          y: event.nativeEvent.pageY,
+        },
+      });
       Animated.sequence([
         Animated.spring(checkAnim, { toValue: 1.2, friction: 4, tension: 100, useNativeDriver: true }),
         Animated.spring(checkAnim, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
