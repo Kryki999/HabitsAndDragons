@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
-import { CalendarClock, ScrollText, SlidersHorizontal, GripVertical } from 'lucide-react-native';
+import { CalendarClock, ScrollText, SlidersHorizontal, GripVertical, Plus } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
@@ -317,8 +317,12 @@ export default function CastleScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Add new quest"
                   >
-                    <Text style={styles.addQuestCardTitle}>Add new quest</Text>
-                    <Text style={styles.addQuestCardSub}>Forge a new habit or side quest for your realm.</Text>
+                    <View style={styles.addQuestRow}>
+                      <View style={styles.addQuestIconWrap}>
+                        <Plus size={22} color={Colors.dark.gold} strokeWidth={3.2} />
+                      </View>
+                      <Text style={styles.addQuestCardTitle}>Add New Quest</Text>
+                    </View>
                   </Pressable>
                 </View>
               ) : (
@@ -473,8 +477,12 @@ export default function CastleScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Add new quest"
                 >
-                  <Text style={styles.addQuestCardTitle}>Add new quest</Text>
-                  <Text style={styles.addQuestCardSub}>Forge a new habit or side quest for your realm.</Text>
+                  <View style={styles.addQuestRow}>
+                    <View style={styles.addQuestIconWrap}>
+                      <Plus size={22} color={Colors.dark.gold} strokeWidth={3.2} />
+                    </View>
+                    <Text style={styles.addQuestCardTitle}>Add New Quest</Text>
+                  </View>
                 </Pressable>
               ) : null}
               <View style={{ height: isPastCastleView ? 220 : 36 }} />
@@ -690,6 +698,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  addQuestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    minHeight: 30,
+    width: '100%',
+  },
+  addQuestIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.dark.gold + '20',
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + '66',
+  },
   addQuestCardPressed: {
     opacity: 0.9,
     transform: [{ scale: 0.99 }],
@@ -703,10 +729,13 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
   },
   addQuestCardTitle: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '800',
     color: Colors.dark.gold,
-    letterSpacing: 0.2,
+    letterSpacing: 0.35,
+    textAlign: 'center',
+    lineHeight: 21,
+    includeFontPadding: false,
   },
   addQuestCardSub: {
     marginTop: 3,

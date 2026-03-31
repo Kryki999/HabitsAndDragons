@@ -221,6 +221,11 @@ export interface GameActions {
     oracleStatWeights?: OracleTaskStatWeights;
   }) => void;
   removeHabit: (habitId: string) => void;
+  /** Updates editable quest fields without touching completion history. */
+  updateHabit: (
+    habitId: string,
+    patch: Partial<Pick<Habit, "name" | "description" | "icon" | "taskType">>,
+  ) => void;
   /** Allows editing only the planned date without affecting the rest of progress. */
   setHabitScheduledDate: (habitId: string, scheduledDate: string | null) => void;
   getPlayerLevel: () => number;

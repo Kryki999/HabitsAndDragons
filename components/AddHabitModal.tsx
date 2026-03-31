@@ -95,6 +95,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
   const [selectedIcon, setSelectedIcon] = useState('⚔️');
   const [selectedScheduledDateKey, setSelectedScheduledDateKey] = useState<string | null>(initialScheduledDateKey ?? null);
   const [oracleBusy, setOracleBusy] = useState(false);
+  const [customNameInputH, setCustomNameInputH] = useState(56);
   const scheduleScrollRef = useRef<ScrollView>(null);
 
   const ICON_OPTIONS = ['⚔️', '🛡️', '🏃', '📖', '🧠', '💪', '🎯', '🔥', '⭐', '🌟', '💎', '🏆'];
@@ -148,6 +149,7 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
       setCustomDesc('');
       setSelectedTaskType('daily');
       setSelectedIcon('⚔️');
+      setCustomNameInputH(56);
       const todayKey = getTodayKey();
       setSelectedScheduledDateKey(
         initialScheduledDateKey && initialScheduledDateKey === todayKey ? null : (initialScheduledDateKey ?? null),
@@ -334,11 +336,17 @@ export default function AddHabitModal({ visible, onClose, onAddHabit, initialSch
 
           <Text style={styles.fieldLabel}>Quest Name</Text>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, styles.textInputMultiGrow, { height: Math.max(56, customNameInputH) }]}
             placeholder="e.g. Drink 2L Water"
             placeholderTextColor={Colors.dark.textMuted}
             value={customName}
             onChangeText={setCustomName}
+            multiline
+            textAlignVertical="top"
+            onContentSizeChange={(e) => {
+              const next = Math.min(180, Math.max(56, Math.ceil(e.nativeEvent.contentSize.height) + 18));
+              setCustomNameInputH(next);
+            }}
             testID="custom-habit-name"
           />
 
@@ -677,6 +685,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.dark.text,
     marginBottom: 16,
+  },
+  textInputMultiGrow: {
+    lineHeight: 20,
+    paddingTop: 12,
+    paddingBottom: 12,
   },
   textInputMulti: {
     minHeight: 60,

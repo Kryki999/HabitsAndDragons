@@ -8,9 +8,10 @@ import {
   Animated,
   useWindowDimensions,
   Platform,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RefreshCw, Info } from 'lucide-react-native';
+import { Info, X } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
@@ -48,6 +49,7 @@ export default function HomeScenePanel({ playerLevel, baseName }: Props) {
 
   const [mode, setMode] = useState<SceneMode>('base');
   const [progressionOpen, setProgressionOpen] = useState(false);
+  const [travelOverlayOpen, setTravelOverlayOpen] = useState(false);
   const crossfade = useRef(new Animated.Value(1)).current;
 
   const baseSource = useMemo(() => getBaseBackgroundForLevel(playerLevel), [playerLevel]);
@@ -71,10 +73,24 @@ export default function HomeScenePanel({ playerLevel, baseName }: Props) {
     [crossfade],
   );
 
-  const onToggle = useCallback(() => {
+  const onOpenTravelOverlay = useCallback(() => {
     impactAsync(ImpactFeedbackStyle.Light);
-    runCrossfade(mode === 'base' ? 'armory' : 'base');
-  }, [mode, runCrossfade]);
+    setTravelOverlayOpen(true);
+  }, []);
+
+  const onCloseTravelOverlay = useCallback(() => {
+    impactAsync(ImpactFeedbackStyle.Light);
+    setTravelOverlayOpen(false);
+  }, []);
+
+  const onSelectLocation = useCallback(
+    (nextMode: SceneMode) => {
+      impactAsync(ImpactFeedbackStyle.Medium);
+      if (nextMode !== mode) runCrossfade(nextMode);
+      setTravelOverlayOpen(false);
+    },
+    [mode, runCrossfade],
+  );
 
   const panelHeight = width / VIEW_ASPECT;
   const maxHeroHeight = panelHeight * 2;
@@ -113,19 +129,12 @@ export default function HomeScenePanel({ playerLevel, baseName }: Props) {
 
         <View style={styles.sceneCornerActions} pointerEvents="box-none">
           <Pressable
-            onPress={onToggle}
-            style={({ pressed }) => [styles.cornerFab, pressed && styles.cornerFabPressed]}
+            onPress={onOpenTravelOverlay}
+            style={({ pressed }) => [styles.doorTrigger, pressed && styles.doorTriggerPressed]}
             accessibilityRole="button"
-            accessibilityLabel={mode === 'base' ? 'Switch to armory' : 'Switch to base'}
+            accessibilityLabel="Open fast travel"
           >
-            <LinearGradient
-              colors={[Colors.dark.surfaceLight + 'f2', Colors.dark.surface + 'f0']}
-              style={styles.cornerFabInner}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <RefreshCw size={17} color={Colors.dark.gold} strokeWidth={2.2} />
-            </LinearGradient>
+            <Text style={styles.doorEmoji}>🚪</Text>
           </Pressable>
         </View>
       </View>
@@ -180,6 +189,78 @@ export default function HomeScenePanel({ playerLevel, baseName }: Props) {
         onClose={() => setProgressionOpen(false)}
         playerLevel={playerLevel}
       />
+
+      <Modal
+        transparent
+        visible={travelOverlayOpen}
+        animationType="fade"
+        onRequestClose={onCloseTravelOverlay}
+      >
+        <View style={styles.overlayRoot}>
+          <Pressable style={styles.overlayBackdrop} onPress={onCloseTravelOverlay} />
+
+          <View style={styles.overlayBottomRow} pointerEvents="box-none">
+            <Pressable
+              onPress={onCloseTravelOverlay}
+              style={({ pressed }) => [styles.overlayCloseBtn, pressed && styles.overlayCloseBtnPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Close fast travel"
+            >
+              <X size={18} color={Colors.dark.textSecondary} strokeWidth={2.4} />
+            </Pressable>
+          </View>
+
+          <View style={styles.fastTravelMenuWrap} pointerEvents="box-none">
+            <View style={styles.fastTravelMenu}>
+              <Pressable
+                onPress={() => onSelectLocation('base')}
+                style={({ pressed }) => [
+                  styles.locationCard,
+                  mode === 'base' ? styles.locationCardActive : styles.locationCardInactive,
+                  pressed && styles.locationCardPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Travel to Castle"
+              >
+                <LinearGradient
+                  colors={mode === 'base' ? ['#ffd978', '#ffb13f', '#ff8b2e'] : ['#4b3a5f', '#30263d']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.locationIconWrap}
+                >
+                  <Text style={styles.locationEmoji}>🏰</Text>
+                </LinearGradient>
+                <Text style={[styles.locationLabel, mode !== 'base' && styles.locationLabelInactive]}>
+                  Castle
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => onSelectLocation('armory')}
+                style={({ pressed }) => [
+                  styles.locationCard,
+                  mode === 'armory' ? styles.locationCardActive : styles.locationCardInactive,
+                  pressed && styles.locationCardPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Travel to Armory"
+              >
+                <LinearGradient
+                  colors={mode === 'armory' ? ['#90e8ff', '#5db8ff', '#8f7cff'] : ['#3a4552', '#252d38']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.locationIconWrap}
+                >
+                  <Text style={styles.locationEmoji}>🛡️</Text>
+                </LinearGradient>
+                <Text style={[styles.locationLabel, mode !== 'armory' && styles.locationLabelInactive]}>
+                  Armory
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -319,30 +400,106 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 8,
   },
-  cornerFab: {
-    borderRadius: 11,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.dark.gold + '55',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.35,
-        shadowRadius: 5,
-      },
-      android: { elevation: 8 },
-      default: {},
-    }),
+  doorTrigger: {
+    padding: 0,
   },
-  cornerFabPressed: {
+  doorTriggerPressed: {
     opacity: 0.88,
     transform: [{ scale: 0.96 }],
   },
-  cornerFabInner: {
-    width: 36,
-    height: 36,
+  doorEmoji: {
+    fontSize: 24,
+    lineHeight: 27,
+  },
+  overlayRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(6, 4, 10, 0.7)',
+  },
+  overlayBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  overlayBottomRow: {
+    position: 'absolute',
+    bottom: Platform.select({ ios: 34, android: 20, default: 20 }),
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 3,
+  },
+  overlayCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.dark.surface + 'd9',
+    borderWidth: 1,
+    borderColor: Colors.dark.border + 'cc',
+  },
+  overlayCloseBtnPressed: {
+    transform: [{ scale: 0.94 }],
+    opacity: 0.85,
+  },
+  fastTravelMenuWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingTop: 0,
+    paddingBottom: 70,
+    zIndex: 2,
+  },
+  fastTravelMenu: {
+    width: '100%',
+    maxWidth: 330,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  locationCard: {
+    flex: 1,
+    minHeight: 124,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+  },
+  locationCardActive: {
+    backgroundColor: Colors.dark.surfaceLight + 'f0',
+    borderWidth: 2,
+    borderColor: Colors.dark.gold + 'dd',
+  },
+  locationCardInactive: {
+    backgroundColor: Colors.dark.surface + 'a6',
+    borderWidth: 1,
+    borderColor: Colors.dark.border + 'a6',
+    opacity: 0.7,
+  },
+  locationIconWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  locationEmoji: {
+    fontSize: 28,
+    lineHeight: 31,
+  },
+  locationCardPressed: {
+    transform: [{ scale: 0.97 }],
+  },
+  locationLabel: {
+    marginTop: 8,
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.dark.text,
+    letterSpacing: 0.4,
+  },
+  locationLabelInactive: {
+    color: Colors.dark.textSecondary,
   },
 });

@@ -10,6 +10,7 @@ import {
   Platform,
   FlatList,
   useWindowDimensions,
+  TextInput,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,8 +23,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Trash2,
-  Check,
   CalendarClock,
   GripVertical,
   ArrowLeft,
@@ -35,6 +34,7 @@ import { useGameStore } from "@/store/gameStore";
 import AddHabitModal from "@/components/AddHabitModal";
 import DayQuestLogReadOnly from "@/components/DayQuestLogReadOnly";
 import DailyReflectionPanel from "@/components/DailyReflectionPanel";
+import TaskCardOverlay, { type CardMetrics } from "@/components/TaskCardOverlay";
 import { applyPlanningOrderForDate } from "@/lib/planningDayOrder";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
 
@@ -119,6 +119,14 @@ function dateKeyFromDate(d: Date): string {
   return dateKeyFromYMD(d.getFullYear(), d.getMonth() + 1, d.getDate());
 }
 
+function addDaysDateKey(baseKey: string, days: number): string {
+  const p = parseDateKey(baseKey);
+  if (!p) return baseKey;
+  const d = new Date(p.y, p.m - 1, p.d);
+  d.setDate(d.getDate() + days);
+  return dateKeyFromDate(d);
+}
+
 function isHabitPlannedForDate(habit: Habit, dateKey: string, todayKey: string): boolean {
   const plannedFrom = habit.scheduledDate ?? todayKey;
   if (habit.taskType === "daily") {
@@ -160,110 +168,79 @@ type Props = {
 
 function TaskRow({
   habit,
-  todayKey,
-  readOnly,
-  historicalCompleted,
-  onCompleteToggle,
+  onComplete,
+  onUncomplete,
   onDelete,
+  onEdit,
   onReschedule,
   drag,
   isActive,
 }: {
   habit: Habit;
-  todayKey: string;
-  readOnly?: boolean;
-  historicalCompleted?: boolean;
-  onCompleteToggle: (habitId: string) => void;
+  onComplete: (habitId: string) => void;
+  onUncomplete: (habitId: string) => void;
   onDelete: (habitId: string) => void;
+  onEdit: (habit: Habit) => void;
   onReschedule: (habit: Habit) => void;
   drag: () => void;
   isActive: boolean;
 }) {
-  const due = !habit.scheduledDate || habit.scheduledDate <= todayKey;
   const scheduledLabel = habit.scheduledDate ? formatDateKeyToShortLabel(habit.scheduledDate) : "Today";
+  const [overlayOpen, setOverlayOpen] = useState(false);
+  const [cardMetrics, setCardMetrics] = useState<CardMetrics | null>(null);
+  const rowRef = useRef<View>(null);
 
-  const rowInner = (
-    <View style={[styles.taskRow, isActive && styles.taskRowActive, !due && !readOnly && styles.taskRowMuted]}>
-      {!readOnly ? (
-        <View style={styles.dragHandle} accessibilityLabel="Reorder">
-          <GripVertical size={18} color={Colors.dark.textMuted} />
-        </View>
-      ) : (
-        <View style={styles.dragHandlePlaceholder} />
-      )}
-      <View style={styles.taskRowLeft}>
-        <Text style={styles.taskEmoji}>{habit.icon}</Text>
-        <View style={styles.taskInfo}>
-          <Text
-            style={[
-              styles.taskName,
-              (readOnly ? historicalCompleted : habit.completedToday) && styles.taskNameCompleted,
-            ]}
-            numberOfLines={1}
-          >
-            {habit.name}
-          </Text>
-          <Text style={styles.taskMeta}>
-            {habit.taskType === "daily" ? "Habit" : "Side quest"} · {scheduledLabel}
-          </Text>
-        </View>
-      </View>
-
-      {!readOnly ? (
-        <View style={styles.taskRowActions}>
-          <Pressable
-            onPress={() => onCompleteToggle(habit.id)}
-            disabled={!due}
-            style={({ pressed }) => [styles.iconBtn, !due && styles.iconBtnDisabled, pressed && due && styles.iconBtnPressed]}
-          >
-            <Check size={16} color={due ? Colors.dark.gold : Colors.dark.textMuted} />
-          </Pressable>
-          <Pressable
-            onPress={() => onReschedule(habit)}
-            style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}
-          >
-            <CalendarClock size={16} color={Colors.dark.textMuted} />
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              impactAsync(ImpactFeedbackStyle.Light);
-              onDelete(habit.id);
-            }}
-            style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}
-          >
-            <Trash2 size={16} color={Colors.dark.textMuted} />
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.taskRowActions}>
-          {historicalCompleted ? (
-            <View style={[styles.iconBtn, styles.iconBtnReadonly]}>
-              <Check size={16} color={Colors.dark.gold} />
-            </View>
-          ) : (
-            <View style={[styles.iconBtn, styles.iconBtnReadonly]}>
-              <Check size={16} color={Colors.dark.textMuted} />
-            </View>
-          )}
-        </View>
-      )}
-    </View>
-  );
-
-  if (readOnly) {
-    return rowInner;
-  }
+  const openOverlay = useCallback(() => {
+    impactAsync(ImpactFeedbackStyle.Light);
+    rowRef.current?.measure((_x, _y, width, height, pageX, pageY) => {
+      setCardMetrics({ x: pageX, y: pageY, width, height });
+      setOverlayOpen(true);
+    });
+  }, []);
 
   return (
     <ScaleDecorator>
       <TouchableOpacity
         onLongPress={drag}
-        disabled={isActive}
+        onPress={openOverlay}
+        disabled={isActive || overlayOpen}
         activeOpacity={0.92}
         delayLongPress={180}
       >
-        {rowInner}
+        <View
+          ref={rowRef}
+          collapsable={false}
+          style={[styles.taskRow, isActive && styles.taskRowActive, overlayOpen && { opacity: 0 }]}
+        >
+          <View style={styles.dragHandle} accessibilityLabel="Reorder">
+            <GripVertical size={18} color={Colors.dark.textMuted} />
+          </View>
+          <View style={styles.taskRowLeft}>
+            <Text style={styles.taskEmoji}>{habit.icon}</Text>
+            <View style={styles.taskInfo}>
+              <Text style={[styles.taskName, habit.completedToday && styles.taskNameCompleted]}>
+                {habit.name}
+              </Text>
+              <Text style={styles.taskMeta}>
+                {habit.taskType === "daily" ? "Habit" : "Side quest"} · {scheduledLabel}
+              </Text>
+            </View>
+          </View>
+        </View>
       </TouchableOpacity>
+      {overlayOpen ? (
+        <TaskCardOverlay
+          visible={overlayOpen}
+          habit={habit}
+          originMetrics={cardMetrics}
+          onClose={() => setOverlayOpen(false)}
+          onComplete={onComplete}
+          onUncomplete={onUncomplete}
+          onDelete={onDelete}
+          onEdit={onEdit}
+          onReschedule={onReschedule}
+        />
+      ) : null}
     </ScaleDecorator>
   );
 }
@@ -424,6 +401,7 @@ export default function ExpeditionCalendarModal({
   const completeHabit = useGameStore((s) => s.completeHabit);
   const uncompleteHabit = useGameStore((s) => s.uncompleteHabit);
   const removeHabit = useGameStore((s) => s.removeHabit);
+  const updateHabit = useGameStore((s) => s.updateHabit);
   const addHabit = useGameStore((s) => s.addHabit);
   const setHabitScheduledDate = useGameStore((s) => s.setHabitScheduledDate);
 
@@ -438,8 +416,13 @@ export default function ExpeditionCalendarModal({
   const [monthExpanded, setMonthExpanded] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [rescheduleHabit, setRescheduleHabit] = useState<Habit | null>(null);
-  const [rescheduleDateKey, setRescheduleDateKey] = useState<string | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [editHabit, setEditHabit] = useState<Habit | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editIcon, setEditIcon] = useState("⚔️");
+  const [editTaskType, setEditTaskType] = useState<Habit["taskType"]>("daily");
   const [reflectionOpen, setReflectionOpen] = useState(false);
 
   // ── Week swiper ──
@@ -563,19 +546,35 @@ export default function ExpeditionCalendarModal({
     if (monthExpanded) setMonthExpanded(false);
   }, [monthExpanded]);
 
-  const handleCompleteToggle = useCallback(
+  const handleCompleteFromTimeline = useCallback(
     (habitId: string) => {
       const habit = habits.find((h) => h.id === habitId);
       if (!habit) return;
-      const due = !habit.scheduledDate || habit.scheduledDate <= todayKey;
-      if (!due) {
-        Alert.alert("Not due yet", "This task is planned for a future date.");
+      if (selectedDateKey > todayKey) {
+        Alert.alert(
+          "Future quest",
+          "This quest belongs to a future day. Do you want to mark it as completed now?",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Complete anyway",
+              style: "default",
+              onPress: () => completeHabit(habitId),
+            },
+          ],
+        );
         return;
       }
-      if (habit.completedToday) uncompleteHabit(habitId);
-      else completeHabit(habitId);
+      completeHabit(habitId);
     },
-    [habits, todayKey, completeHabit, uncompleteHabit],
+    [habits, selectedDateKey, todayKey, completeHabit],
+  );
+
+  const handleUncompleteFromTimeline = useCallback(
+    (habitId: string) => {
+      uncompleteHabit(habitId);
+    },
+    [uncompleteHabit],
   );
 
   const onDragEnd = useCallback(
@@ -595,9 +594,8 @@ export default function ExpeditionCalendarModal({
     ({ item, drag, isActive }: RenderItemParams<Habit>) => (
       <TaskRow
         habit={item}
-        todayKey={todayKey}
-        readOnly={false}
-        onCompleteToggle={handleCompleteToggle}
+        onComplete={handleCompleteFromTimeline}
+        onUncomplete={handleUncompleteFromTimeline}
         onDelete={(habitId) => {
           Alert.alert(
             "Delete Quest",
@@ -614,28 +612,22 @@ export default function ExpeditionCalendarModal({
         }}
         onReschedule={(hh) => {
           setRescheduleHabit(hh);
-          setRescheduleDateKey(hh.scheduledDate ?? null);
           setRescheduleOpen(true);
+        }}
+        onEdit={(hh) => {
+          setEditHabit(hh);
+          setEditName(hh.name);
+          setEditDesc(hh.description ?? "");
+          setEditIcon(hh.icon ?? "⚔️");
+          setEditTaskType(hh.taskType);
+          setEditOpen(true);
         }}
         drag={drag}
         isActive={isActive}
       />
     ),
-    [todayKey, handleCompleteToggle, removeHabit],
+    [todayKey, handleCompleteFromTimeline, handleUncompleteFromTimeline, removeHabit],
   );
-
-  const renderReschedulePicker = useMemo(() => {
-    const chips: { key: string | null; label: string }[] = [{ key: null, label: "No date (today)" }];
-    const futureDays = 60;
-    for (let i = 1; i <= futureDays; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      const key = d.toISOString().split("T")[0]!;
-      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      chips.push({ key, label });
-    }
-    return chips;
-  }, []);
 
   const renderWeekPage = useCallback(
     ({ item }: { item: Date }) => (
@@ -931,36 +923,122 @@ export default function ExpeditionCalendarModal({
             <Pressable style={StyleSheet.absoluteFill} onPress={() => setRescheduleOpen(false)}>
               <View style={styles.rescheduleBackdrop} />
             </Pressable>
-            <View style={styles.rescheduleSheet}>
-              <Text style={styles.rescheduleTitle}>Reschedule</Text>
-              <Text style={styles.rescheduleSub}>{rescheduleHabit ? rescheduleHabit.name : ""}</Text>
+            <View style={styles.rescheduleSheetBottom}>
+              <Text style={styles.rescheduleTitle}>Reschedule Quest</Text>
+              <Text style={styles.rescheduleSub}>{rescheduleHabit?.name ?? ""}</Text>
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 90 }}>
-                <View style={styles.rescheduleRow}>
-                  {renderReschedulePicker.map((c) => {
-                    const active = c.key === rescheduleDateKey;
-                    return (
-                      <Pressable
-                        key={c.key ?? "no_date"}
-                        onPress={() => setRescheduleDateKey(c.key)}
-                        style={[styles.rescheduleChip, active && styles.rescheduleChipActive]}
-                      >
-                        <Text style={[styles.rescheduleChipText, active && styles.rescheduleChipTextActive]}>{c.label}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </ScrollView>
+              {selectedDateKey < todayKey ? (
+                <Pressable
+                  onPress={() => {
+                    if (!rescheduleHabit) return;
+                    setHabitScheduledDate(rescheduleHabit.id, todayKey);
+                    setRescheduleOpen(false);
+                  }}
+                  style={styles.rescheduleActionBtn}
+                >
+                  <Text style={styles.rescheduleActionText}>Move to Today</Text>
+                </Pressable>
+              ) : null}
 
+              <Pressable
+                onPress={() => {
+                  if (!rescheduleHabit) return;
+                  setHabitScheduledDate(rescheduleHabit.id, addDaysDateKey(todayKey, 1));
+                  setRescheduleOpen(false);
+                }}
+                style={styles.rescheduleActionBtn}
+              >
+                <Text style={styles.rescheduleActionText}>Move to Tomorrow</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  if (!rescheduleHabit) return;
+                  setHabitScheduledDate(rescheduleHabit.id, addDaysDateKey(todayKey, 7));
+                  setRescheduleOpen(false);
+                }}
+                style={styles.rescheduleActionBtn}
+              >
+                <Text style={styles.rescheduleActionText}>Next Week</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setRescheduleOpen(false);
+                  setMonthExpanded(true);
+                }}
+                style={styles.rescheduleActionBtn}
+              >
+                <Text style={styles.rescheduleActionText}>Open Full Calendar</Text>
+              </Pressable>
+
+              <Pressable onPress={() => setRescheduleOpen(false)} style={styles.rescheduleCancelBtn}>
+                <Text style={styles.rescheduleCancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </Modal>
+        ) : null}
+
+        {editOpen ? (
+          <Modal visible transparent animationType="fade" onRequestClose={() => setEditOpen(false)}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setEditOpen(false)}>
+              <View style={styles.rescheduleBackdrop} />
+            </Pressable>
+            <View style={styles.editSheet}>
+              <Text style={styles.editTitle}>Edit Quest</Text>
+              <Text style={styles.editSubtitle}>Whimsical Dark Comic Forge</Text>
+              <TextInput
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Quest name"
+                placeholderTextColor={Colors.dark.textMuted}
+                style={styles.editInput}
+              />
+              <TextInput
+                value={editDesc}
+                onChangeText={setEditDesc}
+                placeholder="Quest description"
+                placeholderTextColor={Colors.dark.textMuted}
+                multiline
+                textAlignVertical="top"
+                style={[styles.editInput, styles.editInputMulti]}
+              />
+              <TextInput
+                value={editIcon}
+                onChangeText={setEditIcon}
+                placeholder="Icon"
+                placeholderTextColor={Colors.dark.textMuted}
+                style={styles.editInput}
+                maxLength={2}
+              />
+              <View style={styles.editTypeRow}>
+                <Pressable
+                  onPress={() => setEditTaskType("daily")}
+                  style={[styles.editTypeBtn, editTaskType === "daily" && styles.editTypeBtnActive]}
+                >
+                  <Text style={[styles.editTypeText, editTaskType === "daily" && styles.editTypeTextActive]}>Daily</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setEditTaskType("one-off")}
+                  style={[styles.editTypeBtn, editTaskType === "one-off" && styles.editTypeBtnActive]}
+                >
+                  <Text style={[styles.editTypeText, editTaskType === "one-off" && styles.editTypeTextActive]}>One-off</Text>
+                </Pressable>
+              </View>
               <View style={styles.rescheduleBtns}>
-                <Pressable onPress={() => setRescheduleOpen(false)} style={styles.rescheduleCancelBtn}>
+                <Pressable onPress={() => setEditOpen(false)} style={styles.rescheduleCancelBtn}>
                   <Text style={styles.rescheduleCancelText}>Cancel</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => {
-                    if (!rescheduleHabit) return;
-                    setHabitScheduledDate(rescheduleHabit.id, rescheduleDateKey);
-                    setRescheduleOpen(false);
+                    if (!editHabit || !editName.trim()) return;
+                    updateHabit(editHabit.id, {
+                      name: editName,
+                      description: editDesc,
+                      icon: editIcon.trim() || "⚔️",
+                      taskType: editTaskType,
+                    });
+                    setEditOpen(false);
                   }}
                   style={styles.rescheduleSaveBtn}
                 >
@@ -1289,6 +1367,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800" as const,
     color: Colors.dark.text,
+    lineHeight: 20,
+    flexWrap: "wrap" as const,
   },
   taskNameCompleted: {
     textDecorationLine: "line-through" as const,
@@ -1379,6 +1459,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.dark.borderGlow + "55",
   },
+  rescheduleSheetBottom: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 14,
+    borderRadius: 18,
+    padding: 16,
+    backgroundColor: "#1b132b",
+    borderWidth: 1,
+    borderColor: Colors.dark.borderGlow + "55",
+  },
   rescheduleTitle: {
     fontSize: 18,
     fontWeight: "800" as const,
@@ -1389,6 +1480,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.dark.textMuted,
     marginBottom: 14,
+  },
+  rescheduleActionBtn: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "88",
+    backgroundColor: Colors.dark.surface + "d9",
+  },
+  rescheduleActionText: {
+    fontSize: 13,
+    fontWeight: "800" as const,
+    color: Colors.dark.text,
+    textAlign: "center" as const,
   },
   rescheduleRow: {
     flexDirection: "row",
@@ -1444,6 +1550,72 @@ const styles = StyleSheet.create({
   rescheduleSaveText: {
     fontWeight: "800" as const,
     color: "#1a1228",
+  },
+  editSheet: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    top: "14%" as const,
+    borderRadius: 20,
+    padding: 16,
+    backgroundColor: "#1b132b",
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + "44",
+  },
+  editTitle: {
+    fontSize: 19,
+    fontWeight: "800" as const,
+    color: Colors.dark.text,
+  },
+  editSubtitle: {
+    marginTop: 4,
+    marginBottom: 12,
+    fontSize: 11,
+    fontWeight: "700" as const,
+    color: Colors.dark.gold,
+    textTransform: "uppercase" as const,
+    letterSpacing: 1.2,
+  },
+  editInput: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "99",
+    backgroundColor: Colors.dark.surface + "dd",
+    color: Colors.dark.text,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+    fontSize: 14,
+  },
+  editInputMulti: {
+    minHeight: 84,
+    maxHeight: 160,
+  },
+  editTypeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 2,
+  },
+  editTypeBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "88",
+    backgroundColor: Colors.dark.surface + "cc",
+  },
+  editTypeBtnActive: {
+    borderColor: Colors.dark.gold + "aa",
+    backgroundColor: Colors.dark.gold + "22",
+  },
+  editTypeText: {
+    color: Colors.dark.textMuted,
+    fontWeight: "700" as const,
+    fontSize: 12,
+  },
+  editTypeTextActive: {
+    color: Colors.dark.gold,
   },
   reflectionBtn: {
     flexDirection: "row",

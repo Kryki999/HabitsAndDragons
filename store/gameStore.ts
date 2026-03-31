@@ -675,6 +675,22 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
+      updateHabit: (habitId, patch) => {
+        set((state) => ({
+          habits: state.habits.map((h) => {
+            if (h.id !== habitId) return h;
+            return {
+              ...h,
+              name: patch.name != null ? patch.name.trim() || h.name : h.name,
+              description:
+                patch.description != null ? patch.description.trim() || h.description : h.description,
+              icon: patch.icon != null ? patch.icon : h.icon,
+              taskType: patch.taskType ?? h.taskType,
+            };
+          }),
+        }));
+      },
+
       getPlayerLevel: () => {
         const { strengthXP, agilityXP, intelligenceXP } = get();
         return getLevelFromXP(strengthXP + agilityXP + intelligenceXP);

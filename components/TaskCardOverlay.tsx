@@ -26,6 +26,7 @@ import {
   Pressable,
   Alert,
   useWindowDimensions,
+  ScrollView,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -410,9 +411,13 @@ export default function TaskCardOverlay({
             </View>
 
             {/* Centred body: icon → title → type badge */}
-            <View style={styles.expandedBody}>
+            <ScrollView
+              style={styles.expandedBody}
+              contentContainerStyle={styles.expandedBodyContent}
+              showsVerticalScrollIndicator={false}
+            >
               <Text style={styles.expandedIcon}>{habit.icon}</Text>
-              <Text style={styles.expandedName} numberOfLines={2}>
+              <Text style={styles.expandedName}>
                 {habit.name}
               </Text>
               <View
@@ -430,7 +435,7 @@ export default function TaskCardOverlay({
                   {habit.taskType === 'daily' ? 'Habit' : 'One-time Quest'}
                 </Text>
               </View>
-            </View>
+            </ScrollView>
           </Animated.View>
         </LinearGradient>
 
@@ -641,6 +646,9 @@ const styles = StyleSheet.create({
     color: Colors.dark.gold,
   },
   expandedBody: {
+    flex: 1,
+  },
+  expandedBodyContent: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
