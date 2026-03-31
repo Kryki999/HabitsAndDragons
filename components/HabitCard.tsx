@@ -5,16 +5,17 @@ import {
   StyleSheet,
   Animated,
   Pressable,
-  Modal,
 } from 'react-native';
-import { Check, Trash2, X, Edit3, Calendar, Coins, Flame } from 'lucide-react-native';
+import { Check, Coins } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
-import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '@/constants/colors';
 import { Habit, HabitDifficulty } from '@/types/game';
 import { DIFFICULTY_BASE_REWARDS } from '@/lib/economy';
+import TaskCardOverlay, { CardMetrics } from '@/components/TaskCardOverlay';
 
 const ACCENT = Colors.dark.gold;
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface HabitCardProps {
   habit: Habit;
@@ -29,147 +30,6 @@ interface HabitCardProps {
   historicalCompleted?: boolean;
 }
 
-// ─── Quick Action Modal ───────────────────────────────────────────────────────
-
-function QuickActionModal({
-  visible,
-  habit,
-  onClose,
-  onComplete,
-  onUncomplete,
-  onDelete,
-  onEdit,
-  onReschedule,
-}: {
-  visible: boolean;
-  habit: Habit;
-  onClose: () => void;
-  onComplete: (id: string) => void;
-  onUncomplete: (id: string) => void;
-  onDelete: (id: string) => void;
-  onEdit?: (habit: Habit) => void;
-  onReschedule?: (habit: Habit) => void;
-}) {
-  const scaleAnim = useRef(new Animated.Value(0.92)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.spring(scaleAnim, { toValue: 1, friction: 7, tension: 100, useNativeDriver: true }),
-        Animated.timing(opacityAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-      ]).start();
-    } else {
-      scaleAnim.setValue(0.92);
-      opacityAnim.setValue(0);
-    }
-  }, [visible, scaleAnim, opacityAnim]);
-
-  const handleCompletePress = useCallback(() => {
-    impactAsync(ImpactFeedbackStyle.Heavy);
-    if (habit.completedToday) {
-      onUncomplete(habit.id);
-    } else {
-      onComplete(habit.id);
-    }
-    onClose();
-  }, [habit, onComplete, onUncomplete, onClose]);
-
-  const handleDelete = useCallback(() => {
-    impactAsync(ImpactFeedbackStyle.Light);
-    onDelete(habit.id);
-    onClose();
-  }, [habit.id, onDelete, onClose]);
-
-  const diffKey = (habit.difficulty ?? 'medium') as HabitDifficulty;
-  const baseReward = DIFFICULTY_BASE_REWARDS[diffKey];
-
-  return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <Pressable style={qStyles.backdrop} onPress={onClose}>
-        <Animated.View style={[qStyles.sheet, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
-          <LinearGradient
-            colors={["#1e1628", "#140e20", "#0e0a16"]}
-            style={qStyles.sheetGrad}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            {/* Trash */}
-            <Pressable
-              onPress={handleDelete}
-              style={({ pressed }) => [qStyles.trashBtn, pressed && qStyles.trashBtnPressed]}
-              accessibilityLabel="Delete habit"
-            >
-              <Trash2 size={20} color={Colors.dark.ruby} strokeWidth={2} />
-            </Pressable>
-
-            {/* Icon + Name */}
-            <View style={qStyles.identity}>
-              <Text style={qStyles.icon}>{habit.icon}</Text>
-              <Text style={qStyles.name} numberOfLines={2}>{habit.name}</Text>
-            </View>
-
-            {/* Rewards preview */}
-            <View style={qStyles.rewardRow}>
-              <View style={qStyles.rewardChip}>
-                <Flame size={12} color={Colors.dark.fire} strokeWidth={2.5} />
-                <Text style={qStyles.rewardChipText}>+{baseReward.xp} XP</Text>
-              </View>
-              <View style={qStyles.rewardChipGold}>
-                <Coins size={12} color={Colors.dark.gold} strokeWidth={2.5} />
-                <Text style={qStyles.rewardChipGoldText}>+{baseReward.gold}</Text>
-              </View>
-            </View>
-
-            {/* Action buttons */}
-            <View style={qStyles.actionRow}>
-              <Pressable
-                onPress={() => { onEdit?.(habit); onClose(); }}
-                style={({ pressed }) => [qStyles.secondaryBtn, pressed && qStyles.secondaryBtnPressed]}
-              >
-                <Edit3 size={16} color={Colors.dark.textSecondary} strokeWidth={2} />
-                <Text style={qStyles.secondaryBtnText}>Edit</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={handleCompletePress}
-                style={({ pressed }) => [qStyles.completeBtn, pressed && qStyles.completeBtnPressed]}
-              >
-                <LinearGradient
-                  colors={habit.completedToday
-                    ? [Colors.dark.border, Colors.dark.surface]
-                    : [...Colors.gradients.gold]}
-                  style={qStyles.completeBtnGrad}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <Check size={18} color={habit.completedToday ? Colors.dark.textMuted : "#1a1228"} strokeWidth={3} />
-                  <Text style={[qStyles.completeBtnText, habit.completedToday && qStyles.completeBtnTextDone]}>
-                    {habit.completedToday ? "Undo" : "Complete"}
-                  </Text>
-                </LinearGradient>
-              </Pressable>
-
-              <Pressable
-                onPress={() => { onReschedule?.(habit); onClose(); }}
-                style={({ pressed }) => [qStyles.secondaryBtn, pressed && qStyles.secondaryBtnPressed]}
-              >
-                <Calendar size={16} color={Colors.dark.textSecondary} strokeWidth={2} />
-                <Text style={qStyles.secondaryBtnText}>Reschedule</Text>
-              </Pressable>
-            </View>
-
-            {/* Close */}
-            <Pressable onPress={onClose} style={qStyles.closeBtn} hitSlop={8}>
-              <X size={18} color={Colors.dark.textMuted} />
-            </Pressable>
-          </LinearGradient>
-        </Animated.View>
-      </Pressable>
-    </Modal>
-  );
-}
-
 // ─── HabitCard ────────────────────────────────────────────────────────────────
 
 function HabitCard({
@@ -182,11 +42,16 @@ function HabitCard({
   readOnly,
   historicalCompleted,
 }: HabitCardProps) {
-  const [modalOpen, setModalOpen] = useState(false);
-  // Lazy-mount: QuickActionModal is only added to the tree after first open,
-  // preventing N native Modal nodes from living in memory at all times.
+  const [overlayOpen, setOverlayOpen] = useState(false);
+  const [cardMetrics, setCardMetrics] = useState<CardMetrics | null>(null);
+  // Ref attached to the card's outer View for position measurement
+  const cardRef = useRef<View>(null);
+  // Lazy-mount: TaskCardOverlay is added to the tree only on first tap and then
+  // kept alive. Closing just sets visible=false on the inner Modal (native hide,
+  // near-free) instead of destroying & rebuilding the entire native view tree on
+  // every close — which is what caused the brief freeze after landing.
   const hasOpenedRef = useRef(false);
-  if (modalOpen) hasOpenedRef.current = true;
+  if (overlayOpen) hasOpenedRef.current = true;
 
   const displayCompleted = readOnly ? !!historicalCompleted : habit.completedToday;
   const checkAnim = useRef(new Animated.Value(displayCompleted ? 1 : 0)).current;
@@ -203,11 +68,14 @@ function HabitCard({
   const diffKey = (habit.difficulty ?? 'medium') as HabitDifficulty;
   const baseReward = DIFFICULTY_BASE_REWARDS[diffKey];
 
-  // Tapping the card body → open Quick Action Modal
+  // Tapping the card body → measure position, then open overlay
   const handleCardPress = useCallback(() => {
     if (readOnly || habit.isFrozen) return;
     impactAsync(ImpactFeedbackStyle.Light);
-    setModalOpen(true);
+    cardRef.current?.measure((_x, _y, width, height, pageX, pageY) => {
+      setCardMetrics({ x: pageX, y: pageY, width, height });
+      setOverlayOpen(true);
+    });
   }, [readOnly, habit.isFrozen]);
 
   // Tapping the checkbox directly → complete/uncomplete (no card animation conflict)
@@ -230,13 +98,18 @@ function HabitCard({
     <>
       <Pressable
         onPress={handleCardPress}
-        disabled={readOnly || habit.isFrozen}
+        disabled={readOnly || habit.isFrozen || overlayOpen}
         testID={`habit-card-${habit.id}`}
       >
         <View
+          ref={cardRef}
+          collapsable={false}
           style={[
             styles.cardOuter,
             {
+              // "Hole in list": card is invisible while the overlay is animating.
+              // Reappears in the same render cycle when onClose sets overlayOpen=false.
+              opacity: overlayOpen ? 0 : 1,
               borderColor: habit.isFrozen
                 ? Colors.dark.cyan + '60'
                 : displayCompleted
@@ -316,10 +189,11 @@ function HabitCard({
       </Pressable>
 
       {!readOnly && hasOpenedRef.current && (
-        <QuickActionModal
-          visible={modalOpen}
+        <TaskCardOverlay
+          visible={overlayOpen}
           habit={habit}
-          onClose={() => setModalOpen(false)}
+          originMetrics={cardMetrics}
+          onClose={() => setOverlayOpen(false)}
           onComplete={onComplete}
           onUncomplete={onUncomplete}
           onDelete={onDelete}
@@ -418,150 +292,3 @@ const styles = StyleSheet.create({
   },
 });
 
-// ─── QuickActionModal styles ──────────────────────────────────────────────────
-
-const qStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.72)',
-    justifyContent: 'flex-end' as const,
-  },
-  sheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    overflow: 'hidden' as const,
-    borderTopWidth: 1,
-    borderColor: Colors.dark.borderGlow + '55',
-  },
-  sheetGrad: {
-    paddingTop: 20,
-    paddingHorizontal: 20,
-    paddingBottom: 36,
-  },
-  trashBtn: {
-    position: 'absolute' as const,
-    top: 16,
-    right: 16,
-    padding: 8,
-    borderRadius: 12,
-    backgroundColor: Colors.dark.ruby + '18',
-    borderWidth: 1,
-    borderColor: Colors.dark.ruby + '44',
-    zIndex: 10,
-  },
-  trashBtnPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.96 }],
-  },
-  identity: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 14,
-    marginTop: 8,
-    marginBottom: 12,
-    paddingRight: 44,
-  },
-  icon: {
-    fontSize: 36,
-  },
-  name: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '800' as const,
-    color: Colors.dark.text,
-    lineHeight: 24,
-  },
-  rewardRow: {
-    flexDirection: 'row' as const,
-    gap: 10,
-    marginBottom: 20,
-  },
-  rewardChip: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 5,
-    backgroundColor: Colors.dark.fire + '18',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.dark.fire + '44',
-  },
-  rewardChipText: {
-    fontSize: 13,
-    fontWeight: '700' as const,
-    color: Colors.dark.fire,
-  },
-  rewardChipGold: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 5,
-    backgroundColor: Colors.dark.gold + '18',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.dark.gold + '44',
-  },
-  rewardChipGoldText: {
-    fontSize: 13,
-    fontWeight: '700' as const,
-    color: Colors.dark.gold,
-  },
-  actionRow: {
-    flexDirection: 'row' as const,
-    gap: 10,
-    alignItems: 'stretch' as const,
-  },
-  secondaryBtn: {
-    flex: 1,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: 6,
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: Colors.dark.surface,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  secondaryBtnPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.97 }],
-  },
-  secondaryBtnText: {
-    fontSize: 12,
-    fontWeight: '700' as const,
-    color: Colors.dark.textSecondary,
-  },
-  completeBtn: {
-    flex: 2,
-    borderRadius: 16,
-    overflow: 'hidden' as const,
-  },
-  completeBtnPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.98 }],
-  },
-  completeBtnGrad: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: 8,
-    paddingVertical: 14,
-  },
-  completeBtnText: {
-    fontSize: 15,
-    fontWeight: '800' as const,
-    color: '#1a1228',
-    letterSpacing: 0.3,
-  },
-  completeBtnTextDone: {
-    color: Colors.dark.textMuted,
-  },
-  closeBtn: {
-    position: 'absolute' as const,
-    top: 16,
-    left: 16,
-    padding: 4,
-  },
-});

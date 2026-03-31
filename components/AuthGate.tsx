@@ -1,7 +1,5 @@
 import React, { useEffect } from "react";
 import { useRouter, useSegments } from "expo-router";
-import { ActivityIndicator, View, Text, StyleSheet } from "react-native";
-import Colors from "@/constants/colors";
 import { useAuth } from "@/providers/AuthProvider";
 import { useGameStore } from "@/store/gameStore";
 
@@ -14,21 +12,28 @@ export default function AuthGate() {
   const topSegment = String(segments[0] ?? "");
   const inAuth = topSegment === "(auth)";
   const inOnboarding = topSegment === "onboarding";
+  const targetAfterAuth = onboardingComplete ? "/(tabs)" : "/onboarding";
 
   useEffect(() => {
-    if (isAuthLoading || (session && !isProfileReady)) return;
+    if (isAuthLoading) return;
 
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    // As soon as a valid auth session exists, leave the auth route immediately.
+    if (session && inAuth) {
+      timeoutId = setTimeout(() => router.replace(targetAfterAuth as any), 0);
+      return () => {
+        if (timeoutId !== undefined) clearTimeout(timeoutId);
+      };
+    }
+
+    // Outside /(auth), hold protected routes until profile bootstrap settles.
+    if (session && !isProfileReady) return;
 
     if (!session && !inAuth) {
       timeoutId = setTimeout(() => router.replace("/(auth)/welcome" as any), 0);
     } else if (session && !onboardingComplete && !inOnboarding && !inAuth) {
       timeoutId = setTimeout(() => router.replace("/onboarding" as any), 0);
-    } else if (session && inAuth) {
-      timeoutId = setTimeout(
-        () => router.replace((onboardingComplete ? "/(tabs)" : "/onboarding") as any),
-        0
-      );
     } else if (session && onboardingComplete && inOnboarding) {
       timeoutId = setTimeout(() => router.replace("/(tabs)" as any), 0);
     }
@@ -36,32 +41,8 @@ export default function AuthGate() {
     return () => {
       if (timeoutId !== undefined) clearTimeout(timeoutId);
     };
-  }, [isAuthLoading, isProfileReady, session, onboardingComplete, inAuth, inOnboarding, router]);
-
-  if (isAuthLoading || (session && !isProfileReady)) {
-    return (
-      <View style={styles.overlay}>
-        <ActivityIndicator color={Colors.dark.gold} size="large" />
-        <Text style={styles.text}>Opening the chronicles…</Text>
-      </View>
-    );
-  }
+  }, [isAuthLoading, isProfileReady, session, onboardingComplete, inAuth, inOnboarding, router, targetAfterAuth]);
 
   return null;
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0d0a14ee",
-    gap: 10,
-  },
-  text: {
-    color: Colors.dark.textSecondary,
-    fontSize: 13,
-  },
-});
 

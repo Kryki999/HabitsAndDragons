@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppState } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import type { Session, User } from "@supabase/supabase-js";
 import { AUTH_NETWORK_TIMEOUT_MS, PROFILE_BOOTSTRAP_TIMEOUT_MS, withTimeout } from "@/lib/authTimeout";
@@ -41,6 +43,32 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const AUTH_STORAGE_KEY = "habitsanddragons.auth";
+
+async function recoverSessionFromStorage(): Promise<Session | null> {
+  try {
+    const raw = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const maybeSession = parsed?.currentSession ?? parsed;
+    const accessToken = maybeSession?.access_token;
+    const refreshToken = maybeSession?.refresh_token;
+    if (!accessToken || !refreshToken) return null;
+
+    const { data, error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (error) {
+      console.warn("[auth] storage recovery setSession failed", error.message);
+      return null;
+    }
+    return data.session ?? null;
+  } catch (err) {
+    console.warn("[auth] storage recovery failed", err);
+    return null;
+  }
+}
 
 function profileCreatedAtDateKeyFromRow(createdAt: string | null | undefined): string | null {
   if (!createdAt) return null;
@@ -139,12 +167,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    const watchdog = setTimeout(() => {
+      if (!active) return;
+      console.warn("[auth] getSession watchdog fired; releasing auth loading state");
+      setIsAuthLoading(false);
+    }, 12_000);
 
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
+    withTimeout(supabase.auth.getSession(), 10_000, "getSession")
+      .then(async ({ data }) => {
         if (!active) return;
-        setSession(data.session ?? null);
+        if (data.session) {
+          setSession(data.session);
+          return;
+        }
+        const recovered = await recoverSessionFromStorage();
+        if (!active) return;
+        setSession(recovered);
       })
       .catch((err) => {
         console.warn("[auth] getSession failed", err);
@@ -152,6 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(null);
       })
       .finally(() => {
+        clearTimeout(watchdog);
         if (active) setIsAuthLoading(false);
       });
 
@@ -161,8 +200,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       active = false;
+      clearTimeout(watchdog);
       authListener.subscription.unsubscribe();
     };
+  }, []);
+
+  // Expo Go: after process swap / resume, re-read session so UI matches storage.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next !== "active") return;
+      void withTimeout(supabase.auth.getSession(), 10_000, "resume/getSession")
+        .then(async ({ data }) => {
+          if (data.session) {
+            setSession(data.session);
+            return;
+          }
+          const recovered = await recoverSessionFromStorage();
+          setSession(recovered);
+        })
+        .catch((err) => {
+          console.warn("[auth] resume getSession failed", err);
+        });
+    });
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {

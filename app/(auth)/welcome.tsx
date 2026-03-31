@@ -41,7 +41,7 @@ export default function WelcomeScreen() {
 
   const inCooldown = cooldownUntil !== null && Date.now() < cooldownUntil;
   const cooldownLeftSec = inCooldown ? Math.ceil((cooldownUntil! - Date.now()) / 1000) : 0;
-  const formDisabled = busy || isAuthLoading || inCooldown;
+  const formDisabled = busy || inCooldown;
 
   useEffect(() => {
     if (!inCooldown) return;
@@ -323,6 +323,9 @@ export default function WelcomeScreen() {
               ) : null}
 
               {error ? <Text style={styles.error}>{error}</Text> : null}
+              {isAuthLoading ? (
+                <Text style={styles.cooldown}>Reconnecting session...</Text>
+              ) : null}
               {inCooldown ? (
                 <Text style={styles.cooldown}>Too many tries. Wait {cooldownLeftSec}s.</Text>
               ) : null}

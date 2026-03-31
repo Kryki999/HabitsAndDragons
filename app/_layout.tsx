@@ -9,7 +9,7 @@ import Colors from "@/constants/colors";
 import DailyLoginSync from "@/components/DailyLoginSync";
 import AuthGate from "@/components/AuthGate";
 import CloudSync from "@/components/CloudSync";
-import { AuthProvider } from "@/providers/AuthProvider";
+import { AuthProvider, useAuth } from "@/providers/AuthProvider";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -33,6 +33,17 @@ function RootLayoutNav() {
   );
 }
 
+function AuthenticatedEffects() {
+  const { session, isProfileReady } = useAuth();
+  if (!session || !isProfileReady) return null;
+  return (
+    <>
+      <DailyLoginSync />
+      <CloudSync />
+    </>
+  );
+}
+
 export default function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
@@ -42,8 +53,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <AuthProvider>
-          <DailyLoginSync />
-          <CloudSync />
+          <AuthenticatedEffects />
           <StatusBar style="light" />
           <RootLayoutNav />
           <AuthGate />
