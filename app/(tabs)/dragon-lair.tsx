@@ -672,7 +672,7 @@ export default function DragonLairScreen() {
               </View>
             }
           />
-          <View style={[styles.sectionOverlapContent, styles.sectionOverlapDungeon]}>
+          <View style={styles.sectionOverlapContent}>
             <DungeonsSection
               hideTitle
               engineState={engineState}
@@ -1044,12 +1044,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginHorizontal: 20,
     paddingTop: 2,
-  },
-  sectionOverlapDungeon: {
-    backgroundColor: "rgba(12, 8, 20, 0.82)",
-    borderRadius: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
   },
   dragonsMetaRow: {
     flexDirection: "row" as const,
