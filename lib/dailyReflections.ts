@@ -8,6 +8,15 @@ export type DailyReflectionRow = {
   updated_at: string;
 };
 
+function isMissingDailyReflectionsTable(error: { code?: string | null; message?: string | null }): boolean {
+  const code = error.code ?? "";
+  const msg = (error.message ?? "").toLowerCase();
+  if (code === "PGRST204" || code === "PGRST205" || code === "42P01") return true;
+  if (msg.includes("relation") && msg.includes("daily_reflections") && msg.includes("does not exist")) return true;
+  if (msg.includes("could not find") && msg.includes("daily_reflections") && msg.includes("schema cache")) return true;
+  return false;
+}
+
 export async function fetchDailyReflection(
   userId: string,
   dateKey: string,
@@ -21,7 +30,7 @@ export async function fetchDailyReflection(
 
   if (error) {
     const msg = error.message ?? "";
-    const missing = msg.includes("schema cache") || msg.includes("relation") || error.code === "PGRST204";
+    const missing = isMissingDailyReflectionsTable(error);
     return { row: null, error: msg, tableMissing: missing };
   }
   return { row: data as DailyReflectionRow | null };
@@ -48,7 +57,7 @@ export async function upsertDailyReflection(
 
   if (error) {
     const msg = error.message ?? "";
-    const missing = msg.includes("schema cache") || msg.includes("relation") || error.code === "PGRST204";
+    const missing = isMissingDailyReflectionsTable(error);
     return { row: null, error: msg, tableMissing: missing };
   }
   return { row: data as DailyReflectionRow | null };

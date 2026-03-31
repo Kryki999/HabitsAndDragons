@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RefreshCw, Backpack, Info } from 'lucide-react-native';
+import { RefreshCw, Info } from 'lucide-react-native';
 import { impactAsync, ImpactFeedbackStyle } from '@/lib/hapticsGate';
 import Colors from '@/constants/colors';
 import { useGameStore } from '@/store/gameStore';
@@ -31,10 +31,9 @@ type SceneMode = 'base' | 'armory';
 type Props = {
   playerLevel: number;
   baseName: { emoji: string; name: string };
-  onPressBackpack: () => void;
 };
 
-export default function HomeScenePanel({ playerLevel, baseName, onPressBackpack }: Props) {
+export default function HomeScenePanel({ playerLevel, baseName }: Props) {
   const { width } = useWindowDimensions();
   const strengthXP = useGameStore((s) => s.strengthXP);
   const agilityXP = useGameStore((s) => s.agilityXP);
@@ -126,24 +125,6 @@ export default function HomeScenePanel({ playerLevel, baseName, onPressBackpack 
               end={{ x: 1, y: 1 }}
             >
               <RefreshCw size={17} color={Colors.dark.gold} strokeWidth={2.2} />
-            </LinearGradient>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              impactAsync(ImpactFeedbackStyle.Light);
-              onPressBackpack();
-            }}
-            style={({ pressed }) => [styles.cornerFab, pressed && styles.cornerFabPressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Backpack"
-          >
-            <LinearGradient
-              colors={[Colors.dark.surfaceLight + 'f2', Colors.dark.surface + 'f0']}
-              style={styles.cornerFabInner}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Backpack size={17} color={Colors.dark.gold} strokeWidth={2} />
             </LinearGradient>
           </Pressable>
         </View>

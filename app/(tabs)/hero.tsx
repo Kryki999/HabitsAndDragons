@@ -8,7 +8,8 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { ScrollText } from "lucide-react-native";
+import * as Clipboard from "expo-clipboard";
+import { Copy, ScrollText } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useGameStore } from "@/store/gameStore";
@@ -30,6 +31,20 @@ const CLASS_EPITHET: Record<PlayerClass, string> = {
   hunter: "The Shadowblade",
   mage: "The Mindbinder",
   paladin: "The Dawnwarden",
+};
+
+const CLASS_LABELS: Record<PlayerClass, string> = {
+  warrior: "Warrior",
+  hunter: "Hunter",
+  mage: "Mage",
+  paladin: "Paladin",
+};
+
+const CLASS_COLORS: Record<PlayerClass, string> = {
+  warrior: "#d87c4a",
+  hunter: "#58bf8a",
+  mage: "#9587ff",
+  paladin: "#f0c96f",
 };
 
 type StatsTab = "stats" | "overview";
@@ -62,6 +77,22 @@ function formatDateKey(d: string): string {
   } catch {
     return d;
   }
+}
+
+function daysSince(dateString: string): number {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return 0;
+  const now = new Date();
+  const ms = now.getTime() - date.getTime();
+  return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+}
+
+function toFriendCode(rawId: string | null | undefined): string {
+  if (!rawId) return "UNLINKED";
+  const compact = rawId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  if (compact.length < 8) return compact || "UNLINKED";
+  const tail = compact.slice(-8);
+  return `${tail.slice(0, 4)}-${tail.slice(4)}`;
 }
 
 function calendarYesterdayKey(): string {
@@ -110,6 +141,7 @@ export default function HeroScreen() {
   const getCurrentLevelXP = useGameStore((s) => s.getCurrentLevelXP);
   const getXPForNextLevel = useGameStore((s) => s.getXPForNextLevel);
   const playerClass = useGameStore((s) => s.playerClass);
+  const createdAt = useGameStore((s) => s.createdAt);
   const heroDisplayName = useGameStore((s) => s.heroDisplayName);
   const unlockedTitleIds = useGameStore((s) => s.unlockedTitleIds);
   const completedStrengthQuests = useGameStore((s) => s.completedStrengthQuests);
@@ -120,6 +152,7 @@ export default function HeroScreen() {
   const completedHabitNamesByDate = useGameStore((s) => s.completedHabitNamesByDate);
   const sageChatMessages = useGameStore((s) => s.sageChatMessages);
   const equippedRelicId = useGameStore((s) => s.equippedRelicId);
+  const gold = useGameStore((s) => s.gold);
   const habits = useGameStore((s) => s.habits);
   const tasksCompletedToday = useGameStore((s) => s.tasksCompletedToday);
   const reflectionSavedDateKeys = useGameStore((s) => s.reflectionSavedDateKeys);
@@ -151,14 +184,34 @@ export default function HeroScreen() {
     return "The Wayfarer";
   }, [unlockedTitleIds, heroDisplayName, playerClass]);
 
-  const joinedDateLabel = useMemo(() => {
+  const firstActivityDateKey = useMemo(() => {
     const keys = Object.keys(activityByDate).filter(Boolean).sort();
-    if (keys.length === 0) return "— first log pending";
-    return formatDateKey(keys[0]!);
+    if (keys.length === 0) return null;
+    return keys[0]!;
   }, [activityByDate]);
 
   const bossesKilled =
     completedStrengthQuests + completedAgilityQuests + completedIntelligenceQuests;
+
+  const joinedTheRealmLabel = useMemo(() => {
+    const joinDateRaw = createdAt || firstActivityDateKey;
+    if (!joinDateRaw) return "Joined the Realm: today";
+    const elapsedDays = daysSince(joinDateRaw);
+    return `Joined the Realm: ${elapsedDays} day${elapsedDays === 1 ? "" : "s"} ago`;
+  }, [createdAt, firstActivityDateKey]);
+
+  const className = playerClass ? CLASS_LABELS[playerClass] : "Wanderer";
+  const classColor = playerClass ? CLASS_COLORS[playerClass] : Colors.dark.textMuted;
+  const friendCode = useMemo(() => toFriendCode(user?.id), [user?.id]);
+
+  const questsCompleted = useMemo(
+    () =>
+      Object.values(completedHabitNamesByDate).reduce(
+        (sum, entries) => sum + entries.length,
+        0,
+      ),
+    [completedHabitNamesByDate],
+  );
 
   const todayKey = useMemo(() => nowTick.toISOString().split("T")[0]!, [nowTick]);
   const nextDailyResetCountdown = useMemo(() => formatRemainingToNextMidnight(nowTick), [nowTick]);
@@ -247,6 +300,12 @@ export default function HeroScreen() {
     [claimHeroEpicMilestone],
   );
 
+  const onCopyFriendCode = useCallback(async () => {
+    if (!friendCode || friendCode === "UNLINKED") return;
+    await Clipboard.setStringAsync(friendCode);
+    impactAsync(ImpactFeedbackStyle.Light);
+  }, [friendCode]);
+
   const radarChartSize = Math.min(240, cardMaxW - 36);
   /**
    * HeroHexRadarChart uses pad=36 → rendered frame is (size + 72) tall. Reserve that full height so Stats is never clipped.
@@ -268,29 +327,85 @@ export default function HeroScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.screenTitle}>Hero</Text>
-
-          {/* Module 1 — Hero header */}
-          <View style={styles.headerBlock}>
-            <CircularProgress
-              progress={xpProgress}
-              size={96}
-              strokeWidth={4}
-              color={Colors.dark.gold}
-              backgroundColor={Colors.dark.border}
-            >
-              <View style={styles.avatarRing}>
-                <Text style={styles.avatarEmoji}>🧙‍♂️</Text>
-              </View>
-            </CircularProgress>
-            <Text style={styles.heroName} numberOfLines={2}>
-              {displayName}
-            </Text>
-            <Text style={styles.heroLevel}>Level {playerLevel}</Text>
-          </View>
-
-          {/* Module 2 — Stats & Overview */}
+          {/* Module 1 — Character sheet (header + dynamic center + footer toggle) */}
           <View style={[styles.card, { width: cardMaxW, alignSelf: "center" }]}>
+            <View style={styles.sheetHeaderRow}>
+              <CircularProgress
+                progress={xpProgress}
+                size={86}
+                strokeWidth={4}
+                color={Colors.dark.gold}
+                backgroundColor={Colors.dark.border}
+              >
+                <View style={styles.avatarRing}>
+                  <Text style={styles.avatarEmoji}>🧙‍♂️</Text>
+                </View>
+              </CircularProgress>
+              <View style={styles.sheetHeaderMeta}>
+                <Text style={styles.heroName} numberOfLines={2}>
+                  {displayName}
+                </Text>
+                <Text style={styles.heroLevel}>Level {playerLevel}</Text>
+              </View>
+            </View>
+
+            <View style={[styles.statsOverviewBody, { height: statsOverviewFixedHeight }]}>
+              <View
+                style={[styles.statsOverviewLayer, statsTab === "stats" ? styles.statsOverviewLayerVisible : styles.statsOverviewLayerHidden]}
+                pointerEvents={statsTab === "stats" ? "auto" : "none"}
+              >
+                <View style={styles.statsTabPaneInner}>
+                  <HeroHexRadarChart size={radarChartSize} />
+                </View>
+              </View>
+              <View
+                style={[styles.statsOverviewLayer, statsTab === "overview" ? styles.statsOverviewLayerVisible : styles.statsOverviewLayerHidden]}
+                pointerEvents={statsTab === "overview" ? "auto" : "none"}
+              >
+                <View style={styles.overviewTabPaneInner}>
+                  <View style={styles.overviewPanel}>
+                    <View style={styles.overviewRow}>
+                      <Text style={styles.overviewLabel}>⏳ {joinedTheRealmLabel}</Text>
+                    </View>
+                    <View style={styles.overviewRow}>
+                      <Text style={styles.overviewLabel}>🛡 Class</Text>
+                      <Text style={[styles.overviewValue, { color: classColor }]}>{className}</Text>
+                    </View>
+                    <View style={styles.overviewRow}>
+                      <Text style={styles.overviewLabel}>🤝 Friend Code</Text>
+                      <View style={styles.friendCodeRow}>
+                        <Text style={styles.friendCodeValue}>{friendCode}</Text>
+                        <Pressable
+                          onPress={onCopyFriendCode}
+                          style={({ pressed }) => [
+                            styles.copyBtn,
+                            pressed && styles.copyBtnPressed,
+                          ]}
+                        >
+                          <Copy size={14} color={Colors.dark.emerald} strokeWidth={2.4} />
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    <View style={styles.lifetimeGrid}>
+                      <View style={styles.lifetimeTile}>
+                        <Text style={styles.lifetimeLabel}>Bosses Defeated</Text>
+                        <Text style={styles.lifetimeValue}>{bossesKilled}</Text>
+                      </View>
+                      <View style={styles.lifetimeTile}>
+                        <Text style={styles.lifetimeLabel}>Total Gold Looted</Text>
+                        <Text style={styles.lifetimeValue}>{gold}</Text>
+                      </View>
+                      <View style={styles.lifetimeTile}>
+                        <Text style={styles.lifetimeLabel}>Quests Completed</Text>
+                        <Text style={styles.lifetimeValue}>{questsCompleted}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+
             <View style={styles.toggleRow}>
               <Pressable
                 onPress={() => {
@@ -322,38 +437,6 @@ export default function HeroScreen() {
                   Overview
                 </Text>
               </Pressable>
-            </View>
-
-            <View style={[styles.statsOverviewBody, { height: statsOverviewFixedHeight }]}>
-              <View
-                style={[styles.statsOverviewLayer, statsTab === "stats" ? styles.statsOverviewLayerVisible : styles.statsOverviewLayerHidden]}
-                pointerEvents={statsTab === "stats" ? "auto" : "none"}
-              >
-                <View style={styles.statsTabPaneInner}>
-                  <HeroHexRadarChart size={radarChartSize} />
-                </View>
-              </View>
-              <View
-                style={[styles.statsOverviewLayer, statsTab === "overview" ? styles.statsOverviewLayerVisible : styles.statsOverviewLayerHidden]}
-                pointerEvents={statsTab === "overview" ? "auto" : "none"}
-              >
-                <View style={styles.overviewTabPaneInner}>
-                  <View style={styles.overviewBlock}>
-                    <View style={styles.overviewRow}>
-                      <Text style={styles.overviewLabel}>Total bosses defeated (lifetime)</Text>
-                      <Text style={styles.overviewValue}>{bossesKilled}</Text>
-                    </View>
-                    <View style={styles.overviewRow}>
-                      <Text style={styles.overviewLabel}>Days survived (streak)</Text>
-                      <Text style={styles.overviewValue}>{streak}</Text>
-                    </View>
-                    <View style={styles.overviewRow}>
-                      <Text style={styles.overviewLabel}>Joined (first activity)</Text>
-                      <Text style={styles.overviewValue}>{joinedDateLabel}</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
             </View>
           </View>
 
@@ -449,48 +532,55 @@ const styles = StyleSheet.create({
     textAlign: "center" as const,
     marginBottom: 16,
   },
-  headerBlock: {
-    alignItems: "center" as const,
-    marginBottom: 28,
-  },
   avatarRing: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: Colors.dark.surfaceLight,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarEmoji: {
-    fontSize: 40,
+    fontSize: 34,
   },
   heroName: {
-    marginTop: 16,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "800" as const,
     color: Colors.dark.text,
-    textAlign: "center" as const,
+    textAlign: "left" as const,
     letterSpacing: 0.3,
-    paddingHorizontal: 12,
   },
   heroLevel: {
-    marginTop: 6,
+    marginTop: 4,
     fontSize: 14,
     fontWeight: "700" as const,
     color: Colors.dark.gold,
   },
   card: {
     borderRadius: 20,
-    padding: 18,
+    padding: 16,
     backgroundColor: Colors.dark.surface + "cc",
     borderWidth: 1,
     borderColor: Colors.dark.border + "aa",
     marginBottom: 24,
   },
+  sheetHeaderRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 14,
+    paddingBottom: 14,
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border + "66",
+  },
+  sheetHeaderMeta: {
+    flex: 1,
+    minWidth: 0,
+  },
   toggleRow: {
     flexDirection: "row" as const,
     gap: 8,
-    marginBottom: 16,
+    marginTop: 14,
     padding: 4,
     borderRadius: 14,
     backgroundColor: Colors.dark.background + "cc",
@@ -536,12 +626,16 @@ const styles = StyleSheet.create({
   },
   overviewTabPaneInner: {
     flex: 1,
-    justifyContent: "center" as const,
+    justifyContent: "flex-start" as const,
     paddingVertical: 8,
   },
-  overviewBlock: {
-    gap: 14,
-    paddingVertical: 8,
+  overviewPanel: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "66",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: Colors.dark.background + "66",
   },
   overviewRow: {
     flexDirection: "row" as const,
@@ -554,14 +648,68 @@ const styles = StyleSheet.create({
   },
   overviewLabel: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.dark.textSecondary,
-    lineHeight: 18,
+    lineHeight: 17,
   },
   overviewValue: {
     fontSize: 14,
     fontWeight: "800" as const,
     color: Colors.dark.text,
+  },
+  friendCodeRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+  },
+  friendCodeValue: {
+    fontSize: 12,
+    fontWeight: "800" as const,
+    color: Colors.dark.text,
+    letterSpacing: 0.4,
+  },
+  copyBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+    borderWidth: 1,
+    borderColor: Colors.dark.emerald + "88",
+    backgroundColor: Colors.dark.emerald + "1f",
+  },
+  copyBtnPressed: {
+    opacity: 0.75,
+  },
+  lifetimeGrid: {
+    marginTop: 10,
+    flexDirection: "row" as const,
+    gap: 8,
+  },
+  lifetimeTile: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "66",
+    backgroundColor: Colors.dark.surfaceLight + "66",
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    minHeight: 74,
+    justifyContent: "space-between" as const,
+  },
+  lifetimeLabel: {
+    fontSize: 10,
+    lineHeight: 13,
+    color: Colors.dark.textMuted,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.6,
+    fontWeight: "700" as const,
+  },
+  lifetimeValue: {
+    fontSize: 18,
+    fontWeight: "900" as const,
+    color: Colors.dark.gold,
+    marginTop: 8,
   },
   section: {
     marginBottom: 24,

@@ -1,6 +1,7 @@
 import "react-native-reanimated";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
+import { useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
@@ -35,7 +36,9 @@ function RootLayoutNav() {
 
 function AuthenticatedEffects() {
   const { session, isProfileReady } = useAuth();
-  if (!session || !isProfileReady) return null;
+  const segments = useSegments();
+  const inAuth = String(segments[0] ?? "") === "(auth)";
+  if (!session || !isProfileReady || inAuth) return null;
   return (
     <>
       <DailyLoginSync />

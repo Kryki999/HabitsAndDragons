@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useRouter } from "expo-router";
 import {
   View,
   Text,
@@ -18,6 +19,17 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/providers/AuthProvider";
 
 export default function WelcomeScreen() {
+  const router = useRouter();
+  const forceBypassAuth = true;
+
+  useEffect(() => {
+    if (!forceBypassAuth) return;
+    const id = setTimeout(() => {
+      router.replace("/(tabs)" as any);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [router, forceBypassAuth]);
+
   const {
     signIn,
     signUp,

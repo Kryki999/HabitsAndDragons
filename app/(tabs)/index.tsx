@@ -17,7 +17,6 @@ import { StatType, TaskType, type Habit } from '@/types/game';
 import HabitCard from '@/components/HabitCard';
 import AddHabitModal from '@/components/AddHabitModal';
 import HomeScenePanel from '@/components/HomeScenePanel';
-import BackpackModal from '@/components/BackpackModal';
 import ActivityChroniclesModal from '@/components/ActivityChroniclesModal';
 import ExpeditionCalendarModal from '@/components/ExpeditionCalendarModal';
 import TaskSortBottomSheet from '@/components/TaskSortBottomSheet';
@@ -29,7 +28,6 @@ import { useAuth } from '@/providers/AuthProvider';
 export default function CastleScreen() {
   const { user, profileCreatedAtDateKey } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
-  const [backpackOpen, setBackpackOpen] = useState(false);
   const [chroniclesOpen, setChroniclesOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
@@ -222,7 +220,6 @@ export default function CastleScreen() {
                   <HomeScenePanel
                     playerLevel={playerLevel}
                     baseName={{ emoji: castleTier.emoji, name: castleTier.name }}
-                    onPressBackpack={() => setBackpackOpen(true)}
                   />
                 </Animated.View>
 
@@ -328,7 +325,6 @@ export default function CastleScreen() {
               <HomeScenePanel
                 playerLevel={playerLevel}
                 baseName={{ emoji: castleTier.emoji, name: castleTier.name }}
-                onPressBackpack={() => setBackpackOpen(true)}
               />
             </Animated.View>
 
@@ -480,8 +476,6 @@ export default function CastleScreen() {
         onClose={() => setModalVisible(false)}
         onAddHabit={handleAddHabit}
       />
-
-      <BackpackModal visible={backpackOpen} onClose={() => setBackpackOpen(false)} />
 
       <ActivityChroniclesModal
         visible={chroniclesOpen}

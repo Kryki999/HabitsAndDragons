@@ -33,6 +33,7 @@ import Colors from "@/constants/colors";
 import type { Habit } from "@/types/game";
 import { useGameStore } from "@/store/gameStore";
 import AddHabitModal from "@/components/AddHabitModal";
+import DayQuestLogReadOnly from "@/components/DayQuestLogReadOnly";
 import DailyReflectionPanel from "@/components/DailyReflectionPanel";
 import { applyPlanningOrderForDate } from "@/lib/planningDayOrder";
 import { impactAsync, ImpactFeedbackStyle } from "@/lib/hapticsGate";
@@ -116,6 +117,16 @@ function getMondayOfWeekForDate(dateKey: string): Date {
 
 function dateKeyFromDate(d: Date): string {
   return dateKeyFromYMD(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+function isHabitPlannedForDate(habit: Habit, dateKey: string, todayKey: string): boolean {
+  const plannedFrom = habit.scheduledDate ?? todayKey;
+  if (habit.taskType === "daily") {
+    // Daily habits repeat on every day from their planned start date onward.
+    return dateKey >= plannedFrom;
+  }
+  // One-off quests stay bound to their explicit planned day.
+  return plannedFrom === dateKey;
 }
 
 /** Returns the Thursday of the week starting on `monday`, used for month/year syncing. */
@@ -300,6 +311,7 @@ function WeekPage({
         return (
           <Pressable
             key={key}
+            disabled={isBlocked}
             onPress={() => {
               if (!isBlocked) {
                 impactAsync(ImpactFeedbackStyle.Light);
@@ -469,8 +481,6 @@ export default function ExpeditionCalendarModal({
   }, [visible, expeditionFocusDateKey, todayKey, weeksData]);
 
   const isPastReadOnly = selectedDateKey < todayKey && selectedDateKey >= minSelectableKey;
-  const completedNamesForSelected = completedHabitNamesByDate[selectedDateKey];
-
   const monthYearLabel = formatMonthYearLabel(displayYM.y, displayYM.m);
 
   // "Thu, Apr 9" — shown in the collapsed header instead of "March 2026"
@@ -488,7 +498,7 @@ export default function ExpeditionCalendarModal({
 
   const tasksForSelectedDate = useMemo(() => {
     const key = selectedDateKey;
-    return habits.filter((h) => (h.scheduledDate ?? todayKey) === key);
+    return habits.filter((h) => isHabitPlannedForDate(h, key, todayKey));
   }, [habits, selectedDateKey, todayKey]);
 
   const orderedTasks = useMemo(
@@ -548,6 +558,10 @@ export default function ExpeditionCalendarModal({
 
   const addAllowed = selectedDateKey >= todayKey && selectedDateKey >= minSelectableKey;
   const reflectionAllowed = selectedDateKey <= todayKey && selectedDateKey >= minSelectableKey;
+  const isFutureFocusDay = selectedDateKey > todayKey;
+  const handleTaskListScrollBegin = useCallback(() => {
+    if (monthExpanded) setMonthExpanded(false);
+  }, [monthExpanded]);
 
   const handleCompleteToggle = useCallback(
     (habitId: string) => {
@@ -584,7 +598,20 @@ export default function ExpeditionCalendarModal({
         todayKey={todayKey}
         readOnly={false}
         onCompleteToggle={handleCompleteToggle}
-        onDelete={removeHabit}
+        onDelete={(habitId) => {
+          Alert.alert(
+            "Delete Quest",
+            "Are you sure you want to delete this quest from your timeline?",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Delete",
+                style: "destructive",
+                onPress: () => removeHabit(habitId),
+              },
+            ],
+          );
+        }}
         onReschedule={(hh) => {
           setRescheduleHabit(hh);
           setRescheduleDateKey(hh.scheduledDate ?? null);
@@ -595,23 +622,6 @@ export default function ExpeditionCalendarModal({
       />
     ),
     [todayKey, handleCompleteToggle, removeHabit],
-  );
-
-  const renderReadonlyItem = useCallback(
-    ({ item }: { item: Habit }) => (
-      <TaskRow
-        habit={item}
-        todayKey={todayKey}
-        readOnly
-        historicalCompleted={!!completedNamesForSelected?.includes(item.name)}
-        onCompleteToggle={handleCompleteToggle}
-        onDelete={removeHabit}
-        onReschedule={() => {}}
-        drag={() => {}}
-        isActive={false}
-      />
-    ),
-    [todayKey, completedNamesForSelected, handleCompleteToggle, removeHabit],
   );
 
   const renderReschedulePicker = useMemo(() => {
@@ -802,6 +812,7 @@ export default function ExpeditionCalendarModal({
               getItemLayout={weekGetItemLayout}
               initialScrollIndex={visibleWeekIdx}
               onMomentumScrollEnd={handleWeekMomentumScrollEnd}
+              onScrollBeginDrag={handleTaskListScrollBegin}
               scrollEventThrottle={16}
               windowSize={5}
               maxToRenderPerBatch={3}
@@ -815,53 +826,44 @@ export default function ExpeditionCalendarModal({
             />
           </View>}
 
-          {!isPastReadOnly ? (
-            <Text style={styles.reorderHint}>Long-press a row to drag and reorder quests for this day.</Text>
-          ) : (
-            <Text style={styles.reorderHint}>Past day — quests are read-only. Add reflections below.</Text>
-          )}
         </View>
 
         {/* Module 4: draggable list (or read-only list for past days) */}
         {isPastReadOnly ? (
-          <FlatList
-            data={listData}
-            keyExtractor={(item) => item.id}
-            renderItem={renderReadonlyItem}
+          <ScrollView
             style={styles.dragList}
-            contentContainerStyle={styles.dragListContent}
-            ListEmptyComponent={
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyText}>Nothing planned for this day.</Text>
-                <Text style={styles.emptySub}>Reflections are still available below.</Text>
+            contentContainerStyle={[styles.dragListContent, { paddingBottom: Math.max(insets.bottom, 12) }]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            onScrollBeginDrag={handleTaskListScrollBegin}
+            scrollEventThrottle={16}
+          >
+            <DayQuestLogReadOnly dateKey={selectedDateKey} showTitle={false} />
+            {reflectionAllowed ? (
+              <View style={styles.footerBlock}>
+                <Pressable
+                  onPress={() => {
+                    impactAsync(ImpactFeedbackStyle.Light);
+                    setReflectionOpen(true);
+                  }}
+                  style={({ pressed }) => [
+                    styles.reflectionBtn,
+                    pressed && styles.reflectionBtnPressed,
+                  ]}
+                >
+                  <Plus size={18} color={Colors.dark.gold} />
+                  <Text style={styles.reflectionBtnText}>Daily Reflection</Text>
+                </Pressable>
               </View>
-            }
-            ListFooterComponent={
-              reflectionAllowed ? (
-                <View style={[styles.footerBlock, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-                  <Pressable
-                    onPress={() => {
-                      impactAsync(ImpactFeedbackStyle.Light);
-                      setReflectionOpen(true);
-                    }}
-                    style={({ pressed }) => [
-                      styles.reflectionBtn,
-                      pressed && styles.reflectionBtnPressed,
-                    ]}
-                  >
-                    <Plus size={18} color={Colors.dark.gold} />
-                    <Text style={styles.reflectionBtnText}>Daily Reflection</Text>
-                  </Pressable>
-                </View>
-              ) : null
-            }
-          />
+            ) : null}
+          </ScrollView>
         ) : (
           <DraggableFlatList
             data={listData}
             keyExtractor={(item) => item.id}
             renderItem={renderDraggableItem}
             onDragEnd={onDragEnd}
+            onScrollBeginDrag={handleTaskListScrollBegin}
             containerStyle={styles.dragList}
             contentContainerStyle={styles.dragListContent}
             activationDistance={10}
@@ -975,13 +977,22 @@ export default function ExpeditionCalendarModal({
             onPress={handleReturnToToday}
             style={[
               styles.returnTodayBtn,
-              { bottom: Math.max(insets.bottom + 8, 12) },
+              { bottom: Math.max(insets.bottom + 56, 60) },
+              isFutureFocusDay ? styles.returnTodayBtnLeft : styles.returnTodayBtnRight,
             ]}
             accessibilityLabel="Return to today"
           >
-            <ArrowLeft size={14} color={Colors.dark.gold} strokeWidth={2.4} />
-            <Text style={styles.returnTodayText}>Today</Text>
-            <ArrowRight size={14} color={Colors.dark.gold} strokeWidth={2.4} />
+            {isFutureFocusDay ? (
+              <>
+                <ArrowLeft size={14} color={Colors.dark.gold} strokeWidth={2.4} />
+                <Text style={styles.returnTodayText}>Today</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.returnTodayText}>Today</Text>
+                <ArrowRight size={14} color={Colors.dark.gold} strokeWidth={2.4} />
+              </>
+            )}
           </Pressable>
         ) : null}
 
@@ -1198,30 +1209,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: Colors.dark.gold + "22",
     borderWidth: 1.5,
     borderColor: Colors.dark.gold + "88",
     zIndex: 30,
-    left: 16,
-    right: 16,
+    bottom: 96,
+  },
+  returnTodayBtnLeft: {
+    left: 12,
+    borderTopLeftRadius: 10,
+    borderBottomLeftRadius: 10,
+  },
+  returnTodayBtnRight: {
+    right: 12,
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 10,
   },
   returnTodayText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "800" as const,
     color: Colors.dark.gold,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
     textTransform: "uppercase" as const,
-  },
-  reorderHint: {
-    fontSize: 11,
-    color: Colors.dark.textMuted,
-    textAlign: "center" as const,
-    marginBottom: 6,
-    lineHeight: 16,
-    paddingHorizontal: 8,
   },
   dragList: {
     flex: 1,

@@ -138,19 +138,21 @@ export default function ActivityHeatmap({
       </View>
 
       {/* ── Scrollable heatmap ── */}
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        bounces={false}
-        overScrollMode="never"
-        onContentSizeChange={() => {
-          if (autoScrollToLatest) {
-            scrollRef.current?.scrollToEnd({ animated: false });
-          }
-        }}
-      >
-        <View>
+      <View style={styles.heatmapViewport}>
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never"
+          contentContainerStyle={styles.heatmapScrollContent}
+          onContentSizeChange={() => {
+            if (autoScrollToLatest) {
+              scrollRef.current?.scrollToEnd({ animated: false });
+            }
+          }}
+        >
+          <View>
           {/* Month labels row — each cell has same width as a column so they align */}
           <View style={styles.monthRow}>
             {/* spacer matching the day-label column */}
@@ -242,8 +244,10 @@ export default function ActivityHeatmap({
               </View>
             ))}
           </View>
-        </View>
-      </ScrollView>
+          </View>
+        </ScrollView>
+        <View pointerEvents="none" style={styles.leftEdgeMask} />
+      </View>
 
       {/* ── Legend ── */}
       <View style={styles.legendRow}>
@@ -300,6 +304,22 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     height: MONTH_ROW_H,
     marginBottom: 4,
+  },
+  heatmapViewport: {
+    overflow: "hidden",
+    borderRadius: 2,
+    position: "relative",
+  },
+  heatmapScrollContent: {
+    paddingLeft: 1,
+  },
+  leftEdgeMask: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: Colors.dark.background,
   },
   monthLabel: {
     fontSize: 10,

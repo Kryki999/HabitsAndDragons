@@ -13,11 +13,19 @@ export default function AuthGate() {
   const inAuth = topSegment === "(auth)";
   const inOnboarding = topSegment === "onboarding";
   const targetAfterAuth = onboardingComplete ? "/(tabs)" : "/onboarding";
+  // Temporary hard bypass for local development.
+  // Set to false when auth flow is ready for strict gating again.
+  const forceBypassAuth = true;
 
   useEffect(() => {
-    if (isAuthLoading) return;
-
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    if (forceBypassAuth && inAuth) {
+      timeoutId = setTimeout(() => router.replace(targetAfterAuth as any), 0);
+      return () => {
+        if (timeoutId !== undefined) clearTimeout(timeoutId);
+      };
+    }
 
     // As soon as a valid auth session exists, leave the auth route immediately.
     if (session && inAuth) {
@@ -27,10 +35,13 @@ export default function AuthGate() {
       };
     }
 
+    // For non-auth routes, wait until initial auth bootstrap settles.
+    if (isAuthLoading) return;
+
     // Outside /(auth), hold protected routes until profile bootstrap settles.
     if (session && !isProfileReady) return;
 
-    if (!session && !inAuth) {
+    if (!session && !inAuth && !forceBypassAuth) {
       timeoutId = setTimeout(() => router.replace("/(auth)/welcome" as any), 0);
     } else if (session && !onboardingComplete && !inOnboarding && !inAuth) {
       timeoutId = setTimeout(() => router.replace("/onboarding" as any), 0);
@@ -41,7 +52,7 @@ export default function AuthGate() {
     return () => {
       if (timeoutId !== undefined) clearTimeout(timeoutId);
     };
-  }, [isAuthLoading, isProfileReady, session, onboardingComplete, inAuth, inOnboarding, router, targetAfterAuth]);
+  }, [isAuthLoading, isProfileReady, session, onboardingComplete, inAuth, inOnboarding, router, targetAfterAuth, forceBypassAuth]);
 
   return null;
 }

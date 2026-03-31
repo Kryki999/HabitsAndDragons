@@ -17,6 +17,15 @@ type Props = {
   completedHabitNamesByDate: Record<string, string[]>;
 };
 
+function formatChronicleDate(dateKey: string): string {
+  const d = new Date(`${dateKey}T12:00:00`);
+  return d.toLocaleDateString("pl-PL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
 function habitActivityMap(habit: Habit): Record<string, { completions: number; xpFromHabits: number }> {
   const out: Record<string, { completions: number; xpFromHabits: number }> = {};
   for (const date of habit.completionDates ?? []) {
@@ -62,11 +71,6 @@ export default function ActivityChroniclesModal({
     return habitActivityMap(trailHabit);
   }, [trailHabit]);
 
-  const habitDayTasks = useMemo(() => {
-    if (!habitSelectedDate || !trailHabit) return [];
-    return (trailHabit.completionDates ?? []).includes(habitSelectedDate) ? [trailHabit.name] : [];
-  }, [habitSelectedDate, trailHabit]);
-
   const handleClose = useCallback(() => {
     impactAsync(ImpactFeedbackStyle.Light);
     onClose();
@@ -104,7 +108,6 @@ export default function ActivityChroniclesModal({
             keyboardShouldPersistTaps="handled"
           >
             <Text style={styles.heroTitle}>Chronicles</Text>
-            <Text style={styles.heroSub}>Your realm's deeds, day by day.</Text>
 
             <Text style={styles.sectionLabel}>General history</Text>
             <View style={styles.card}>
@@ -119,9 +122,7 @@ export default function ActivityChroniclesModal({
 
             <View style={styles.dayCard}>
               <Text style={styles.dayCardTitle}>
-                {generalSelectedDate
-                  ? "That day's quest log"
-                  : "Tap a day on the map — your realm's story unfolds below"}
+                {generalSelectedDate ? formatChronicleDate(generalSelectedDate) : "Wybierz dzień"}
               </Text>
               {generalSelectedDate ? (
                 <DayQuestLogReadOnly dateKey={generalSelectedDate} showTitle={false} />
@@ -133,9 +134,6 @@ export default function ActivityChroniclesModal({
             <View style={styles.divider} />
 
             <Text style={styles.sectionLabel}>Individual habit heatmaps</Text>
-            <Text style={styles.sectionHint}>
-              Pick one habit to see only its completion trail, separate from the realm-wide map.
-            </Text>
 
             <Pressable
               onPress={() => {
@@ -181,13 +179,6 @@ export default function ActivityChroniclesModal({
 
             {trailHabit ? (
               <>
-                <View style={styles.statsCard}>
-                  <Text style={styles.statsTitle}>Habit progress</Text>
-                  <Text style={styles.statsLine}>Current streak: {trailHabit.currentStreak ?? 0}</Text>
-                  <Text style={styles.statsLine}>Best streak: {trailHabit.longestStreak ?? 0}</Text>
-                  <Text style={styles.statsLine}>Total completions: {trailHabit.totalCompletions ?? 0}</Text>
-                </View>
-
                 <View style={styles.card}>
                   <ActivityHeatmap
                     activityByDate={habitHeatmapData}
@@ -198,25 +189,11 @@ export default function ActivityChroniclesModal({
                   />
                 </View>
 
-                <View style={styles.dayCard}>
-                  <Text style={styles.dayCardTitle}>
-                    {habitSelectedDate
-                      ? `Log — ${habitSelectedDate}`
-                      : "Tap the habit heatmap to pick a day"}
-                  </Text>
-                  {habitSelectedDate ? (
-                    habitDayTasks.length > 0 ? (
-                      habitDayTasks.map((name, idx) => (
-                        <Text key={`${habitSelectedDate}_${idx}`} style={styles.taskLine}>
-                          • {name}
-                        </Text>
-                      ))
-                    ) : (
-                      <Text style={styles.muted}>No completion on this day.</Text>
-                    )
-                  ) : (
-                    <Text style={styles.muted}>Select a day on the habit map.</Text>
-                  )}
+                <View style={styles.statsCard}>
+                  <Text style={styles.statsTitle}>Habit progress</Text>
+                  <Text style={styles.statsLine}>Current streak: {trailHabit.currentStreak ?? 0}</Text>
+                  <Text style={styles.statsLine}>Best streak: {trailHabit.longestStreak ?? 0}</Text>
+                  <Text style={styles.statsLine}>Total completions: {trailHabit.totalCompletions ?? 0}</Text>
                 </View>
 
                 <View style={styles.manageRow}>
@@ -239,7 +216,7 @@ export default function ActivityChroniclesModal({
                 </View>
               </>
             ) : (
-              <Text style={styles.placeholderMuted}>Choose a habit from the list to reveal its trail.</Text>
+              <View style={{ height: 4 }} />
             )}
 
             <View style={{ height: 32 }} />
@@ -293,11 +270,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   heroSub: {
-    marginTop: 6,
-    fontSize: 13,
-    color: Colors.dark.textMuted,
-    marginBottom: 20,
-    lineHeight: 18,
+    marginTop: 0,
+    marginBottom: 0,
+    height: 0,
+    opacity: 0,
   },
   sectionLabel: {
     fontSize: 11,
@@ -308,10 +284,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionHint: {
-    fontSize: 12,
-    color: Colors.dark.textMuted,
-    lineHeight: 17,
-    marginBottom: 12,
+    marginBottom: 0,
+    height: 0,
+    opacity: 0,
   },
   card: {
     borderRadius: 16,
@@ -348,11 +323,10 @@ const styles = StyleSheet.create({
     fontStyle: "italic" as const,
   },
   placeholderMuted: {
-    fontSize: 13,
-    color: Colors.dark.textMuted,
-    fontStyle: "italic" as const,
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: 0,
+    marginBottom: 0,
+    height: 0,
+    opacity: 0,
   },
   divider: {
     height: 1,
