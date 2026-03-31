@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { TouchableOpacity } from "react-native-gesture-handler";
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
 import {
   X,
@@ -24,7 +23,6 @@ import {
   ChevronRight,
   Plus,
   CalendarClock,
-  GripVertical,
   ArrowLeft,
   ArrowRight,
 } from "lucide-react-native";
@@ -173,8 +171,8 @@ function TaskRow({
   onDelete,
   onEdit,
   onReschedule,
-  drag,
-  isActive,
+  drag: _drag,
+  isActive: _isActive,
 }: {
   habit: Habit;
   onComplete: (habitId: string) => void;
@@ -200,21 +198,15 @@ function TaskRow({
 
   return (
     <ScaleDecorator>
-      <TouchableOpacity
-        onLongPress={drag}
+      <Pressable
         onPress={openOverlay}
-        disabled={isActive || overlayOpen}
-        activeOpacity={0.92}
-        delayLongPress={180}
+        disabled={overlayOpen}
       >
         <View
           ref={rowRef}
           collapsable={false}
-          style={[styles.taskRow, isActive && styles.taskRowActive, overlayOpen && { opacity: 0 }]}
+          style={[styles.taskRow, overlayOpen && { opacity: 0 }]}
         >
-          <View style={styles.dragHandle} accessibilityLabel="Reorder">
-            <GripVertical size={18} color={Colors.dark.textMuted} />
-          </View>
           <View style={styles.taskRowLeft}>
             <Text style={styles.taskEmoji}>{habit.icon}</Text>
             <View style={styles.taskInfo}>
@@ -227,7 +219,7 @@ function TaskRow({
             </View>
           </View>
         </View>
-      </TouchableOpacity>
+      </Pressable>
       {overlayOpen ? (
         <TaskCardOverlay
           visible={overlayOpen}
@@ -398,6 +390,7 @@ export default function ExpeditionCalendarModal({
   const planningDayOrderByDate = useGameStore((s) => s.planningDayOrderByDate);
   const setPlanningDayOrderForDate = useGameStore((s) => s.setPlanningDayOrderForDate);
   const completedHabitNamesByDate = useGameStore((s) => s.completedHabitNamesByDate);
+  const dailyReflectionByDate = useGameStore((s) => s.dailyReflectionByDate);
   const completeHabit = useGameStore((s) => s.completeHabit);
   const uncompleteHabit = useGameStore((s) => s.uncompleteHabit);
   const removeHabit = useGameStore((s) => s.removeHabit);
@@ -417,6 +410,11 @@ export default function ExpeditionCalendarModal({
   const [addOpen, setAddOpen] = useState(false);
   const [rescheduleHabit, setRescheduleHabit] = useState<Habit | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [rescheduleDateKey, setRescheduleDateKey] = useState(todayKey);
+  const [rescheduleYM, setRescheduleYM] = useState(() => {
+    const p = parseDateKey(todayKey);
+    return { y: p?.y ?? new Date().getFullYear(), m: p?.m ?? new Date().getMonth() + 1 };
+  });
   const [editHabit, setEditHabit] = useState<Habit | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
@@ -424,6 +422,7 @@ export default function ExpeditionCalendarModal({
   const [editIcon, setEditIcon] = useState("⚔️");
   const [editTaskType, setEditTaskType] = useState<Habit["taskType"]>("daily");
   const [reflectionOpen, setReflectionOpen] = useState(false);
+  const reflectionForSelectedDay = (dailyReflectionByDate[selectedDateKey] ?? "").trim();
 
   // ── Week swiper ──
   const weekFlatListRef = useRef<FlatList<Date>>(null);
@@ -678,6 +677,19 @@ export default function ExpeditionCalendarModal({
     });
   }, []);
 
+  useEffect(() => {
+    if (!rescheduleOpen || !rescheduleHabit) return;
+    const target = rescheduleHabit.scheduledDate ?? todayKey;
+    setRescheduleDateKey(target);
+    const p = parseDateKey(target);
+    if (p) setRescheduleYM({ y: p.y, m: p.m });
+  }, [rescheduleOpen, rescheduleHabit, todayKey]);
+
+  const rescheduleGridCells = useMemo(
+    () => buildMonthGridCells(rescheduleYM.y, rescheduleYM.m),
+    [rescheduleYM.y, rescheduleYM.m],
+  );
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.shell}>
@@ -831,6 +843,12 @@ export default function ExpeditionCalendarModal({
             scrollEventThrottle={16}
           >
             <DayQuestLogReadOnly dateKey={selectedDateKey} showTitle={false} />
+            {reflectionForSelectedDay.length > 0 ? (
+              <View style={styles.timelineReflectionCard}>
+                <Text style={styles.timelineReflectionKicker}>Saved Reflection</Text>
+                <Text style={styles.timelineReflectionText}>{reflectionForSelectedDay}</Text>
+              </View>
+            ) : null}
             {reflectionAllowed ? (
               <View style={styles.footerBlock}>
                 <Pressable
@@ -867,6 +885,12 @@ export default function ExpeditionCalendarModal({
             }
             ListFooterComponent={
               <View style={[styles.footerBlock, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+                {reflectionForSelectedDay.length > 0 ? (
+                  <View style={[styles.timelineReflectionCard, { marginBottom: 10 }]}>
+                    <Text style={styles.timelineReflectionKicker}>Saved Reflection</Text>
+                    <Text style={styles.timelineReflectionText}>{reflectionForSelectedDay}</Text>
+                  </View>
+                ) : null}
                 <Pressable
                   onPress={() => {
                     if (!addAllowed) {
@@ -919,132 +943,209 @@ export default function ExpeditionCalendarModal({
         ) : null}
 
         {rescheduleOpen ? (
-          <Modal visible transparent animationType="fade" onRequestClose={() => setRescheduleOpen(false)}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={() => setRescheduleOpen(false)}>
-              <View style={styles.rescheduleBackdrop} />
-            </Pressable>
-            <View style={styles.rescheduleSheetBottom}>
-              <Text style={styles.rescheduleTitle}>Reschedule Quest</Text>
-              <Text style={styles.rescheduleSub}>{rescheduleHabit?.name ?? ""}</Text>
-
-              {selectedDateKey < todayKey ? (
+          <Modal visible transparent={false} animationType="slide" onRequestClose={() => setRescheduleOpen(false)}>
+            <View style={styles.fullModalShell}>
+              <LinearGradient
+                colors={["#1a0f2e", "#120a1c", "#080510"]}
+                style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+              />
+              <View style={[styles.fullModalHeader, { paddingTop: Math.max(insets.top, 14) }]}>
                 <Pressable
-                  onPress={() => {
-                    if (!rescheduleHabit) return;
-                    setHabitScheduledDate(rescheduleHabit.id, todayKey);
-                    setRescheduleOpen(false);
-                  }}
-                  style={styles.rescheduleActionBtn}
+                  onPress={() => setRescheduleOpen(false)}
+                  style={({ pressed }) => [styles.headerIconBtn, pressed && styles.headerIconBtnPressed]}
                 >
-                  <Text style={styles.rescheduleActionText}>Move to Today</Text>
+                  <X size={24} color={Colors.dark.text} />
                 </Pressable>
-              ) : null}
+                <View style={styles.fullModalTitleBlock}>
+                  <Text style={styles.fullModalTitle}>Reschedule Quest</Text>
+                  <Text style={styles.fullModalSubtitle} numberOfLines={1}>{rescheduleHabit?.name ?? ""}</Text>
+                </View>
+                <View style={styles.headerSpacer} />
+              </View>
 
-              <Pressable
-                onPress={() => {
-                  if (!rescheduleHabit) return;
-                  setHabitScheduledDate(rescheduleHabit.id, addDaysDateKey(todayKey, 1));
-                  setRescheduleOpen(false);
-                }}
-                style={styles.rescheduleActionBtn}
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={[styles.fullModalBody, { paddingBottom: Math.max(insets.bottom, 20) }]}
+                showsVerticalScrollIndicator={false}
               >
-                <Text style={styles.rescheduleActionText}>Move to Tomorrow</Text>
-              </Pressable>
+                <Text style={styles.modalSectionKicker}>Quick Actions</Text>
+                <View style={styles.quickTilesRow}>
+                  <Pressable
+                    onPress={() => setRescheduleDateKey(addDaysDateKey(todayKey, 1))}
+                    style={[styles.quickTile, rescheduleDateKey === addDaysDateKey(todayKey, 1) && styles.quickTileActive]}
+                  >
+                    <Text style={styles.quickTileTitle}>Tomorrow</Text>
+                    <Text style={styles.quickTileMeta}>{formatDateKeyToShortLabel(addDaysDateKey(todayKey, 1))}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setRescheduleDateKey(addDaysDateKey(todayKey, 7))}
+                    style={[styles.quickTile, rescheduleDateKey === addDaysDateKey(todayKey, 7) && styles.quickTileActive]}
+                  >
+                    <Text style={styles.quickTileTitle}>Next Week</Text>
+                    <Text style={styles.quickTileMeta}>{formatDateKeyToShortLabel(addDaysDateKey(todayKey, 7))}</Text>
+                  </Pressable>
+                </View>
 
-              <Pressable
-                onPress={() => {
-                  if (!rescheduleHabit) return;
-                  setHabitScheduledDate(rescheduleHabit.id, addDaysDateKey(todayKey, 7));
-                  setRescheduleOpen(false);
-                }}
-                style={styles.rescheduleActionBtn}
-              >
-                <Text style={styles.rescheduleActionText}>Next Week</Text>
-              </Pressable>
+                <Text style={[styles.modalSectionKicker, { marginTop: 18 }]}>Pick Date</Text>
+                <View style={styles.modalCalendarCard}>
+                  <View style={styles.monthNavRow}>
+                    <Pressable
+                      onPress={() =>
+                        setRescheduleYM((prev) => (prev.m === 1 ? { y: prev.y - 1, m: 12 } : { y: prev.y, m: prev.m - 1 }))
+                      }
+                      style={({ pressed }) => [styles.monthNavBtn, pressed && styles.monthNavBtnPressed]}
+                    >
+                      <ChevronLeft size={20} color={Colors.dark.gold} strokeWidth={2.4} />
+                    </Pressable>
+                    <Text style={styles.monthGridLabel}>{formatMonthYearLabel(rescheduleYM.y, rescheduleYM.m)}</Text>
+                    <Pressable
+                      onPress={() =>
+                        setRescheduleYM((prev) => (prev.m === 12 ? { y: prev.y + 1, m: 1 } : { y: prev.y, m: prev.m + 1 }))
+                      }
+                      style={({ pressed }) => [styles.monthNavBtn, pressed && styles.monthNavBtnPressed]}
+                    >
+                      <ChevronRight size={20} color={Colors.dark.gold} strokeWidth={2.4} />
+                    </Pressable>
+                  </View>
+                  <View style={styles.weekdayRow}>
+                    {WEEKDAY_LABELS.map((w) => (
+                      <Text key={`rs-${w}`} style={styles.weekdayCell}>{w}</Text>
+                    ))}
+                  </View>
+                  <View style={styles.gridCells}>
+                    {rescheduleGridCells.map((day, idx) => {
+                      if (day === null) return <View key={`rs-empty-${idx}`} style={styles.gridCellEmpty} />;
+                      const key = dateKeyFromYMD(rescheduleYM.y, rescheduleYM.m, day);
+                      const isSelected = key === rescheduleDateKey;
+                      return (
+                        <Pressable
+                          key={key}
+                          onPress={() => setRescheduleDateKey(key)}
+                          style={[styles.gridCellBtn, isSelected && styles.gridCellBtnSelected]}
+                        >
+                          <Text style={[styles.gridCellText, isSelected && styles.gridCellTextSelected]}>{day}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
 
-              <Pressable
-                onPress={() => {
-                  setRescheduleOpen(false);
-                  setMonthExpanded(true);
-                }}
-                style={styles.rescheduleActionBtn}
-              >
-                <Text style={styles.rescheduleActionText}>Open Full Calendar</Text>
-              </Pressable>
-
-              <Pressable onPress={() => setRescheduleOpen(false)} style={styles.rescheduleCancelBtn}>
-                <Text style={styles.rescheduleCancelText}>Cancel</Text>
-              </Pressable>
+                <View style={styles.rescheduleBtns}>
+                  <Pressable onPress={() => setRescheduleOpen(false)} style={styles.rescheduleCancelBtn}>
+                    <Text style={styles.rescheduleCancelText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      if (!rescheduleHabit) return;
+                      setHabitScheduledDate(rescheduleHabit.id, rescheduleDateKey);
+                      setRescheduleOpen(false);
+                    }}
+                    style={styles.rescheduleSaveBtn}
+                  >
+                    <Text style={styles.rescheduleSaveText}>Apply</Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
             </View>
           </Modal>
         ) : null}
 
         {editOpen ? (
-          <Modal visible transparent animationType="fade" onRequestClose={() => setEditOpen(false)}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={() => setEditOpen(false)}>
-              <View style={styles.rescheduleBackdrop} />
-            </Pressable>
-            <View style={styles.editSheet}>
-              <Text style={styles.editTitle}>Edit Quest</Text>
-              <Text style={styles.editSubtitle}>Whimsical Dark Comic Forge</Text>
-              <TextInput
-                value={editName}
-                onChangeText={setEditName}
-                placeholder="Quest name"
-                placeholderTextColor={Colors.dark.textMuted}
-                style={styles.editInput}
+          <Modal visible transparent={false} animationType="slide" onRequestClose={() => setEditOpen(false)}>
+            <View style={styles.fullModalShell}>
+              <LinearGradient
+                colors={["#1a0f2e", "#120a1c", "#080510"]}
+                style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
               />
-              <TextInput
-                value={editDesc}
-                onChangeText={setEditDesc}
-                placeholder="Quest description"
-                placeholderTextColor={Colors.dark.textMuted}
-                multiline
-                textAlignVertical="top"
-                style={[styles.editInput, styles.editInputMulti]}
-              />
-              <TextInput
-                value={editIcon}
-                onChangeText={setEditIcon}
-                placeholder="Icon"
-                placeholderTextColor={Colors.dark.textMuted}
-                style={styles.editInput}
-                maxLength={2}
-              />
-              <View style={styles.editTypeRow}>
+              <View style={[styles.fullModalHeader, { paddingTop: Math.max(insets.top, 14) }]}>
                 <Pressable
-                  onPress={() => setEditTaskType("daily")}
-                  style={[styles.editTypeBtn, editTaskType === "daily" && styles.editTypeBtnActive]}
+                  onPress={() => setEditOpen(false)}
+                  style={({ pressed }) => [styles.headerIconBtn, pressed && styles.headerIconBtnPressed]}
                 >
-                  <Text style={[styles.editTypeText, editTaskType === "daily" && styles.editTypeTextActive]}>Daily</Text>
+                  <X size={24} color={Colors.dark.text} />
                 </Pressable>
-                <Pressable
-                  onPress={() => setEditTaskType("one-off")}
-                  style={[styles.editTypeBtn, editTaskType === "one-off" && styles.editTypeBtnActive]}
-                >
-                  <Text style={[styles.editTypeText, editTaskType === "one-off" && styles.editTypeTextActive]}>One-off</Text>
-                </Pressable>
+                <View style={styles.fullModalTitleBlock}>
+                  <Text style={styles.fullModalTitle}>Edit Quest</Text>
+                  <Text style={styles.fullModalSubtitle}>Dark fantasy forge</Text>
+                </View>
+                <View style={styles.headerSpacer} />
               </View>
-              <View style={styles.rescheduleBtns}>
-                <Pressable onPress={() => setEditOpen(false)} style={styles.rescheduleCancelBtn}>
-                  <Text style={styles.rescheduleCancelText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    if (!editHabit || !editName.trim()) return;
-                    updateHabit(editHabit.id, {
-                      name: editName,
-                      description: editDesc,
-                      icon: editIcon.trim() || "⚔️",
-                      taskType: editTaskType,
-                    });
-                    setEditOpen(false);
-                  }}
-                  style={styles.rescheduleSaveBtn}
-                >
-                  <Text style={styles.rescheduleSaveText}>Save</Text>
-                </Pressable>
-              </View>
+
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={[styles.fullModalBody, { paddingBottom: Math.max(insets.bottom, 20) }]}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <Text style={styles.modalSectionKicker}>Core</Text>
+                <TextInput
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Quest name"
+                  placeholderTextColor={Colors.dark.textMuted}
+                  style={styles.editInput}
+                />
+                <TextInput
+                  value={editDesc}
+                  onChangeText={setEditDesc}
+                  placeholder="Quest description"
+                  placeholderTextColor={Colors.dark.textMuted}
+                  multiline
+                  textAlignVertical="top"
+                  style={[styles.editInput, styles.editInputMulti]}
+                />
+
+                <Text style={[styles.modalSectionKicker, { marginTop: 10 }]}>Visual</Text>
+                <TextInput
+                  value={editIcon}
+                  onChangeText={setEditIcon}
+                  placeholder="Icon"
+                  placeholderTextColor={Colors.dark.textMuted}
+                  style={styles.editInput}
+                  maxLength={2}
+                />
+
+                <Text style={[styles.modalSectionKicker, { marginTop: 10 }]}>Type</Text>
+                <View style={styles.editTypeRow}>
+                  <Pressable
+                    onPress={() => setEditTaskType("daily")}
+                    style={[styles.editTypeBtn, editTaskType === "daily" && styles.editTypeBtnActive]}
+                  >
+                    <Text style={[styles.editTypeText, editTaskType === "daily" && styles.editTypeTextActive]}>Daily</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setEditTaskType("one-off")}
+                    style={[styles.editTypeBtn, editTaskType === "one-off" && styles.editTypeBtnActive]}
+                  >
+                    <Text style={[styles.editTypeText, editTaskType === "one-off" && styles.editTypeTextActive]}>One-off</Text>
+                  </Pressable>
+                </View>
+
+                <View style={styles.rescheduleBtns}>
+                  <Pressable onPress={() => setEditOpen(false)} style={styles.rescheduleCancelBtn}>
+                    <Text style={styles.rescheduleCancelText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      if (!editHabit || !editName.trim()) return;
+                      updateHabit(editHabit.id, {
+                        name: editName,
+                        description: editDesc,
+                        icon: editIcon.trim() || "⚔️",
+                        taskType: editTaskType,
+                      });
+                      setEditOpen(false);
+                    }}
+                    style={styles.rescheduleSaveBtn}
+                  >
+                    <Text style={styles.rescheduleSaveText}>Save</Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
             </View>
           </Modal>
         ) : null}
@@ -1342,10 +1443,6 @@ const styles = StyleSheet.create({
   taskRowMuted: {
     opacity: 0.72,
   },
-  dragHandle: {
-    paddingRight: 6,
-    paddingVertical: 4,
-  },
   dragHandlePlaceholder: {
     width: 24,
   },
@@ -1443,6 +1540,108 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800" as const,
     color: Colors.dark.gold,
+  },
+  timelineReflectionCard: {
+    marginBottom: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + "44",
+    backgroundColor: Colors.dark.gold + "12",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  timelineReflectionKicker: {
+    fontSize: 10,
+    fontWeight: "800" as const,
+    color: Colors.dark.gold,
+    letterSpacing: 1,
+    textTransform: "uppercase" as const,
+  },
+  timelineReflectionText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: Colors.dark.textSecondary,
+    fontStyle: "italic" as const,
+  },
+  fullModalShell: {
+    flex: 1,
+    backgroundColor: "#080510",
+  },
+  fullModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border + "66",
+  },
+  fullModalTitleBlock: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
+  fullModalTitle: {
+    fontSize: 17,
+    fontWeight: "800" as const,
+    color: Colors.dark.text,
+    letterSpacing: 0.2,
+  },
+  fullModalSubtitle: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: "700" as const,
+    color: Colors.dark.gold,
+    letterSpacing: 1,
+    textTransform: "uppercase" as const,
+  },
+  fullModalBody: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+  },
+  modalSectionKicker: {
+    fontSize: 10,
+    fontWeight: "800" as const,
+    color: Colors.dark.gold,
+    letterSpacing: 1.1,
+    textTransform: "uppercase" as const,
+    marginBottom: 8,
+  },
+  quickTilesRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  quickTile: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + "88",
+    backgroundColor: Colors.dark.surface + "dd",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 2,
+  },
+  quickTileActive: {
+    borderColor: Colors.dark.gold + "aa",
+    backgroundColor: Colors.dark.gold + "1a",
+  },
+  quickTileTitle: {
+    fontSize: 13,
+    fontWeight: "800" as const,
+    color: Colors.dark.text,
+  },
+  quickTileMeta: {
+    fontSize: 11,
+    fontWeight: "600" as const,
+    color: Colors.dark.textMuted,
+  },
+  modalCalendarCard: {
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: Colors.dark.surface + "99",
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + "33",
   },
   rescheduleBackdrop: {
     flex: 1,

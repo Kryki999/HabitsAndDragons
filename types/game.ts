@@ -192,6 +192,8 @@ export interface GameState {
    * Used by Hero daily rituals; optional cloud parity later.
    */
   reflectionSavedDateKeys: Record<string, true>;
+  /** Reflection text by day key (`YYYY-MM-DD`) for timeline/chronicles rendering and local fallback. */
+  dailyReflectionByDate: Record<string, string>;
   /** True after first successful gold purchase in D&D (dungeon key or elixir). */
   heroShopPurchaseEver: boolean;
   /** Calendar day for which `heroDailyQuestClaimedIds` applies. */
@@ -305,6 +307,8 @@ export interface GameActions {
   setCastleQuestOrderIds: (orderedHabitIds: string[]) => void;
   /** Mark a reflection as saved for a date (after successful cloud upsert). */
   recordHeroReflectionSaved: (dateKey: string) => void;
+  /** Upsert/remove daily reflection in local state; removes entry when content is empty. */
+  setHeroDailyReflection: (dateKey: string, content: string) => void;
   /** Claim Hero tab daily ritual reward (rollover by calendar day). Returns false if already claimed or invalid. */
   claimHeroDailyQuest: (
     questId: string,

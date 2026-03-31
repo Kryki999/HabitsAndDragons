@@ -232,6 +232,7 @@ export const useGameStore = create<GameStore>()(
       lastDailyWelcomeDate: null,
       lastAcknowledgedPlayerLevel: 1,
       reflectionSavedDateKeys: {},
+      dailyReflectionByDate: {},
       heroShopPurchaseEver: false,
       heroDailyQuestClaimsDate: null,
       heroDailyQuestClaimedIds: [],
@@ -243,6 +244,25 @@ export const useGameStore = create<GameStore>()(
         set((s) => ({
           reflectionSavedDateKeys: { ...s.reflectionSavedDateKeys, [dateKey]: true },
         }));
+      },
+      setHeroDailyReflection: (dateKey: string, content: string) => {
+        if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
+        const normalized = content.trim();
+        set((s) => {
+          const nextByDate = { ...s.dailyReflectionByDate };
+          const nextSaved = { ...s.reflectionSavedDateKeys };
+          if (normalized.length > 0) {
+            nextByDate[dateKey] = normalized;
+            nextSaved[dateKey] = true;
+          } else {
+            delete nextByDate[dateKey];
+            delete nextSaved[dateKey];
+          }
+          return {
+            dailyReflectionByDate: nextByDate,
+            reflectionSavedDateKeys: nextSaved,
+          };
+        });
       },
 
       claimHeroDailyQuest: (questId, goldReward, xpReward) => {
@@ -437,6 +457,10 @@ export const useGameStore = create<GameStore>()(
               snapshot.reflectionSavedDateKeys && typeof snapshot.reflectionSavedDateKeys === "object"
                 ? { ...state.reflectionSavedDateKeys, ...snapshot.reflectionSavedDateKeys }
                 : state.reflectionSavedDateKeys,
+            dailyReflectionByDate:
+              snapshot.dailyReflectionByDate && typeof snapshot.dailyReflectionByDate === "object"
+                ? { ...state.dailyReflectionByDate, ...snapshot.dailyReflectionByDate }
+                : state.dailyReflectionByDate,
             heroShopPurchaseEver: snapshot.heroShopPurchaseEver ?? state.heroShopPurchaseEver,
             heroDailyQuestClaimsDate:
               snapshot.heroDailyQuestClaimsDate ?? state.heroDailyQuestClaimsDate,
@@ -1097,6 +1121,7 @@ export const useGameStore = create<GameStore>()(
         lastDailyWelcomeDate: state.lastDailyWelcomeDate,
         lastAcknowledgedPlayerLevel: state.lastAcknowledgedPlayerLevel,
         reflectionSavedDateKeys: state.reflectionSavedDateKeys,
+        dailyReflectionByDate: state.dailyReflectionByDate,
         heroShopPurchaseEver: state.heroShopPurchaseEver,
         heroDailyQuestClaimsDate: state.heroDailyQuestClaimsDate,
         heroDailyQuestClaimedIds: state.heroDailyQuestClaimedIds,
@@ -1148,6 +1173,7 @@ export const useGameStore = create<GameStore>()(
                   (p?.strengthXP ?? 0) + (p?.agilityXP ?? 0) + (p?.intelligenceXP ?? 0),
                 ),
           reflectionSavedDateKeys: p?.reflectionSavedDateKeys ?? current.reflectionSavedDateKeys,
+          dailyReflectionByDate: p?.dailyReflectionByDate ?? current.dailyReflectionByDate,
           heroShopPurchaseEver: p?.heroShopPurchaseEver ?? current.heroShopPurchaseEver,
           heroDailyQuestClaimsDate: p?.heroDailyQuestClaimsDate ?? current.heroDailyQuestClaimsDate,
           heroDailyQuestClaimedIds: Array.isArray(p?.heroDailyQuestClaimedIds)

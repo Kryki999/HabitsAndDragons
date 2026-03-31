@@ -209,13 +209,20 @@ export default function TaskCardOverlay({
   }, [habit.id, onDelete, triggerClose]);
 
   const handleEdit = useCallback(() => {
-    onEdit?.(habit);
     triggerClose();
+    // Open parent modal only after this overlay starts closing,
+    // otherwise nested modal stacking can swallow the transition.
+    if (onEdit) {
+      setTimeout(() => onEdit(habit), 170);
+    }
   }, [habit, onEdit, triggerClose]);
 
   const handleReschedule = useCallback(() => {
-    onReschedule?.(habit);
     triggerClose();
+    // Same sequencing as edit: close shared card first, then open full-screen flow.
+    if (onReschedule) {
+      setTimeout(() => onReschedule(habit), 170);
+    }
   }, [habit, onReschedule, triggerClose]);
 
   const diffKey = (habit.difficulty ?? 'medium') as HabitDifficulty;

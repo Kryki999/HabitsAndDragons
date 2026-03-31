@@ -29,6 +29,8 @@ export default function DailyReflectionPanel({ dateKey, userId, variant = "modal
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tableMissing, setTableMissing] = useState(false);
+  const localReflectionByDate = useGameStore((s) => s.dailyReflectionByDate);
+  const setHeroDailyReflection = useGameStore((s) => s.setHeroDailyReflection);
 
   const dirty = draft.trim() !== savedRemote.trim();
 
@@ -36,9 +38,10 @@ export default function DailyReflectionPanel({ dateKey, userId, variant = "modal
     let cancelled = false;
     setLoadError(null);
     setTableMissing(false);
+    const localValue = localReflectionByDate[dateKey] ?? "";
     if (!userId) {
-      setDraft("");
-      setSavedRemote("");
+      setDraft(localValue);
+      setSavedRemote(localValue);
       setLoading(false);
       return;
     }
@@ -46,36 +49,39 @@ export default function DailyReflectionPanel({ dateKey, userId, variant = "modal
     fetchDailyReflection(userId, dateKey).then(({ row, error, tableMissing: missing }) => {
       if (cancelled) return;
       if (error) {
+        // Keep UX unblocked: when table is missing or inaccessible we gracefully fall back to local state.
         if (missing) setTableMissing(true);
-        setLoadError(error);
-        setDraft("");
-        setSavedRemote("");
+        if (!missing) setLoadError(error);
+        setDraft(localValue);
+        setSavedRemote(localValue);
       } else {
         const c = row?.content ?? "";
         setDraft(c);
         setSavedRemote(c);
-        if (c.trim().length > 0) {
-          useGameStore.getState().recordHeroReflectionSaved(dateKey);
-        }
+        setHeroDailyReflection(dateKey, c);
       }
       setLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [userId, dateKey]);
+  }, [userId, dateKey, localReflectionByDate, setHeroDailyReflection]);
 
   const onSave = useCallback(async () => {
     if (!userId) {
-      Alert.alert("Zaloguj się", "Refleksje są zapisywane na koncie — zaloguj się, aby je zapisać.");
+      const localOnly = draft.trim();
+      setHeroDailyReflection(dateKey, localOnly);
+      setSavedRemote(localOnly);
+      setDraft(localOnly);
+      Alert.alert("Zapis lokalny", "Refleksja została zapisana lokalnie na tym urządzeniu.");
       return;
     }
     impactAsync(ImpactFeedbackStyle.Medium);
     setSaving(true);
     setLoadError(null);
-    const { row, error } = await upsertDailyReflection(userId, dateKey, draft);
+    const { row, error, tableMissing: missing } = await upsertDailyReflection(userId, dateKey, draft);
     setSaving(false);
-    if (error) {
+    if (error && !missing) {
       setLoadError(error);
       Alert.alert("Błąd zapisu", error);
       return;
@@ -83,10 +89,9 @@ export default function DailyReflectionPanel({ dateKey, userId, variant = "modal
     const next = row?.content ?? draft.trim();
     setSavedRemote(next);
     setDraft(next);
-    if (next.trim().length > 0) {
-      useGameStore.getState().recordHeroReflectionSaved(dateKey);
-    }
-  }, [userId, dateKey, draft]);
+    setHeroDailyReflection(dateKey, next);
+    if (missing) setTableMissing(true);
+  }, [userId, dateKey, draft, setHeroDailyReflection]);
 
   const bottomPad = variant === "screen" ? Math.max(insets.bottom, 12) + 8 : 8;
 
@@ -94,18 +99,19 @@ export default function DailyReflectionPanel({ dateKey, userId, variant = "modal
     <View style={[styles.wrap, { paddingBottom: bottomPad }]}>
       <Text style={styles.title}>Daily Reflection</Text>
       <Text style={styles.sub}>Refleksja</Text>
-      {tableMissing ? (
-        <View style={styles.loaderRow}>
-          <Text style={styles.missingText}>
-            Refleksje nie są jeszcze dostępne — uruchom migrację bazy danych (schema.sql).
-          </Text>
-        </View>
-      ) : loading ? (
+      {loading ? (
         <View style={styles.loaderRow}>
           <ActivityIndicator color={Colors.dark.gold} />
         </View>
       ) : (
         <>
+          {tableMissing ? (
+            <View style={styles.localModeWrap}>
+              <Text style={styles.missingText}>
+                Tryb lokalny: zapisujemy refleksje na tym urządzeniu, dopóki tabela chmurowa nie będzie gotowa.
+              </Text>
+            </View>
+          ) : null}
           <TextInput
             value={draft}
             onChangeText={setDraft}
@@ -163,6 +169,9 @@ const styles = StyleSheet.create({
   loaderRow: {
     paddingVertical: 24,
     alignItems: "center",
+  },
+  localModeWrap: {
+    marginBottom: 10,
   },
   missingText: {
     fontSize: 12,

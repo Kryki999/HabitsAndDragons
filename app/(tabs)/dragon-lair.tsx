@@ -20,7 +20,6 @@ import {
   Coins,
   Key,
   Lock,
-  Snowflake,
   AlertTriangle,
   Swords,
 } from "lucide-react-native";
@@ -357,7 +356,6 @@ export default function DragonLairScreen() {
   const [dungeonsGuideOpen, setDungeonsGuideOpen] = useState(false);
   const [dragonsGuideOpen, setDragonsGuideOpen] = useState(false);
 
-  const headerAnim = useRef(new Animated.Value(0)).current;
   const dragonsSectionAnim = useRef(new Animated.Value(0)).current;
   const dungeonsSectionAnim = useRef(new Animated.Value(0)).current;
   const orbAnim = useRef(new Animated.Value(0.2)).current;
@@ -366,8 +364,6 @@ export default function DragonLairScreen() {
   const cardHeight = useMemo(() => Math.round(cardWidth * PORTRAIT_CARD_HEIGHT_RATIO), [cardWidth]);
   const cardGap = 14;
   const snapInterval = cardWidth + cardGap;
-
-  const unlockedCount = DRAGON_LIST.filter((d) => streak >= d.unlockStreak).length;
 
   const switchCooldownLabel = useMemo(
     () => formatSwitchCooldownRemaining(dragonSwitchCooldownUntil),
@@ -380,13 +376,6 @@ export default function DragonLairScreen() {
   }, []);
 
   useEffect(() => {
-    Animated.spring(headerAnim, {
-      toValue: 1,
-      friction: 6,
-      tension: 50,
-      useNativeDriver: true,
-    }).start();
-
     Animated.timing(dragonsSectionAnim, {
       toValue: 1,
       duration: 520,
@@ -415,7 +404,7 @@ export default function DragonLairScreen() {
         }),
       ]),
     ).start();
-  }, [headerAnim, dragonsSectionAnim, dungeonsSectionAnim, orbAnim]);
+  }, [dragonsSectionAnim, dungeonsSectionAnim, orbAnim]);
 
   const handleAddStreak = useCallback(() => {
     impactAsync(ImpactFeedbackStyle.Heavy);
@@ -646,133 +635,14 @@ export default function DragonLairScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: 20, paddingBottom: 40 },
+          { paddingTop: 0, paddingBottom: 40 },
         ]}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
       >
         <Animated.View
           style={[
-            styles.header,
-            {
-              opacity: headerAnim,
-              transform: [
-                {
-                  translateY: headerAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [16, 0],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          <Text style={styles.title}>Dungeons & Dragons</Text>
-          <Text style={styles.subtitle}>Trophy hall & forbidden depths</Text>
-        </Animated.View>
-
-        <Animated.View
-          style={{
-            opacity: dragonsSectionAnim,
-            transform: [
-              {
-                translateY: dragonsSectionAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [20, 0],
-                }),
-              },
-            ],
-          }}
-        >
-          <SectionBanner
-            title="Dragons"
-            source={DRAGONS_BANNER_BG}
-            onInfoPress={() => setDragonsGuideOpen(true)}
-            infoAccessibilityLabel="Dragons guide"
-            footerSlot={
-              <>
-                <SectionBannerCounter emoji="🔥" value={streak} label="day streak" />
-                <SectionBannerCounter
-                  emoji="🧊"
-                  value={consumables?.elixirOfTime ?? 0}
-                  label="freeze potions"
-                />
-              </>
-            }
-          />
-
-          <Pressable
-            onPress={handleBuyElixir}
-            disabled={!canBuyElixir}
-            style={({ pressed }) => [
-              styles.elixirCta,
-              !canBuyElixir && styles.elixirCtaDisabled,
-              pressed && canBuyElixir && styles.elixirCtaPressed,
-            ]}
-          >
-            <LinearGradient
-              colors={canBuyElixir ? ["#1a3a4a", "#0d2838"] : ["#2a2a2a", "#1a1a1a"]}
-              style={styles.elixirCtaGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Snowflake size={22} color={canBuyElixir ? Colors.dark.cyan : Colors.dark.textMuted} />
-              <View style={styles.elixirCtaMid}>
-                <Text style={styles.elixirCtaTitle}>Buy Freeze Potion</Text>
-                <Text style={styles.elixirCtaSub}>
-                  Freeze a daily habit so your streak survives a missed day (use from a habit when needed).
-                </Text>
-              </View>
-              <View style={styles.ctaPriceRow}>
-                <Text style={[styles.elixirPrice, !canBuyElixir && styles.elixirPriceDisabled]}>
-                  {ELIXIR_OF_TIME_GOLD_COST}
-                </Text>
-                <Coins
-                  size={18}
-                  color={canBuyElixir ? Colors.dark.gold : Colors.dark.textMuted}
-                  strokeWidth={2.2}
-                />
-              </View>
-            </LinearGradient>
-          </Pressable>
-
-          {switchCooldownLabel ? (
-            <Text style={styles.cooldownBanner}>Next dragon switch in {switchCooldownLabel}</Text>
-          ) : null}
-
-          <Text style={styles.sectionHint}>
-            {unlockedCount} / {DRAGON_LIST.length} guardians unlocked
-          </Text>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            snapToInterval={snapInterval}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            contentContainerStyle={styles.dragonsCarouselContent}
-            nestedScrollEnabled
-          >
-            {DRAGON_LIST.map((dragon, index) => (
-              <View key={dragon.id} style={[styles.dragonCarouselItem, { width: cardWidth, marginRight: cardGap }]}>
-                <PortraitDragonCard
-                  dragon={dragon}
-                  streak={streak}
-                  activeDragonId={activeDragonId}
-                  cardWidth={cardWidth}
-                  cardHeight={cardHeight}
-                  delay={180 + index * 100}
-                  switchCooldownLabel={switchCooldownLabel}
-                  onSetActive={handleSetActiveDragon}
-                />
-              </View>
-            ))}
-          </ScrollView>
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.dungeonsBlock,
+            styles.sectionBlock,
             {
               opacity: dungeonsSectionAnim,
               transform: [{ translateY: dungeonsTranslateY }],
@@ -785,52 +655,109 @@ export default function DragonLairScreen() {
             onInfoPress={() => setDungeonsGuideOpen(true)}
             infoAccessibilityLabel="Dungeons guide"
             footerSlot={
-              <SectionBannerCounter emoji="🗝️" value={dungeonKeys} label="dungeon keys" />
+              <View style={styles.bannerFooter}>
+                <SectionBannerCounter emoji="🗝️" value={dungeonKeys} label="dungeon keys" />
+                <Pressable
+                  onPress={handleBuyKey}
+                  disabled={!canBuy}
+                  style={({ pressed }) => [
+                    styles.bannerBuyBtn,
+                    styles.bannerBuyBtnDungeon,
+                    !canBuy && styles.bannerBuyBtnDisabled,
+                    pressed && canBuy && styles.bannerBuyBtnPressed,
+                  ]}
+                >
+                  <Text style={styles.bannerBuyText}>Buy key · {DUNGEON_KEY_GOLD_PRICE} 🪙</Text>
+                </Pressable>
+              </View>
             }
           />
+          <View style={[styles.sectionOverlapContent, styles.sectionOverlapDungeon]}>
+            <DungeonsSection
+              hideTitle
+              engineState={engineState}
+              playerLevel={getPlayerLevel()}
+              dungeonKeys={dungeonKeys}
+              onFight={openBattle}
+            />
+          </View>
+        </Animated.View>
 
-          <Pressable
-            onPress={handleBuyKey}
-            disabled={!canBuy}
-            style={({ pressed }) => [
-              styles.keyCta,
-              !canBuy && styles.keyCtaDisabled,
-              pressed && canBuy && styles.keyCtaPressed,
-            ]}
-          >
-            <LinearGradient
-              colors={canBuy ? ["#3a2e1a", "#1f1810"] : ["#2a2a2a", "#1a1a1a"]}
-              style={styles.keyCtaGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Key size={22} color={canBuy ? Colors.dark.cyan : Colors.dark.textMuted} strokeWidth={2.2} />
-              <View style={styles.keyCtaMid}>
-                <Text style={styles.keyCtaTitle}>Buy dungeon key</Text>
-                <Text style={styles.keyCtaSub}>One key — one boss fight. Your balance is shown above.</Text>
-              </View>
-              <View style={styles.ctaPriceRow}>
-                <Text style={[styles.keyPrice, !canBuy && styles.keyPriceDisabled]}>
-                  {DUNGEON_KEY_GOLD_PRICE}
-                </Text>
-                <Coins
-                  size={18}
-                  color={canBuy ? Colors.dark.gold : Colors.dark.textMuted}
-                  strokeWidth={2.2}
+        <Animated.View
+          style={[
+            styles.sectionBlock,
+            {
+              opacity: dragonsSectionAnim,
+              transform: [
+                {
+                  translateY: dragonsSectionAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [20, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <SectionBanner
+            title="Dragons"
+            source={DRAGONS_BANNER_BG}
+            onInfoPress={() => setDragonsGuideOpen(true)}
+            infoAccessibilityLabel="Dragons guide"
+            footerSlot={
+              <View style={styles.bannerFooter}>
+                <SectionBannerCounter emoji="🔥" value={streak} label="day streak" />
+                <SectionBannerCounter
+                  emoji="🧊"
+                  value={consumables?.elixirOfTime ?? 0}
+                  label="freeze potions"
                 />
+                <Pressable
+                  onPress={handleBuyElixir}
+                  disabled={!canBuyElixir}
+                  style={({ pressed }) => [
+                    styles.bannerBuyBtn,
+                    styles.bannerBuyBtnDragon,
+                    !canBuyElixir && styles.bannerBuyBtnDisabled,
+                    pressed && canBuyElixir && styles.bannerBuyBtnPressed,
+                  ]}
+                >
+                  <Text style={styles.bannerBuyText}>Buy potion · {ELIXIR_OF_TIME_GOLD_COST} 🪙</Text>
+                </Pressable>
               </View>
-            </LinearGradient>
-          </Pressable>
-
-          <Text style={styles.sectionHint}>Boss raids — portrait challenges · 1 key per fight</Text>
-
-          <DungeonsSection
-            hideTitle
-            engineState={engineState}
-            playerLevel={getPlayerLevel()}
-            dungeonKeys={dungeonKeys}
-            onFight={openBattle}
+            }
           />
+          <View style={styles.sectionOverlapContent}>
+            {switchCooldownLabel ? (
+              <View style={styles.dragonsMetaRow}>
+                <Text style={styles.dragonsMetaText}>Next switch: {switchCooldownLabel}</Text>
+              </View>
+            ) : null}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={snapInterval}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              contentContainerStyle={styles.dragonsCarouselContent}
+              nestedScrollEnabled
+            >
+              {DRAGON_LIST.map((dragon, index) => (
+                <View key={dragon.id} style={[styles.dragonCarouselItem, { width: cardWidth, marginRight: cardGap }]}>
+                  <PortraitDragonCard
+                    dragon={dragon}
+                    streak={streak}
+                    activeDragonId={activeDragonId}
+                    cardWidth={cardWidth}
+                    cardHeight={cardHeight}
+                    delay={180 + index * 100}
+                    switchCooldownLabel={switchCooldownLabel}
+                    onSetActive={handleSetActiveDragon}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+          </View>
         </Animated.View>
 
         {/* ── Daily Flow Testing ─────────────────────────────────────── */}
@@ -1058,6 +985,10 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
   },
+  sectionBlock: {
+    marginBottom: 26,
+    marginHorizontal: -20,
+  },
   glowOrb: {
     position: "absolute" as const,
     top: 30,
@@ -1076,87 +1007,65 @@ const styles = StyleSheet.create({
     borderRadius: 70,
     backgroundColor: "#45d4e808",
   },
-  header: {
+  bannerFooter: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 8,
     alignItems: "center" as const,
-    marginBottom: 16,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "800" as const,
-    color: Colors.dark.text,
-    letterSpacing: 0.3,
-    textAlign: "center" as const,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: Colors.dark.textSecondary,
-    marginTop: 4,
-  },
-  elixirCta: {
-    marginTop: 4,
-    marginBottom: 14,
-    borderRadius: 18,
-    overflow: "hidden" as const,
+  bannerBuyBtn: {
+    borderRadius: 14,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: Colors.dark.cyan + "44",
   },
-  elixirCtaDisabled: {
+  bannerBuyBtnDungeon: {
+    backgroundColor: "rgba(46,35,15,0.92)",
+    borderColor: "rgba(255,214,140,0.48)",
+  },
+  bannerBuyBtnDragon: {
+    backgroundColor: "rgba(16,36,52,0.92)",
+    borderColor: "rgba(120,220,255,0.42)",
+  },
+  bannerBuyBtnDisabled: {
     opacity: 0.5,
   },
-  elixirCtaPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.99 }],
+  bannerBuyBtnPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.97 }],
   },
-  elixirCtaGradient: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    gap: 12,
-  },
-  elixirCtaMid: {
-    flex: 1,
-    minWidth: 0,
-  },
-  elixirCtaTitle: {
-    fontSize: 16,
+  bannerBuyText: {
+    fontSize: 12,
     fontWeight: "800" as const,
-    color: Colors.dark.text,
+    color: "#fff8ee",
+    letterSpacing: 0.2,
   },
-  elixirCtaSub: {
+  sectionOverlapContent: {
+    marginTop: 8,
+    marginHorizontal: 20,
+    paddingTop: 2,
+  },
+  sectionOverlapDungeon: {
+    backgroundColor: "rgba(12, 8, 20, 0.82)",
+    borderRadius: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  dragonsMetaRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    marginBottom: 10,
+    paddingHorizontal: 6,
+    gap: 8,
+  },
+  dragonsMetaText: {
     fontSize: 11,
-    color: Colors.dark.textMuted,
-    marginTop: 2,
-    lineHeight: 15,
-  },
-  ctaPriceRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "flex-end" as const,
-    gap: 6,
-  },
-  elixirPrice: {
-    fontSize: 14,
-    fontWeight: "800" as const,
-    color: Colors.dark.gold,
-  },
-  elixirPriceDisabled: {
-    color: Colors.dark.textMuted,
-  },
-  cooldownBanner: {
-    fontSize: 12,
     fontWeight: "700" as const,
-    color: Colors.dark.gold,
-    marginBottom: 8,
-    textAlign: "center" as const,
-  },
-  sectionHint: {
-    fontSize: 12,
-    color: Colors.dark.textMuted,
-    marginBottom: 12,
+    color: "rgba(255,232,236,0.78)",
   },
   dragonsCarouselContent: {
-    paddingBottom: 8,
+    paddingBottom: 10,
     paddingRight: 4,
   },
   dragonCarouselItem: {},
@@ -1301,54 +1210,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800" as const,
     color: Colors.dark.text,
-  },
-  dungeonsBlock: {
-    marginTop: 20,
-  },
-  keyCta: {
-    marginTop: 4,
-    marginBottom: 14,
-    borderRadius: 18,
-    overflow: "hidden" as const,
-    borderWidth: 1,
-    borderColor: Colors.dark.gold + "44",
-  },
-  keyCtaDisabled: {
-    opacity: 0.5,
-  },
-  keyCtaPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.99 }],
-  },
-  keyCtaGradient: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    gap: 12,
-  },
-  keyCtaMid: {
-    flex: 1,
-    minWidth: 0,
-  },
-  keyCtaTitle: {
-    fontSize: 16,
-    fontWeight: "800" as const,
-    color: Colors.dark.text,
-  },
-  keyCtaSub: {
-    fontSize: 11,
-    color: Colors.dark.textMuted,
-    marginTop: 2,
-    lineHeight: 15,
-  },
-  keyPrice: {
-    fontSize: 14,
-    fontWeight: "800" as const,
-    color: Colors.dark.gold,
-  },
-  keyPriceDisabled: {
-    color: Colors.dark.textMuted,
   },
   debugSection: {
     marginTop: 28,

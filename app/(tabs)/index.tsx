@@ -6,6 +6,8 @@ import {
   Animated,
   ScrollView,
   Pressable,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
@@ -49,7 +51,18 @@ export default function CastleScreen() {
     castleQuestOrderIds,
     setCastleQuestOrderIds,
     planningDayOrderByDate,
+    updateHabit,
+    setHabitScheduledDate,
   } = useGameStore();
+  const [rescheduleHabit, setRescheduleHabit] = useState<Habit | null>(null);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [editHabit, setEditHabit] = useState<Habit | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editIcon, setEditIcon] = useState('⚔️');
+  const [editTaskType, setEditTaskType] = useState<Habit['taskType']>('daily');
+  const [rescheduleDateInput, setRescheduleDateInput] = useState('');
 
   const playerLevel = getPlayerLevel();
   const castleTier = getCastleTier(playerLevel);
@@ -202,6 +215,19 @@ export default function CastleScreen() {
                 onComplete={handleComplete}
                 onUncomplete={handleUncomplete}
                 onDelete={handleRemove}
+                onEdit={(hh) => {
+                  setEditHabit(hh);
+                  setEditName(hh.name);
+                  setEditDesc(hh.description ?? '');
+                  setEditIcon(hh.icon ?? '⚔️');
+                  setEditTaskType(hh.taskType);
+                  setEditOpen(true);
+                }}
+                onReschedule={(hh) => {
+                  setRescheduleHabit(hh);
+                  setRescheduleDateInput(hh.scheduledDate ?? todayKey);
+                  setRescheduleOpen(true);
+                }}
                 readOnly={isPastCastleView}
                 historicalCompleted={!!completedNamesForFocusedDay?.includes(item.name)}
               />
@@ -210,7 +236,7 @@ export default function CastleScreen() {
         </TouchableOpacity>
       </ScaleDecorator>
     ),
-    [handleComplete, handleUncomplete, handleRemove, isPastCastleView, completedNamesForFocusedDay],
+    [handleComplete, handleUncomplete, handleRemove, isPastCastleView, completedNamesForFocusedDay, todayKey],
   );
 
   return (
@@ -433,6 +459,19 @@ export default function CastleScreen() {
                           onComplete={handleComplete}
                           onUncomplete={handleUncomplete}
                           onDelete={handleRemove}
+                          onEdit={(hh) => {
+                            setEditHabit(hh);
+                            setEditName(hh.name);
+                            setEditDesc(hh.description ?? '');
+                            setEditIcon(hh.icon ?? '⚔️');
+                            setEditTaskType(hh.taskType);
+                            setEditOpen(true);
+                          }}
+                          onReschedule={(hh) => {
+                            setRescheduleHabit(hh);
+                            setRescheduleDateInput(hh.scheduledDate ?? todayKey);
+                            setRescheduleOpen(true);
+                          }}
                           readOnly={isPastCastleView}
                           historicalCompleted={!!completedNamesForFocusedDay?.includes(habit.name)}
                         />
@@ -458,6 +497,19 @@ export default function CastleScreen() {
                           onComplete={handleComplete}
                           onUncomplete={handleUncomplete}
                           onDelete={handleRemove}
+                          onEdit={(hh) => {
+                            setEditHabit(hh);
+                            setEditName(hh.name);
+                            setEditDesc(hh.description ?? '');
+                            setEditIcon(hh.icon ?? '⚔️');
+                            setEditTaskType(hh.taskType);
+                            setEditOpen(true);
+                          }}
+                          onReschedule={(hh) => {
+                            setRescheduleHabit(hh);
+                            setRescheduleDateInput(hh.scheduledDate ?? todayKey);
+                            setRescheduleOpen(true);
+                          }}
                           readOnly={isPastCastleView}
                           historicalCompleted={!!completedNamesForFocusedDay?.includes(habit.name)}
                         />
@@ -517,6 +569,135 @@ export default function CastleScreen() {
       />
 
       <TaskSortBottomSheet visible={sortMenuOpen} onClose={() => setSortMenuOpen(false)} />
+
+      {rescheduleOpen ? (
+        <Modal visible transparent={false} animationType="slide" onRequestClose={() => setRescheduleOpen(false)}>
+          <View style={styles.fullModalShell}>
+            <View style={styles.fullModalHeader}>
+              <Pressable onPress={() => setRescheduleOpen(false)} style={styles.taskIconBtn}>
+                <Text style={styles.modalCloseGlyph}>×</Text>
+              </Pressable>
+              <Text style={styles.fullModalTitle}>Reschedule Quest</Text>
+              <View style={styles.taskIconBtn} />
+            </View>
+            <ScrollView contentContainerStyle={styles.fullModalBody}>
+              <Text style={styles.modalSub}>{rescheduleHabit?.name ?? ''}</Text>
+              <View style={styles.quickActionsRow}>
+                <Pressable
+                  style={styles.quickActionBtn}
+                  onPress={() => {
+                    if (!rescheduleHabit) return;
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    setHabitScheduledDate(rescheduleHabit.id, tomorrow.toISOString().split('T')[0]);
+                    setRescheduleOpen(false);
+                  }}
+                >
+                  <Text style={styles.quickActionText}>Tomorrow</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.quickActionBtn}
+                  onPress={() => {
+                    if (!rescheduleHabit) return;
+                    const nextWeek = new Date();
+                    nextWeek.setDate(nextWeek.getDate() + 7);
+                    setHabitScheduledDate(rescheduleHabit.id, nextWeek.toISOString().split('T')[0]);
+                    setRescheduleOpen(false);
+                  }}
+                >
+                  <Text style={styles.quickActionText}>Next Week</Text>
+                </Pressable>
+              </View>
+              <TextInput
+                value={rescheduleDateInput}
+                onChangeText={setRescheduleDateInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={Colors.dark.textMuted}
+                style={styles.modalInput}
+              />
+              <Pressable
+                style={styles.modalPrimaryBtn}
+                onPress={() => {
+                  if (!rescheduleHabit) return;
+                  setHabitScheduledDate(rescheduleHabit.id, rescheduleDateInput.trim() || null);
+                  setRescheduleOpen(false);
+                }}
+              >
+                <Text style={styles.modalPrimaryText}>Apply Date</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </Modal>
+      ) : null}
+
+      {editOpen ? (
+        <Modal visible transparent={false} animationType="slide" onRequestClose={() => setEditOpen(false)}>
+          <View style={styles.fullModalShell}>
+            <View style={styles.fullModalHeader}>
+              <Pressable onPress={() => setEditOpen(false)} style={styles.taskIconBtn}>
+                <Text style={styles.modalCloseGlyph}>×</Text>
+              </Pressable>
+              <Text style={styles.fullModalTitle}>Edit Quest</Text>
+              <View style={styles.taskIconBtn} />
+            </View>
+            <ScrollView contentContainerStyle={styles.fullModalBody}>
+              <TextInput
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Quest name"
+                placeholderTextColor={Colors.dark.textMuted}
+                style={styles.modalInput}
+              />
+              <TextInput
+                value={editDesc}
+                onChangeText={setEditDesc}
+                placeholder="Quest description"
+                placeholderTextColor={Colors.dark.textMuted}
+                multiline
+                textAlignVertical="top"
+                style={[styles.modalInput, styles.modalInputMulti]}
+              />
+              <TextInput
+                value={editIcon}
+                onChangeText={setEditIcon}
+                placeholder="Icon"
+                placeholderTextColor={Colors.dark.textMuted}
+                style={styles.modalInput}
+                maxLength={2}
+              />
+              <View style={styles.quickActionsRow}>
+                <Pressable
+                  style={[styles.quickActionBtn, editTaskType === 'daily' && styles.quickActionBtnActive]}
+                  onPress={() => setEditTaskType('daily')}
+                >
+                  <Text style={styles.quickActionText}>Daily</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.quickActionBtn, editTaskType === 'one-off' && styles.quickActionBtnActive]}
+                  onPress={() => setEditTaskType('one-off')}
+                >
+                  <Text style={styles.quickActionText}>One-off</Text>
+                </Pressable>
+              </View>
+              <Pressable
+                style={styles.modalPrimaryBtn}
+                onPress={() => {
+                  if (!editHabit || !editName.trim()) return;
+                  updateHabit(editHabit.id, {
+                    name: editName,
+                    description: editDesc,
+                    icon: editIcon.trim() || '⚔️',
+                    taskType: editTaskType,
+                  });
+                  setEditOpen(false);
+                }}
+              >
+                <Text style={styles.modalPrimaryText}>Save Changes</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </Modal>
+      ) : null}
     </View>
   );
 }
@@ -742,5 +923,88 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: Colors.dark.textMuted,
+  },
+  fullModalShell: {
+    flex: 1,
+    backgroundColor: Colors.dark.background,
+  },
+  fullModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border + '66',
+  },
+  fullModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Colors.dark.text,
+  },
+  fullModalBody: {
+    padding: 16,
+    gap: 10,
+  },
+  modalSub: {
+    fontSize: 13,
+    color: Colors.dark.textMuted,
+    marginBottom: 2,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  quickActionBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + '99',
+    borderRadius: 12,
+    backgroundColor: Colors.dark.surface,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  quickActionBtnActive: {
+    borderColor: Colors.dark.gold + 'aa',
+    backgroundColor: Colors.dark.gold + '22',
+  },
+  quickActionText: {
+    color: Colors.dark.text,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  modalInput: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.border + '99',
+    backgroundColor: Colors.dark.surface,
+    color: Colors.dark.text,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  modalInputMulti: {
+    minHeight: 90,
+    maxHeight: 180,
+  },
+  modalPrimaryBtn: {
+    marginTop: 6,
+    borderRadius: 14,
+    backgroundColor: Colors.dark.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+  },
+  modalPrimaryText: {
+    color: '#1a1228',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  modalCloseGlyph: {
+    color: Colors.dark.text,
+    fontSize: 22,
+    lineHeight: 24,
+    fontWeight: '700',
   },
 });

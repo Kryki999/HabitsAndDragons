@@ -29,6 +29,7 @@ type Props = {
 export default function DayQuestLogReadOnly({ dateKey, showTitle = true }: Props) {
   const habits = useGameStore((s) => s.habits);
   const completedHabitNamesByDate = useGameStore((s) => s.completedHabitNamesByDate ?? {});
+  const dailyReflectionByDate = useGameStore((s) => s.dailyReflectionByDate ?? {});
 
   const tKey = todayKey();
   const activeHabits = useMemo(() => habits.filter((h) => h.isActive), [habits]);
@@ -42,6 +43,7 @@ export default function DayQuestLogReadOnly({ dateKey, showTitle = true }: Props
   }, [activeHabits, completedHabitNamesByDate, dateKey, tKey]);
 
   const empty = rows.length === 0 && orphanCompletions.length === 0;
+  const reflection = (dailyReflectionByDate[dateKey] ?? "").trim();
 
   return (
     <View style={styles.wrap}>
@@ -80,6 +82,12 @@ export default function DayQuestLogReadOnly({ dateKey, showTitle = true }: Props
           ))}
         </View>
       )}
+      {reflection.length > 0 ? (
+        <View style={styles.reflectionCard}>
+          <Text style={styles.reflectionKicker}>Daily Reflection</Text>
+          <Text style={styles.reflectionText}>{reflection}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -207,5 +215,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.dark.border + "88",
     opacity: 0.9,
+  },
+  reflectionCard: {
+    marginTop: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.dark.gold + "44",
+    backgroundColor: Colors.dark.gold + "12",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  reflectionKicker: {
+    fontSize: 10,
+    fontWeight: "800" as const,
+    color: Colors.dark.gold,
+    letterSpacing: 1,
+    textTransform: "uppercase" as const,
+  },
+  reflectionText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: Colors.dark.textSecondary,
+    fontStyle: "italic" as const,
   },
 });
